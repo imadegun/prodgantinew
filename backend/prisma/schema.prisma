@@ -1,0 +1,278 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
+enum UserRole {
+  MANAGER
+  ADMIN
+  WORKER
+}
+
+enum POLStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ProductionStage {
+  FORMING
+  FIRING
+  GLAZING
+  QUALITY_CONTROL
+  PACKAGING
+}
+
+enum AlertPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum AlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+enum IssueType {
+  MATERIAL_ISSUE
+  TOOL_ISSUE
+  PROCESS_ISSUE
+  QUALITY_ISSUE
+  OTHER
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum LogStatus {
+  NORMAL
+  ISSUES
+  RESOLVED
+}
+
+enum RevisionStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
+enum RevisionType {
+  DESIGN
+  PRODUCTION
+  MATERIAL
+  OTHER
+}
+
+// User table
+model User {
+  id             String    @id @default(uuid())
+  username        String    @unique
+  password        String
+  fullName        String
+  role            UserRole
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  lastLogin       DateTime?
+  
+  pols                  POL[]              @relation("POLCreatedBy")
+  productionRecords      ProductionRecord[]
+  logbookEntries        LogbookEntry[]
+  revisionTickets       RevisionTicket[]    @relation("RevisionCreatedBy")
+  approvedRevisions     RevisionTicket[]    @relation("RevisionApprovedBy")
+  activityLogs          ActivityLog[]
+  reportedAlerts       DiscrepancyAlert[] @relation("AlertReportedBy")
+  acknowledgedAlerts    DiscrepancyAlert[] @relation("AlertAcknowledgedBy")
+  resolvedAlerts        DiscrepancyAlert[] @relation("AlertResolvedBy")
+  
+  @@map("users")
+}
+
+// POL (Production Order List) table
+model POL {
+  id            String     @id @default(uuid())
+  polNumber     String     @unique
+  customerName  String
+  orderDate     DateTime   @default(now())
+  deliveryDate  DateTime
+  status        POLStatus  @default(PENDING)
+  notes         String?
+  createdBy     String
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  
+  creator               User?              @relation("POLCreatedBy", fields: [createdBy], references: [id])
+  details               POLDetail[]
+  logbookEntries        LogbookEntry[]
+  revisionTickets       RevisionTicket[]
+  discrepancyAlerts     DiscrepancyAlert[]
+  
+  @@map("pols")
+}
+
+// POL Detail table (products within a POL)
+model POLDetail {
+  id            String   @id @default(uuid())
+  polId         String
+  productCode   String
+  productName   String
+  quantity      Int
+  productType   String   @default("PLAIN")
+  color         String?
+  texture       String?
+  material      String?
+  size          String?
+  finalSize     String?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  pol                   POL                 @relation(fields: [polId], references: [id], onDelete: Cascade)
+  productionRecords      ProductionRecord[]
+  decorationTasks       DecorationTask[]
+  discrepancyAlerts     DiscrepancyAlert[]
+  logbookEntries        LogbookEntry[]
+  revisionTickets       RevisionTicket[]
+  
+  @@map("pol_details")
+}
+
+// Production Record table
+model ProductionRecord {
+  id            String          @id @default(uuid())
+  polDetailId   String
+  stage         ProductionStage
+  quantity      Int
+  userId        String
+  notes         String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  
+  polDetail    POLDetail  @relation(fields: [polDetailId], references: [id], onDelete: Cascade)
+  user         User       @relation(fields: [userId], references: [id])
+  
+  @@map("production_records")
+}
+
+// Decoration Task table
+model DecorationTask {
+  id            String   @id @default(uuid())
+  polDetailId   String
+  taskName      String
+  description   String?
+  quantity      Int      @default(0)
+  completed     Boolean  @default(false)
+  userId        String?
+  completedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  polDetail     POLDetail @relation(fields: [polDetailId], references: [id], onDelete: Cascade)
+  
+  @@map("decoration_tasks")
+}
+
+// Discrepancy Alert table
+model DiscrepancyAlert {
+  id               String        @id @default(uuid())
+  polId            String
+  polDetailId       String
+  stage             ProductionStage
+  expectedQuantity   Int
+  actualQuantity    Int
+  difference        Int
+  priority          AlertPriority @default(MEDIUM)
+  status            AlertStatus   @default(OPEN)
+  reportedBy        String
+  acknowledgedBy    String?
+  acknowledgedAt    DateTime?
+  resolvedBy        String?
+  resolvedAt        DateTime?
+  resolutionNotes   String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  
+  pol               POL         @relation(fields: [polId], references: [id], onDelete: Cascade)
+  polDetail         POLDetail   @relation(fields: [polDetailId], references: [id], onDelete: Cascade)
+  reportedByUser    User        @relation("AlertReportedBy", fields: [reportedBy], references: [id])
+  acknowledgedByUser User?       @relation("AlertAcknowledgedBy", fields: [acknowledgedBy], references: [id])
+  resolvedByUser     User?       @relation("AlertResolvedBy", fields: [resolvedBy], references: [id])
+  
+  @@map("discrepancy_alerts")
+}
+
+// Logbook Entry table
+model LogbookEntry {
+  id            String      @id @default(uuid())
+  polId         String?
+  polDetailId    String?
+  userId        String
+  entryDate     DateTime
+  status        LogStatus   @default(NORMAL)
+  notes         String
+  issues        String?
+  actions       String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  
+  pol           POL?        @relation(fields: [polId], references: [id])
+  polDetail     POLDetail?  @relation(fields: [polDetailId], references: [id])
+  user          User        @relation(fields: [userId], references: [id])
+  
+  @@map("logbook_entries")
+}
+
+// Revision Ticket table
+model RevisionTicket {
+  id                String          @id @default(uuid())
+  polId             String
+  polDetailId        String?
+  createdBy          String
+  type               RevisionType
+  issueType          String
+  severity           Severity
+  description        String
+  proposedSolution   String?
+  status             RevisionStatus  @default(DRAFT)
+  submittedAt        DateTime?
+  approvedBy         String?
+  approvedAt         DateTime?
+  managerNotes       String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  
+  pol               POL         @relation(fields: [polId], references: [id])
+  polDetail          POLDetail?  @relation(fields: [polDetailId], references: [id])
+  creator           User        @relation("RevisionCreatedBy", fields: [createdBy], references: [id])
+  approvedByUser     User?       @relation("RevisionApprovedBy", fields: [approvedBy], references: [id])
+  
+  @@map("revision_tickets")
+}
+
+// Activity Log table (for audit)
+model ActivityLog {
+  id          String   @id @default(uuid())
+  userId       String
+  action      String
+  entityType  String
+  entityId    String?
+  details     String?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+  
+  user        User     @relation(fields: [userId], references: [id])
+  
+  @@map("activity_logs")
+}
