@@ -1,6 +1,8 @@
+import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from './store';
+import { loginSuccess } from './store/authSlice';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -16,9 +18,27 @@ import Settings from './pages/Settings';
 import './App.css';
 
 function App() {
-  const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
+  const dispatch = useDispatch();
+  const { isAuthenticated, user, token } = useSelector((state: RootState) => state.auth);
 
-  if (!isAuthenticated) {
+  // Check for existing token and restore auth state
+  useEffect(() => {
+    const storedToken = localStorage.getItem('token');
+    const storedUser = localStorage.getItem('user');
+    
+    if (storedToken && storedUser && !isAuthenticated) {
+      try {
+        const userData = JSON.parse(storedUser);
+        dispatch(loginSuccess({ user: userData, token: storedToken }));
+      } catch (err) {
+        console.error('Error parsing stored user:', err);
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      }
+    }
+  }, [dispatch, isAuthenticated]);
+
+  if (!isAuthenticated && !token) {
     return <Login />;
   }
 

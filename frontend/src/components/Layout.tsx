@@ -65,7 +65,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { user } = useSelector((state: RootState) => state.auth);
   const { alerts } = useSelector((state: RootState) => state.alerts);
 
-  const unreadAlerts = alerts.filter((a) => a.status === 'Open' && a.priority === 'Critical').length;
+  const unreadAlerts = alerts.filter((a) => a.status === 'OPEN' && (a.priority === 'HIGH' || a.priority === 'CRITICAL')).length;
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);

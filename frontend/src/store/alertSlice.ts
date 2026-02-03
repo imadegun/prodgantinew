@@ -40,21 +40,23 @@ const alertSlice = createSlice({
       state.loading = false;
       state.error = action.payload;
     },
-    acknowledgeAlertSuccess: (state, action: PayloadAction<{ id: number; userId: number }>) => {
+    acknowledgeAlertSuccess: (state, action: PayloadAction<{ id: string; userId: string }>) => {
+      state.loading = false;
       const alert = state.alerts.find((a) => a.id === action.payload.id);
       if (alert) {
-        alert.status = 'Acknowledged';
-        alert.acknowledged_by = action.payload.userId;
-        alert.acknowledged_at = new Date().toISOString();
+        alert.status = 'ACKNOWLEDGED';
+        alert.acknowledgedBy = action.payload.userId;
+        alert.acknowledgedAt = new Date().toISOString();
       }
     },
-    resolveAlertSuccess: (state, action: PayloadAction<{ id: number; userId: number; notes: string }>) => {
+    resolveAlertSuccess: (state, action: PayloadAction<{ id: string; userId: string; notes: string }>) => {
+      state.loading = false;
       const alert = state.alerts.find((a) => a.id === action.payload.id);
       if (alert) {
-        alert.status = 'Resolved';
-        alert.resolved_by = action.payload.userId;
-        alert.resolved_at = new Date().toISOString();
-        alert.resolution_notes = action.payload.notes;
+        alert.status = 'RESOLVED';
+        alert.resolvedBy = action.payload.userId;
+        alert.resolvedAt = new Date().toISOString();
+        alert.resolutionNotes = action.payload.notes;
       }
     },
     setFilters: (state, action: PayloadAction<Partial<AlertState['filters']>>) => {

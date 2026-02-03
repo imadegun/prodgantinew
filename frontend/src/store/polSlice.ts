@@ -65,7 +65,7 @@ const polSlice = createSlice({
       }
       state.error = null;
     },
-    deletePOLSuccess: (state, action: PayloadAction<number>) => {
+    deletePOLSuccess: (state, action: PayloadAction<string>) => {
       state.loading = false;
       state.pols = state.pols.filter((pol) => pol.id !== action.payload);
       state.error = null;

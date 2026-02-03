@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
@@ -12,10 +12,6 @@ import {
   Button,
   TextField,
   Grid,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   IconButton,
   Table,
   TableBody,
@@ -30,16 +26,10 @@ import {
   DialogContent,
   DialogActions,
 } from '@mui/material';
-import {
-  ArrowBack as ArrowBackIcon,
-  Add as AddIcon,
-  Delete as DeleteIcon,
-  Search as SearchIcon,
-} from '@mui/icons-material';
+import { ArrowBack as ArrowBackIcon, Add as AddIcon, Delete as DeleteIcon, Search as SearchIcon } from '@mui/icons-material';
 import { RootState } from '../store';
 import { createPOLSuccess } from '../store/polSlice';
 import { polService, productService } from '../services/api';
-import { POL } from '../types';
 
 const steps = ['POL Details', 'Add Products', 'Review & Confirm'];
 
@@ -62,7 +52,6 @@ const POLCreate = (): JSX.Element => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Step 1: POL Details
   const [polDetails, setPolDetails] = useState({
     clientName: '',
     poNumber: '',
@@ -71,7 +60,6 @@ const POLCreate = (): JSX.Element => {
     notes: '',
   });
   
-  // Step 2: Products
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [productSearch, setProductSearch] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -134,9 +122,7 @@ const POLCreate = (): JSX.Element => {
   };
 
   const handleAddCustomProduct = () => {
-    if (!newProduct.productCode || !newProduct.productName) {
-      return;
-    }
+    if (!newProduct.productCode || !newProduct.productName) return;
     const newItem: ProductItem = {
       id: `temp-${Date.now()}`,
       ...newProduct,
@@ -159,9 +145,7 @@ const POLCreate = (): JSX.Element => {
   };
 
   const handleUpdateQuantity = (id: string, quantity: number) => {
-    setProducts(
-      products.map((p) => (p.id === id ? { ...p, quantity: Math.max(1, quantity) } : p))
-    );
+    setProducts(products.map((p) => (p.id === id ? { ...p, quantity: Math.max(1, quantity) } : p)));
   };
 
   const handleSubmit = async () => {
@@ -229,7 +213,6 @@ const POLCreate = (): JSX.Element => {
 
       <Card>
         <CardContent>
-          {/* Step 1: POL Details */}
           {activeStep === 0 && (
             <Box>
               <Typography variant="h6" sx={{ mb: 3 }}>Step 1: POL Details</Typography>
@@ -287,7 +270,6 @@ const POLCreate = (): JSX.Element => {
             </Box>
           )}
 
-          {/* Step 2: Add Products */}
           {activeStep === 1 && (
             <Box>
               <Typography variant="h6" sx={{ mb: 3 }}>Step 2: Add Products</Typography>
@@ -300,12 +282,7 @@ const POLCreate = (): JSX.Element => {
                   onChange={(e) => setProductSearch(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSearchProduct()}
                 />
-                <Button
-                  variant="outlined"
-                  startIcon={<SearchIcon />}
-                  onClick={handleSearchProduct}
-                  disabled={searching}
-                >
+                <Button variant="outlined" startIcon={<SearchIcon />} onClick={handleSearchProduct} disabled={searching}>
                   Search
                 </Button>
               </Box>
@@ -329,11 +306,7 @@ const POLCreate = (): JSX.Element => {
               )}
 
               <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-                <Button
-                  variant="contained"
-                  startIcon={<AddIcon />}
-                  onClick={() => setAddDialogOpen(true)}
-                >
+                <Button variant="contained" startIcon={<AddIcon />} onClick={() => setAddDialogOpen(true)}>
                   Add Custom Product
                 </Button>
               </Box>
@@ -374,11 +347,7 @@ const POLCreate = (): JSX.Element => {
                           />
                         </TableCell>
                         <TableCell>
-                          <IconButton
-                            size="small"
-                            color="error"
-                            onClick={() => handleRemoveProduct(product.id)}
-                          >
+                          <IconButton size="small" color="error" onClick={() => handleRemoveProduct(product.id)}>
                             <DeleteIcon />
                           </IconButton>
                         </TableCell>
@@ -398,7 +367,6 @@ const POLCreate = (): JSX.Element => {
             </Box>
           )}
 
-          {/* Step 3: Review & Confirm */}
           {activeStep === 2 && (
             <Box>
               <Typography variant="h6" sx={{ mb: 3 }}>Step 3: Review & Confirm</Typography>
@@ -468,11 +436,7 @@ const POLCreate = (): JSX.Element => {
             </Button>
             <Box>
               {activeStep === steps.length - 1 ? (
-                <Button
-                  variant="contained"
-                  onClick={handleSubmit}
-                  disabled={loading}
-                >
+                <Button variant="contained" onClick={handleSubmit} disabled={loading}>
                   {loading ? 'Creating...' : 'Create POL'}
                 </Button>
               ) : (
@@ -485,7 +449,6 @@ const POLCreate = (): JSX.Element => {
         </CardContent>
       </Card>
 
-      {/* Add Custom Product Dialog */}
       <Dialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Add Custom Product</DialogTitle>
         <DialogContent>

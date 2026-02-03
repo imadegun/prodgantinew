@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import {
@@ -9,14 +9,12 @@ import {
   Typography,
   Button,
   LinearProgress,
-  Chip,
   List,
   ListItem,
   ListItemText,
   ListItemIcon,
   Divider,
   Alert,
-  AlertTitle,
 } from '@mui/material';
 import {
   TrendingUp as TrendingUpIcon,
@@ -30,9 +28,9 @@ import {
 } from '@mui/icons-material';
 import { RootState } from '../store';
 import { dashboardService, alertService } from '../services/api';
-import { DashboardStats, Alert as AlertType, POL } from '../types';
+import { DashboardStats, Alert as AlertType } from '../types';
 
-const Dashboard: React.FC = () => {
+const Dashboard = (): JSX.Element => {
   const navigate = useNavigate();
   const { user } = useSelector((state: RootState) => state.auth);
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -49,7 +47,6 @@ const Dashboard: React.FC = () => {
           alertService.getAll({ status: 'OPEN' }),
         ]);
         setStats(statsData);
-        // Handle both array and object response
         const alertsArray = Array.isArray(alertsData) ? alertsData : (alertsData.alerts || []);
         setAlerts(alertsArray.slice(0, 5));
       } catch (err: any) {
@@ -61,7 +58,7 @@ const Dashboard: React.FC = () => {
     fetchData();
   }, []);
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: string): string => {
     switch (status) {
       case 'Active': return 'success';
       case 'Pending': return 'warning';
@@ -86,13 +83,12 @@ const Dashboard: React.FC = () => {
           Welcome back, {user?.fullName || 'User'}!
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Here's what's happening with your production today.
+          Here is what is happening with your production today.
         </Typography>
       </Box>
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
-          <AlertTitle>Error</AlertTitle>
           {error}
         </Alert>
       )}
@@ -195,7 +191,7 @@ const Dashboard: React.FC = () => {
               <Button
                 size="small"
                 endIcon={<ArrowForwardIcon />}
-                onClick={() => navigate('/pols?status=Delayed')}
+                onClick={() => navigate('/pols')}
                 sx={{ mt: 1 }}
               >
                 View Details
@@ -212,7 +208,7 @@ const Dashboard: React.FC = () => {
             <CardContent>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                 <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                  🚨 Critical Alerts
+                  Critical Alerts
                 </Typography>
                 <Button size="small" onClick={() => navigate('/alerts')}>
                   View All
@@ -237,8 +233,8 @@ const Dashboard: React.FC = () => {
                           )}
                         </ListItemIcon>
                         <ListItemText
-                          primary={alert.alertMessage || alert.alert_message}
-                          secondary={new Date(alert.createdAt || alert.created_at).toLocaleString()}
+                          primary={alert.alertMessage || alert.alert_message || 'Alert'}
+                          secondary={new Date(alert.createdAt || alert.created_at || '').toLocaleString()}
                         />
                       </ListItem>
                       {index < alerts.length - 1 && <Divider />}
@@ -255,9 +251,9 @@ const Dashboard: React.FC = () => {
           <Card sx={{ height: '100%' }}>
             <CardContent>
               <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>
-                📊 Production Progress Overview
+                Production Progress Overview
               </Typography>
-              {stats?.production_progress?.map((stage) => (
+              {(stats?.production_progress || []).map((stage) => (
                 <Box key={stage.stage} sx={{ mb: 2 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
                     <Typography variant="body2">{stage.stage}</Typography>
@@ -290,7 +286,7 @@ const Dashboard: React.FC = () => {
           <Card>
             <CardContent>
               <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-                ⚡ Quick Actions
+                Quick Actions
               </Typography>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6} md={3}>

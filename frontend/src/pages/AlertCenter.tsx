@@ -9,6 +9,7 @@ import { Alert } from '../types';
 
 const AlertCenter = (): JSX.Element => {
   const dispatch = useDispatch();
+  const { user } = useSelector((state: RootState) => state.auth);
   const { alerts, loading, error } = useSelector((state: RootState) => state.alerts);
   const [activeTab, setActiveTab] = useState(0);
   const [priorityFilter, setPriorityFilter] = useState<string>('all');

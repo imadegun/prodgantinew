@@ -1,14 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { Box, Typography, Card, CardContent, Grid, Chip, LinearProgress, Button, Divider, Table, TableBody, TableCell, TableHead, TableRow, Alert, AlertTitle, Skeleton, Tabs, Tab } from '@mui/material';
+import { Box, Typography, Card, CardContent, Grid, Chip, LinearProgress, Button, Divider, Table, TableBody, TableCell, TableHead, TableRow, Alert, Skeleton, Tabs, Tab } from '@mui/material';
 import { ArrowBack as ArrowBackIcon, Edit as EditIcon, CheckCircle as CheckCircleIcon, Warning as WarningIcon } from '@mui/icons-material';
 import { RootState } from '../store';
 import { fetchPOLDetailSuccess } from '../store/polSlice';
 import { polService } from '../services/api';
 import { POL, POLDetail as POLDetailType } from '../types';
 
-const POLDetail: React.FC = () => {
+const POLDetail = (): JSX.Element => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const dispatch = useDispatch();
@@ -33,18 +33,13 @@ const POLDetail: React.FC = () => {
     fetchData();
   }, [id, dispatch]);
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: string): 'success' | 'info' | 'error' | 'default' => {
     switch (status) {
-      case 'IN_PROGRESS':
-        return 'success';
-      case 'COMPLETED':
-        return 'info';
-      case 'CANCELLED':
-        return 'error';
-      case 'DRAFT':
-        return 'default';
-      default:
-        return 'default';
+      case 'IN_PROGRESS': return 'success';
+      case 'COMPLETED': return 'info';
+      case 'CANCELLED': return 'error';
+      case 'DRAFT': return 'default';
+      default: return 'default';
     }
   };
 
@@ -78,7 +73,6 @@ const POLDetail: React.FC = () => {
     return (
       <Box>
         <Alert severity="error" sx={{ mb: 3 }}>
-          <AlertTitle>Error</AlertTitle>
           {error || 'POL not found'}
         </Alert>
         <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/pols')}>
@@ -124,20 +118,20 @@ const POLDetail: React.FC = () => {
                 <Divider />
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Typography color="text.secondary">Client</Typography>
-                  <Typography sx={{ fontWeight: 500 }}>{currentPOL.client_name || currentPOL.customerName}</Typography>
+                  <Typography sx={{ fontWeight: 500 }}>{currentPOL.client_name || currentPOL.customerName || '-'}</Typography>
                 </Box>
                 <Divider />
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Typography color="text.secondary">PO Date</Typography>
                   <Typography sx={{ fontWeight: 500 }}>
-                    {currentPOL.createdAt ? new Date(currentPOL.createdAt).toLocaleDateString() : 'N/A'}
+                    {currentPOL.createdAt || currentPOL.created_at ? new Date(currentPOL.createdAt || currentPOL.created_at || '').toLocaleDateString() : 'N/A'}
                   </Typography>
                 </Box>
                 <Divider />
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Typography color="text.secondary">Delivery Date</Typography>
                   <Typography sx={{ fontWeight: 500 }}>
-                    {currentPOL.delivery_date ? new Date(currentPOL.delivery_date).toLocaleDateString() : 'N/A'}
+                    {currentPOL.delivery_date || currentPOL.deliveryDate ? new Date(currentPOL.delivery_date || currentPOL.deliveryDate || '').toLocaleDateString() : 'N/A'}
                   </Typography>
                 </Box>
                 <Divider />
@@ -152,7 +146,7 @@ const POLDetail: React.FC = () => {
                 <Divider />
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Typography color="text.secondary">Total Order</Typography>
-                  <Typography sx={{ fontWeight: 500 }}>{currentPOL.total_order || details.reduce((sum, d) => sum + (d.quantity || 0), 0)}</Typography>
+                  <Typography sx={{ fontWeight: 500 }}>{currentPOL.total_order || details.reduce((sum: number, d) => sum + (d.quantity || 0), 0)}</Typography>
                 </Box>
               </Box>
             </CardContent>
@@ -174,7 +168,7 @@ const POLDetail: React.FC = () => {
               
               {activeTab === 0 && (
                 <Box>
-                  {['FORMING', 'FIRING', 'GLAZING', 'QUALITY_CONTROL', 'PACKAGING'].map((stage, index) => (
+                  {['FORMING', 'FIRING', 'GLAZING', 'QUALITY_CONTROL', 'PACKAGING'].map((stage) => (
                     <Box key={stage} sx={{ mb: 3 }}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
                         <Typography>{stage.replace('_', ' ')}</Typography>
@@ -190,31 +184,10 @@ const POLDetail: React.FC = () => {
                 </Box>
               )}
 
-              {activeTab === 1 && (
+              {activeTab > 0 && (
                 <Box sx={{ py: 4, textAlign: 'center' }}>
-                  <Typography color="text.secondary">Forming stage details</Typography>
-                  <LinearProgress variant="determinate" value={getStageProgress('FORMING')} sx={{ mt: 2, height: 10, borderRadius: 5 }} />
-                </Box>
-              )}
-
-              {activeTab === 2 && (
-                <Box sx={{ py: 4, textAlign: 'center' }}>
-                  <Typography color="text.secondary">Firing stage details</Typography>
-                  <LinearProgress variant="determinate" value={getStageProgress('FIRING')} sx={{ mt: 2, height: 10, borderRadius: 5 }} />
-                </Box>
-              )}
-
-              {activeTab === 3 && (
-                <Box sx={{ py: 4, textAlign: 'center' }}>
-                  <Typography color="text.secondary">Glazing stage details</Typography>
-                  <LinearProgress variant="determinate" value={getStageProgress('GLAZING')} sx={{ mt: 2, height: 10, borderRadius: 5 }} />
-                </Box>
-              )}
-
-              {activeTab === 4 && (
-                <Box sx={{ py: 4, textAlign: 'center' }}>
-                  <Typography color="text.secondary">Quality Control details</Typography>
-                  <LinearProgress variant="determinate" value={getStageProgress('QUALITY_CONTROL')} sx={{ mt: 2, height: 10, borderRadius: 5 }} />
+                  <Typography color="text.secondary">{['Forming', 'Firing', 'Glazing', 'Quality Control'][activeTab - 1]} stage details</Typography>
+                  <LinearProgress variant="determinate" value={getStageProgress(['FORMING', 'FIRING', 'GLAZING', 'QUALITY_CONTROL'][activeTab - 1])} sx={{ mt: 2, height: 10, borderRadius: 5 }} />
                 </Box>
               )}
             </CardContent>
@@ -247,12 +220,12 @@ const POLDetail: React.FC = () => {
                   <TableBody>
                     {details.map((detail: POLDetailType) => (
                       <TableRow key={detail.id}>
-                        <TableCell>{detail.productCode}</TableCell>
-                        <TableCell>{detail.productName}</TableCell>
+                        <TableCell>{detail.productCode || '-'}</TableCell>
+                        <TableCell>{detail.productName || '-'}</TableCell>
                         <TableCell>{detail.color || '-'}</TableCell>
                         <TableCell>{detail.material || '-'}</TableCell>
                         <TableCell>{detail.size || '-'}</TableCell>
-                        <TableCell>{detail.quantity}</TableCell>
+                        <TableCell>{detail.quantity || 0}</TableCell>
                         <TableCell>
                           <Chip
                             label={detail.notes?.split(' ')[0] || 'Forming'}

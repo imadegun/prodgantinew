@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
@@ -24,7 +24,6 @@ import {
   ListItemText,
   FormControl,
   Select,
-  InputLabel,
   Grid,
   LinearProgress,
 } from '@mui/material';
@@ -35,14 +34,13 @@ import {
   Visibility as ViewIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  FilterList as FilterIcon,
 } from '@mui/icons-material';
 import { RootState } from '../store';
 import { fetchPOLsStart, fetchPOLsSuccess, setFilters, deletePOLSuccess } from '../store/polSlice';
 import { polService } from '../services/api';
 import { POL } from '../types';
 
-const POLList: React.FC = () => {
+const POLList = (): JSX.Element => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const { pols, loading, filters } = useSelector((state: RootState) => state.pol);
@@ -65,7 +63,7 @@ const POLList: React.FC = () => {
     fetchPOLs();
   }, [dispatch, filters]);
 
-  const handleChangePage = (event: unknown, newPage: number) => {
+  const handleChangePage = (_event: unknown, newPage: number) => {
     setPage(newPage);
   };
 
@@ -87,7 +85,7 @@ const POLList: React.FC = () => {
   const handleDelete = async () => {
     if (selectedPOL) {
       try {
-        await polService.delete(selectedPOL.id);
+        await polService.delete(Number(selectedPOL.id));
         dispatch(deletePOLSuccess(selectedPOL.id));
       } catch (error) {
         console.error('Failed to delete POL:', error);
@@ -96,26 +94,26 @@ const POLList: React.FC = () => {
     handleMenuClose();
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: string): 'success' | 'default' | 'info' | 'error' => {
     switch (status) {
-      case 'In Progress': return 'success';
-      case 'Draft': return 'default';
-      case 'Completed': return 'info';
-      case 'Cancelled': return 'error';
+      case 'IN_PROGRESS': return 'success';
+      case 'DRAFT': return 'default';
+      case 'COMPLETED': return 'info';
+      case 'CANCELLED': return 'error';
       default: return 'default';
     }
   };
 
   const filteredPOLs = pols.filter((pol) =>
-    pol.po_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    pol.client_name.toLowerCase().includes(searchTerm.toLowerCase())
+    (pol.po_number || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (pol.client_name || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4" sx={{ fontWeight: 600 }}>
-          📋 POL Management
+          POL Management
         </Typography>
         <Button
           variant="contained"
@@ -154,10 +152,10 @@ const POLList: React.FC = () => {
                   onChange={(e) => dispatch(setFilters({ status: e.target.value }))}
                 >
                   <MenuItem value="All">All Status</MenuItem>
-                  <MenuItem value="Draft">Draft</MenuItem>
-                  <MenuItem value="In Progress">In Progress</MenuItem>
-                  <MenuItem value="Completed">Completed</MenuItem>
-                  <MenuItem value="Cancelled">Cancelled</MenuItem>
+                  <MenuItem value="DRAFT">Draft</MenuItem>
+                  <MenuItem value="IN_PROGRESS">In Progress</MenuItem>
+                  <MenuItem value="COMPLETED">Completed</MenuItem>
+                  <MenuItem value="CANCELLED">Cancelled</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -187,18 +185,20 @@ const POLList: React.FC = () => {
                   <TableRow key={pol.id} hover>
                     <TableCell>
                       <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        {pol.po_number}
+                        {pol.po_number || `PO-${pol.id}`}
                       </Typography>
                     </TableCell>
-                    <TableCell>{pol.client_name}</TableCell>
-                    <TableCell align="center">{pol.total_order}</TableCell>
+                    <TableCell>{pol.client_name || pol.customerName || '-'}</TableCell>
+                    <TableCell align="center">{pol.total_order || 0}</TableCell>
                     <TableCell>
-                      {new Date(pol.delivery_date).toLocaleDateString()}
+                      {pol.delivery_date || pol.deliveryDate
+                        ? new Date(pol.delivery_date || pol.deliveryDate || '').toLocaleDateString()
+                        : '-'}
                     </TableCell>
                     <TableCell>
                       <Chip
-                        label={pol.status}
-                        color={getStatusColor(pol.status) as any}
+                        label={pol.status?.replace('_', ' ')}
+                        color={getStatusColor(pol.status || '')}
                         size="small"
                       />
                     </TableCell>
@@ -206,11 +206,11 @@ const POLList: React.FC = () => {
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <LinearProgress
                           variant="determinate"
-                          value={pol.status === 'Completed' ? 100 : pol.status === 'In Progress' ? 50 : 0}
+                          value={pol.status === 'COMPLETED' ? 100 : pol.status === 'IN_PROGRESS' ? 50 : 0}
                           sx={{ width: 80, height: 6, borderRadius: 3 }}
                         />
                         <Typography variant="caption">
-                          {pol.status === 'Completed' ? '100%' : pol.status === 'In Progress' ? '50%' : '0%'}
+                          {pol.status === 'COMPLETED' ? '100%' : pol.status === 'IN_PROGRESS' ? '50%' : '0%'}
                         </Typography>
                       </Box>
                     </TableCell>
