@@ -1,11 +1,94 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Box, Typography, Card, CardContent, Grid, Chip, LinearProgress, Button, Divider, Table, TableBody, TableCell, TableHead, TableRow } from '@mui/material';
-import { ArrowBack as ArrowBackIcon, Edit as EditIcon } from '@mui/icons-material';
+import { useDispatch, useSelector } from 'react-redux';
+import { Box, Typography, Card, CardContent, Grid, Chip, LinearProgress, Button, Divider, Table, TableBody, TableCell, TableHead, TableRow, Alert, AlertTitle, Skeleton, Tabs, Tab } from '@mui/material';
+import { ArrowBack as ArrowBackIcon, Edit as EditIcon, CheckCircle as CheckCircleIcon, Warning as WarningIcon } from '@mui/icons-material';
+import { RootState } from '../store';
+import { fetchPOLDetailSuccess } from '../store/polSlice';
+import { polService } from '../services/api';
+import { POL, POLDetail as POLDetailType } from '../types';
 
 const POLDetail: React.FC = () => {
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const { currentPOL, polDetails, loading, error } = useSelector((state: RootState) => state.pol);
+  const [activeTab, setActiveTab] = useState(0);
+  const [localLoading, setLocalLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      if (id) {
+        setLocalLoading(true);
+        try {
+          const polData = await polService.getById(Number(id));
+          dispatch(fetchPOLDetailSuccess(polData));
+        } catch (err) {
+          console.error('Failed to fetch POL details:', err);
+        } finally {
+          setLocalLoading(false);
+        }
+      }
+    };
+    fetchData();
+  }, [id, dispatch]);
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'IN_PROGRESS':
+        return 'success';
+      case 'COMPLETED':
+        return 'info';
+      case 'CANCELLED':
+        return 'error';
+      case 'DRAFT':
+        return 'default';
+      default:
+        return 'default';
+    }
+  };
+
+  const getStageProgress = (stage: string): number => {
+    const stages = ['FORMING', 'FIRING', 'GLAZING', 'QUALITY_CONTROL', 'PACKAGING'];
+    const index = stages.indexOf(stage);
+    return index >= 0 ? ((index + 1) / stages.length) * 100 : 0;
+  };
+
+  if (localLoading || loading) {
+    return (
+      <Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+          <Skeleton variant="rectangular" width={100} height={40} />
+          <Skeleton variant="text" width={300} height={40} />
+          <Skeleton variant="rectangular" width={120} height={40} sx={{ ml: 'auto' }} />
+        </Box>
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={4}>
+            <Skeleton variant="rectangular" height={300} />
+          </Grid>
+          <Grid item xs={12} md={8}>
+            <Skeleton variant="rectangular" height={300} />
+          </Grid>
+        </Grid>
+      </Box>
+    );
+  }
+
+  if (error || !currentPOL) {
+    return (
+      <Box>
+        <Alert severity="error" sx={{ mb: 3 }}>
+          <AlertTitle>Error</AlertTitle>
+          {error || 'POL not found'}
+        </Alert>
+        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/pols')}>
+          Back to POLs
+        </Button>
+      </Box>
+    );
+  }
+
+  const details = polDetails.length > 0 ? polDetails : (currentPOL.details || []);
 
   return (
     <Box>
@@ -14,14 +97,21 @@ const POLDetail: React.FC = () => {
           Back to POLs
         </Button>
         <Typography variant="h4" sx={{ fontWeight: 600, flex: 1 }}>
-          POL-{id} - Detail View
+          {currentPOL.po_number || `POL-${currentPOL.id}`} - Detail View
         </Typography>
         <Button variant="contained" startIcon={<EditIcon />}>
           Edit POL
         </Button>
       </Box>
 
+      {error && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          {error}
+        </Alert>
+      )}
+
       <Grid container spacing={3}>
+        {/* POL Information Card */}
         <Grid item xs={12} md={4}>
           <Card>
             <CardContent>
@@ -29,99 +119,176 @@ const POLDetail: React.FC = () => {
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Typography color="text.secondary">PO Number</Typography>
-                  <Typography sx={{ fontWeight: 500 }}>PO-{id}</Typography>
+                  <Typography sx={{ fontWeight: 500 }}>{currentPOL.po_number || `PO-${currentPOL.id}`}</Typography>
                 </Box>
+                <Divider />
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Typography color="text.secondary">Client</Typography>
-                  <Typography sx={{ fontWeight: 500 }}>ABC Corporation</Typography>
+                  <Typography sx={{ fontWeight: 500 }}>{currentPOL.client_name || currentPOL.customerName}</Typography>
                 </Box>
+                <Divider />
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Typography color="text.secondary">PO Date</Typography>
-                  <Typography sx={{ fontWeight: 500 }}>2026-01-15</Typography>
+                  <Typography sx={{ fontWeight: 500 }}>
+                    {currentPOL.createdAt ? new Date(currentPOL.createdAt).toLocaleDateString() : 'N/A'}
+                  </Typography>
                 </Box>
+                <Divider />
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Typography color="text.secondary">Delivery Date</Typography>
-                  <Typography sx={{ fontWeight: 500 }}>2026-02-15</Typography>
+                  <Typography sx={{ fontWeight: 500 }}>
+                    {currentPOL.delivery_date ? new Date(currentPOL.delivery_date).toLocaleDateString() : 'N/A'}
+                  </Typography>
                 </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                <Divider />
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Typography color="text.secondary">Status</Typography>
-                  <Chip label="In Progress" color="success" size="small" />
+                  <Chip
+                    label={currentPOL.status || 'Unknown'}
+                    color={getStatusColor(currentPOL.status || '') as any}
+                    size="small"
+                  />
+                </Box>
+                <Divider />
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography color="text.secondary">Total Order</Typography>
+                  <Typography sx={{ fontWeight: 500 }}>{currentPOL.total_order || details.reduce((sum, d) => sum + (d.quantity || 0), 0)}</Typography>
                 </Box>
               </Box>
             </CardContent>
           </Card>
         </Grid>
 
+        {/* Production Progress Card */}
         <Grid item xs={12} md={8}>
           <Card>
             <CardContent>
               <Typography variant="h6" sx={{ mb: 2 }}>Production Progress</Typography>
-              <Box sx={{ mb: 3 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                  <Typography>Forming</Typography>
-                  <Typography>75%</Typography>
+              <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ mb: 2 }}>
+                <Tab label="Overview" />
+                <Tab label="Forming" />
+                <Tab label="Firing" />
+                <Tab label="Glazing" />
+                <Tab label="QC" />
+              </Tabs>
+              
+              {activeTab === 0 && (
+                <Box>
+                  {['FORMING', 'FIRING', 'GLAZING', 'QUALITY_CONTROL', 'PACKAGING'].map((stage, index) => (
+                    <Box key={stage} sx={{ mb: 3 }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                        <Typography>{stage.replace('_', ' ')}</Typography>
+                        <Typography>{getStageProgress(stage)}%</Typography>
+                      </Box>
+                      <LinearProgress
+                        variant="determinate"
+                        value={getStageProgress(stage)}
+                        sx={{ height: 8, borderRadius: 4 }}
+                      />
+                    </Box>
+                  ))}
                 </Box>
-                <LinearProgress variant="determinate" value={75} sx={{ height: 8, borderRadius: 4 }} />
-              </Box>
-              <Box sx={{ mb: 3 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                  <Typography>Firing</Typography>
-                  <Typography>50%</Typography>
+              )}
+
+              {activeTab === 1 && (
+                <Box sx={{ py: 4, textAlign: 'center' }}>
+                  <Typography color="text.secondary">Forming stage details</Typography>
+                  <LinearProgress variant="determinate" value={getStageProgress('FORMING')} sx={{ mt: 2, height: 10, borderRadius: 5 }} />
                 </Box>
-                <LinearProgress variant="determinate" value={50} sx={{ height: 8, borderRadius: 4 }} />
-              </Box>
-              <Box sx={{ mb: 3 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                  <Typography>Glazing</Typography>
-                  <Typography>20%</Typography>
+              )}
+
+              {activeTab === 2 && (
+                <Box sx={{ py: 4, textAlign: 'center' }}>
+                  <Typography color="text.secondary">Firing stage details</Typography>
+                  <LinearProgress variant="determinate" value={getStageProgress('FIRING')} sx={{ mt: 2, height: 10, borderRadius: 5 }} />
                 </Box>
-                <LinearProgress variant="determinate" value={20} sx={{ height: 8, borderRadius: 4 }} />
-              </Box>
-              <Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                  <Typography>QC</Typography>
-                  <Typography>10%</Typography>
+              )}
+
+              {activeTab === 3 && (
+                <Box sx={{ py: 4, textAlign: 'center' }}>
+                  <Typography color="text.secondary">Glazing stage details</Typography>
+                  <LinearProgress variant="determinate" value={getStageProgress('GLAZING')} sx={{ mt: 2, height: 10, borderRadius: 5 }} />
                 </Box>
-                <LinearProgress variant="determinate" value={10} sx={{ height: 8, borderRadius: 4 }} />
-              </Box>
+              )}
+
+              {activeTab === 4 && (
+                <Box sx={{ py: 4, textAlign: 'center' }}>
+                  <Typography color="text.secondary">Quality Control details</Typography>
+                  <LinearProgress variant="determinate" value={getStageProgress('QUALITY_CONTROL')} sx={{ mt: 2, height: 10, borderRadius: 5 }} />
+                </Box>
+              )}
             </CardContent>
           </Card>
         </Grid>
 
+        {/* Products Table */}
         <Grid item xs={12}>
           <Card>
             <CardContent>
               <Typography variant="h6" sx={{ mb: 2 }}>Products</Typography>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Product Code</TableCell>
-                    <TableCell>Product Name</TableCell>
-                    <TableCell>Color</TableCell>
-                    <TableCell>Material</TableCell>
-                    <TableCell>Order Qty</TableCell>
-                    <TableCell>Current Stage</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  <TableRow>
-                    <TableCell>TP-MAIN</TableCell>
-                    <TableCell>Teapot (Main Body)</TableCell>
-                    <TableCell>Blue</TableCell>
-                    <TableCell>Stoneware</TableCell>
-                    <TableCell>100</TableCell>
-                    <TableCell><Chip label="Trimming" size="small" color="success" /></TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>TP-LID</TableCell>
-                    <TableCell>Teapot (Lid)</TableCell>
-                    <TableCell>Blue</TableCell>
-                    <TableCell>Stoneware</TableCell>
-                    <TableCell>100</TableCell>
-                    <TableCell><Chip label="Throwing" size="small" color="warning" /></TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
+              {details.length === 0 ? (
+                <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
+                  No products added yet
+                </Typography>
+              ) : (
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Product Code</TableCell>
+                      <TableCell>Product Name</TableCell>
+                      <TableCell>Color</TableCell>
+                      <TableCell>Material</TableCell>
+                      <TableCell>Size</TableCell>
+                      <TableCell>Order Qty</TableCell>
+                      <TableCell>Current Stage</TableCell>
+                      <TableCell>Status</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {details.map((detail: POLDetailType) => (
+                      <TableRow key={detail.id}>
+                        <TableCell>{detail.productCode}</TableCell>
+                        <TableCell>{detail.productName}</TableCell>
+                        <TableCell>{detail.color || '-'}</TableCell>
+                        <TableCell>{detail.material || '-'}</TableCell>
+                        <TableCell>{detail.size || '-'}</TableCell>
+                        <TableCell>{detail.quantity}</TableCell>
+                        <TableCell>
+                          <Chip
+                            label={detail.notes?.split(' ')[0] || 'Forming'}
+                            size="small"
+                            color="success"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            icon={<CheckCircleIcon />}
+                            label="On Track"
+                            size="small"
+                            color="success"
+                            variant="outlined"
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Alerts Section */}
+        <Grid item xs={12}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                <WarningIcon color="warning" />
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>Active Alerts</Typography>
+              </Box>
+              <Typography color="text.secondary">
+                No active alerts for this POL
+              </Typography>
             </CardContent>
           </Card>
         </Grid>

@@ -170,7 +170,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </IconButton>
           <IconButton onClick={handleMenuOpen}>
             <Avatar sx={{ width: 36, height: 36, bgcolor: 'primary.main' }}>
-              {user?.full_name?.charAt(0) || 'U'}
+              {user?.fullName?.charAt(0) || 'U'}
             </Avatar>
           </IconButton>
           <Menu
@@ -182,7 +182,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           >
             <MenuItem disabled>
               <Typography variant="body2" color="text.secondary">
-                {user?.full_name} ({user?.role})
+                {user?.fullName} ({user?.role})
               </Typography>
             </MenuItem>
             <Divider />

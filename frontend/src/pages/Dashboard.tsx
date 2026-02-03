@@ -46,10 +46,12 @@ const Dashboard: React.FC = () => {
         setLoading(true);
         const [statsData, alertsData] = await Promise.all([
           dashboardService.getStats(),
-          alertService.getAll({ status: 'Open', priority: 'Critical' }),
+          alertService.getAll({ status: 'OPEN' }),
         ]);
         setStats(statsData);
-        setAlerts(alertsData.slice(0, 5));
+        // Handle both array and object response
+        const alertsArray = Array.isArray(alertsData) ? alertsData : (alertsData.alerts || []);
+        setAlerts(alertsArray.slice(0, 5));
       } catch (err: any) {
         setError(err.message || 'Failed to load dashboard data');
       } finally {
@@ -81,7 +83,7 @@ const Dashboard: React.FC = () => {
     <Box>
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" sx={{ fontWeight: 600 }}>
-          Welcome back, {user?.full_name || 'User'}!
+          Welcome back, {user?.fullName || 'User'}!
         </Typography>
         <Typography variant="body1" color="text.secondary">
           Here's what's happening with your production today.
@@ -226,17 +228,17 @@ const Dashboard: React.FC = () => {
                     <React.Fragment key={alert.id}>
                       <ListItem sx={{ px: 0 }}>
                         <ListItemIcon sx={{ minWidth: 40 }}>
-                          {alert.priority === 'Critical' ? (
+                          {alert.priority === 'CRITICAL' || alert.priority === 'HIGH' ? (
                             <ErrorIcon color="error" />
-                          ) : alert.priority === 'Warning' ? (
+                          ) : alert.priority === 'WARNING' || alert.priority === 'MEDIUM' ? (
                             <WarningIcon color="warning" />
                           ) : (
                             <InfoIcon color="info" />
                           )}
                         </ListItemIcon>
                         <ListItemText
-                          primary={alert.alert_message}
-                          secondary={new Date(alert.created_at).toLocaleString()}
+                          primary={alert.alertMessage || alert.alert_message}
+                          secondary={new Date(alert.createdAt || alert.created_at).toLocaleString()}
                         />
                       </ListItem>
                       {index < alerts.length - 1 && <Divider />}

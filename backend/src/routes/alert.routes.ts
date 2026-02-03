@@ -3,6 +3,44 @@ import { authenticate } from '../middleware/auth.middleware';
 
 const router = Router();
 
+// Get dashboard stats
+router.get('/stats', authenticate, async (_req, res) => {
+  try {
+    res.json({
+      success: true,
+      data: {
+        total_pols: 48,
+        active_pols: 28,
+        completed_this_month: 16,
+        delayed_pols: 4,
+        critical_alerts: 2,
+        warning_alerts: 5,
+        info_alerts: 8,
+        pols_by_status: [
+          { status: 'PENDING', count: 8 },
+          { status: 'IN_PROGRESS', count: 28 },
+          { status: 'COMPLETED', count: 10 },
+          { status: 'CANCELLED', count: 2 },
+        ],
+        production_progress: [
+          { stage: 'Forming', progress: 75 },
+          { stage: 'Firing', progress: 60 },
+          { stage: 'Glazing', progress: 40 },
+          { stage: 'QC', progress: 15 },
+        ],
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'FETCH_STATS_FAILED',
+        message: 'Failed to fetch dashboard stats',
+      },
+    });
+  }
+});
+
 // Get alerts
 router.get('/', authenticate, async (req, res) => {
   try {
@@ -14,7 +52,7 @@ router.get('/', authenticate, async (req, res) => {
       data: {
         alerts: [
           {
-            alertId: 'alert-uuid',
+            id: 'alert-uuid',
             polDetailId: 'pol-detail-uuid',
             polNumber: 'PO-2026-001',
             productCode: 'TP-MAIN',
