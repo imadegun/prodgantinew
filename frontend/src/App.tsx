@@ -43,21 +43,24 @@ function App() {
   }
 
   return (
-    <Layout>
+    <>
       <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/pols" element={<POLList />} />
-        <Route path="/pols/create" element={<POLCreate />} />
-        <Route path="/pols/:id" element={<POLDetail />} />
-        <Route path="/production" element={<ProductionTracking />} />
-        <Route path="/alerts" element={<AlertCenter />} />
-        <Route path="/reports" element={<Reports />} />
-        <Route path="/logbook" element={<Logbook />} />
-        <Route path="/revisions" element={<RevisionTickets />} />
-        <Route path="/settings" element={<Settings />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/" element={<Layout />}>
+          <Route index element={<Dashboard />} />
+          <Route path="pols" element={<POLList />} />
+          <Route path="pols/create" element={<POLCreate />} />
+          <Route path="pols/:id" element={<POLDetail />} />
+          <Route path="production" element={<ProductionTracking />} />
+          <Route path="alerts" element={<AlertCenter />} />
+          <Route path="reports" element={<Reports />} />
+          <Route path="logbook" element={<Logbook />} />
+          <Route path="revisions" element={<RevisionTickets />} />
+          <Route path="settings" element={<Settings />} />
+        </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </Layout>
+    </>
   );
 }
 

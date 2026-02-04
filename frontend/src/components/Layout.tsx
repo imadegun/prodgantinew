@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import {
   Box,
@@ -36,6 +36,7 @@ import {
 } from '@mui/icons-material';
 import { RootState } from '../store';
 import { logout } from '../store/authSlice';
+import { authService } from '../services/api';
 
 const drawerWidth = 260;
 
@@ -51,7 +52,7 @@ const menuItems = [
 ];
 
 interface LayoutProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
@@ -80,6 +81,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   };
 
   const handleLogout = () => {
+    authService.logout();
     dispatch(logout());
     navigate('/login');
   };
@@ -242,7 +244,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           minHeight: 'calc(100vh - 64px)',
         }}
       >
-        {children}
+        <Outlet />
       </Box>
     </Box>
   );
