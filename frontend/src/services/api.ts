@@ -282,6 +282,13 @@ export const revisionService = {
     // Backend returns { success, data: { tickets: [...] }, meta: {...} }
     const responseData = response.data.data || response.data;
     const tickets = responseData.tickets || responseData || [];
+    // Debug: log what we got
+    console.log('Revisions API response:', { responseData, tickets, isArray: Array.isArray(tickets) });
+    // Ensure we return an array
+    if (!Array.isArray(tickets)) {
+      console.error('Expected array but got:', typeof tickets, tickets);
+      return [];
+    }
     // Transform backend field names to frontend field names
     return tickets.map((ticket: any) => ({
       ...ticket,

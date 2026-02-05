@@ -3,46 +3,46 @@ import { authenticate, authorize } from '../middleware/auth.middleware';
 
 const router = Router();
 
-// Get revision tickets
-router.get('/', authenticate, async (req, res) => {
-  try {
-    const { page = 1, limit = 10, status, polId } = req.query;
-    
-    // TODO: Implement revision tickets retrieval
-    res.json({
-      success: true,
-      data: {
-        tickets: [
-          {
-            ticketId: 'ticket-uuid',
-            ticketNumber: 'REV-001',
-            polId: 'pol-uuid',
-            polNumber: 'PO-2026-001',
-            productName: 'Teapot (Lid)',
-            revisionType: 'DESIGN_CHANGE',
-            status: 'APPROVED',
-            createdAt: '2026-01-20T10:00:00Z',
-            createdBy: { userId: 'user-uuid', fullName: 'John Manager' },
-          },
-        ],
-      },
-      meta: {
-        page: Number(page),
-        limit: Number(limit),
-        total: 10,
-        totalPages: 1,
-      },
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: {
-        code: 'FETCH_REVISIONS_FAILED',
-        message: 'Failed to fetch revision tickets',
-      },
-    });
-  }
-});
+  // Get revision tickets
+  router.get('/', authenticate, async (req, res) => {
+    try {
+      const { page = 1, limit = 10, status, polId } = req.query;
+      
+      // TODO: Implement revision tickets retrieval
+      res.json({
+        success: true,
+        data: {
+          tickets: [
+            {
+              id: 'ticket-uuid',
+              ticketNumber: 'REV-001',
+              polId: 'pol-uuid',
+              polNumber: 'PO-2026-001',
+              productName: 'Teapot (Lid)',
+              revisionType: 'DESIGN_CHANGE',
+              status: 'APPROVED',
+              createdAt: '2026-01-20T10:00:00Z',
+              createdBy: { userId: 'user-uuid', fullName: 'John Manager' },
+            },
+          ],
+        },
+        meta: {
+          page: Number(page),
+          limit: Number(limit),
+          total: 10,
+          totalPages: 1,
+        },
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: {
+          code: 'FETCH_REVISIONS_FAILED',
+          message: 'Failed to fetch revision tickets',
+        },
+      });
+    }
+  });
 
 // Create revision ticket
 router.post('/', authenticate, authorize('MANAGER'), async (req, res) => {
