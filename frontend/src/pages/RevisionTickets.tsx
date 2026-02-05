@@ -343,35 +343,37 @@ const RevisionTickets = (): JSX.Element => {
               </TableRow>
             ) : (
               filteredTickets.map((ticket) => (
-                <TableRow key={ticket.id} hover>
+                <TableRow key={ticket?.id || Math.random()} hover>
                   <TableCell>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>REV-{ticket.id.slice(-6)}</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      {ticket?.id ? `REV-${String(ticket.id).slice(-6)}` : 'REV-N/A'}
+                    </Typography>
                   </TableCell>
-                  <TableCell>{new Date(ticket.createdAt).toLocaleDateString()}</TableCell>
-                  <TableCell>{ticket.polId || 'N/A'}</TableCell>
+                  <TableCell>{ticket?.createdAt ? new Date(ticket.createdAt).toLocaleDateString() : '-'}</TableCell>
+                  <TableCell>{ticket?.polId || 'N/A'}</TableCell>
                   <TableCell>
                     <Chip
-                      label={ticket.type}
-                      color={getTypeColor(ticket.type) as any}
+                      label={ticket?.type || 'N/A'}
+                      color={getTypeColor(ticket?.type || '') as any}
                       size="small"
                       variant="outlined"
                     />
                   </TableCell>
                   <TableCell>
                     <Chip
-                      label={ticket.severity}
-                      color={getSeverityColor(ticket.severity) as any}
+                      label={ticket?.severity || 'N/A'}
+                      color={getSeverityColor(ticket?.severity || '') as any}
                       size="small"
                     />
                   </TableCell>
                   <TableCell>
                     <Chip
-                      label={ticket.status?.replace('_', ' ')}
-                      color={getStatusColor(ticket.status || '') as any}
+                      label={ticket?.status?.replace('_', ' ') || 'N/A'}
+                      color={getStatusColor(ticket?.status || '') as any}
                       size="small"
                     />
                   </TableCell>
-                  <TableCell>{ticket.createdBy || 'Unknown'}</TableCell>
+                  <TableCell>{ticket?.createdBy || 'Unknown'}</TableCell>
                   <TableCell align="right">
                     <Tooltip title="View Details">
                       <IconButton size="small" onClick={() => handleView(ticket)}>

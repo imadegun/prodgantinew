@@ -60,7 +60,10 @@ export const polService = {
     if (filters?.dateTo) params.append('dateTo', filters.dateTo);
     if (filters?.search) params.append('search', filters.search);
     const response = await api.get(`/pols?${params.toString()}`);
-    return response.data.data || response.data;
+    // Backend returns { success, data: { pols: [...] }, meta: {...} }
+    // Extract the pols array from the nested structure
+    const responseData = response.data.data || response.data;
+    return responseData.pols || responseData || [];
   },
 
   getById: async (id: number): Promise<POL> => {
@@ -92,22 +95,30 @@ export const polService = {
 export const productService = {
   search: async (query: string): Promise<any[]> => {
     const response = await api.get(`/products/search?q=${encodeURIComponent(query)}`);
-    return response.data.data || response.data;
+    // Backend returns { success, data: { products: [...] } }
+    const responseData = response.data.data || response.data;
+    return responseData.products || responseData || [];
   },
 
   getByCode: async (code: string): Promise<any> => {
     const response = await api.get(`/products/${code}`);
-    return response.data.data || response.data;
+    // Backend returns { success, data: { product: {...} } }
+    const responseData = response.data.data || response.data;
+    return responseData.product || responseData;
   },
 
   getMaterialRequirements: async (productCode: string): Promise<any> => {
     const response = await api.get(`/products/${productCode}/materials`);
-    return response.data.data || response.data;
+    // Backend returns { success, data: { materials: {...} } }
+    const responseData = response.data.data || response.data;
+    return responseData.materials || responseData;
   },
 
   getToolRequirements: async (productCode: string): Promise<any> => {
     const response = await api.get(`/products/${productCode}/tools`);
-    return response.data.data || response.data;
+    // Backend returns { success, data: { tools: {...} } }
+    const responseData = response.data.data || response.data;
+    return responseData.tools || responseData;
   },
 };
 
@@ -152,7 +163,14 @@ export const alertService = {
     if (filters?.priority) params.append('priority', filters.priority);
     if (filters?.status) params.append('status', filters.status);
     const response = await api.get(`/alerts?${params.toString()}`);
-    return response.data.data || response.data;
+    // Backend returns { success, data: { alerts: [...] }, meta: {...} }
+    const responseData = response.data.data || response.data;
+    const alerts = responseData.alerts || responseData || [];
+    // Transform alertId to id for frontend compatibility
+    return alerts.map((alert: any) => ({
+      ...alert,
+      id: alert.alertId || alert.id
+    }));
   },
 
   acknowledge: async (id: number): Promise<Alert> => {
@@ -167,7 +185,13 @@ export const alertService = {
 
   getStats: async (): Promise<{ critical: number; warning: number; info: number }> => {
     const response = await api.get('/alerts/stats');
-    return response.data.data || response.data;
+    // Backend returns { success, data: { critical_alerts, warning_alerts, info_alerts } }
+    const responseData = response.data.data || response.data;
+    return {
+      critical: responseData.critical_alerts || responseData.critical || 0,
+      warning: responseData.warning_alerts || responseData.warning || 0,
+      info: responseData.info_alerts || responseData.info || 0,
+    };
   },
 };
 
@@ -175,17 +199,33 @@ export const alertService = {
 export const dashboardService = {
   getStats: async (): Promise<DashboardStats> => {
     const response = await api.get('/alerts/stats');
-    return response.data.data || response.data;
+    // Backend returns { success, data: { total_pols, active_pols, completed_this_month, delayed_pols, critical_alerts, warning_alerts, info_alerts, ... } }
+    const responseData = response.data.data || response.data;
+    return {
+      total_pols: responseData.total_pols || 0,
+      active_pols: responseData.active_pols || 0,
+      completed_this_month: responseData.completed_this_month || 0,
+      delayed_pols: responseData.delayed_pols || 0,
+      critical_alerts: responseData.critical_alerts || 0,
+      warning_alerts: responseData.warning_alerts || 0,
+      info_alerts: responseData.info_alerts || 0,
+      pols_by_status: responseData.pols_by_status || [],
+      production_progress: responseData.production_progress || [],
+    };
   },
 
   getRecentPOLs: async (limit: number = 5): Promise<POL[]> => {
     const response = await api.get(`/pols?limit=${limit}`);
-    return response.data.data?.pols || response.data;
+    // Backend returns { success, data: { pols: [...] }, meta: {...} }
+    const responseData = response.data.data || response.data;
+    return responseData.pols || responseData || [];
   },
 
   getUpcomingDeliveries: async (): Promise<any[]> => {
     const response = await api.get('/pols?status=IN_PROGRESS');
-    return response.data.data?.pols || response.data;
+    // Backend returns { success, data: { pols: [...] }, meta: {...} }
+    const responseData = response.data.data || response.data;
+    return responseData.pols || responseData || [];
   },
 };
 
@@ -199,7 +239,14 @@ export const logbookService = {
       });
     }
     const response = await api.get(`/logbook?${params.toString()}`);
-    return response.data.data || response.data;
+    // Backend returns { success, data: { entries: [...] }, meta: {...} }
+    const responseData = response.data.data || response.data;
+    const entries = responseData.entries || responseData || [];
+    // Transform entryId to id for frontend compatibility
+    return entries.map((entry: any) => ({
+      ...entry,
+      id: entry.entryId || entry.id
+    }));
   },
 
   getById: async (id: number): Promise<any> => {
@@ -232,7 +279,15 @@ export const revisionService = {
       });
     }
     const response = await api.get(`/revisions?${params.toString()}`);
-    return response.data.data || response.data;
+    // Backend returns { success, data: { tickets: [...] }, meta: {...} }
+    const responseData = response.data.data || response.data;
+    const tickets = responseData.tickets || responseData || [];
+    // Transform backend field names to frontend field names
+    return tickets.map((ticket: any) => ({
+      ...ticket,
+      id: ticket.ticketId || ticket.id,
+      type: ticket.revisionType || ticket.type,
+    }));
   },
 
   getById: async (id: number): Promise<any> => {

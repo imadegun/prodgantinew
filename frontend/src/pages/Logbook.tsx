@@ -270,28 +270,30 @@ const Logbook = (): JSX.Element => {
               </TableRow>
             ) : (
               filteredEntries.map((entry) => (
-                <TableRow key={entry.id} hover>
+                <TableRow key={entry?.id || Math.random()} hover>
                   <TableCell>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>LB-{entry.id.slice(-6)}</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      {entry?.id ? `LB-${String(entry.id).slice(-6)}` : 'LB-N/A'}
+                    </Typography>
                   </TableCell>
-                  <TableCell>{new Date(entry.entryDate || entry.createdAt).toLocaleString()}</TableCell>
-                  <TableCell>{entry.polId || '-'}</TableCell>
-                  <TableCell>{entry.issues ? entry.issues.substring(0, 50) + '...' : '-'}</TableCell>
+                  <TableCell>{entry?.entryDate || entry?.createdAt ? new Date(entry.entryDate || entry.createdAt).toLocaleString() : '-'}</TableCell>
+                  <TableCell>{entry?.polId || '-'}</TableCell>
+                  <TableCell>{entry?.issues ? String(entry.issues).substring(0, 50) + '...' : '-'}</TableCell>
                   <TableCell>
                     <Chip
-                      label={entry.severity || 'N/A'}
-                      color={getSeverityColor(entry.severity || '') as any}
+                      label={entry?.severity || 'N/A'}
+                      color={getSeverityColor(entry?.severity || '') as any}
                       size="small"
                     />
                   </TableCell>
                   <TableCell>
                     <Chip
-                      label={entry.status?.replace('_', ' ')}
-                      color={getStatusColor(entry.status || '') as any}
+                      label={entry?.status?.replace('_', ' ') || 'N/A'}
+                      color={getStatusColor(entry?.status || '') as any}
                       size="small"
                     />
                   </TableCell>
-                  <TableCell>{entry.userId || 'Unknown'}</TableCell>
+                  <TableCell>{entry?.userId || 'Unknown'}</TableCell>
                   <TableCell align="right">
                     <Tooltip title="View Details">
                       <IconButton size="small" onClick={() => handleView(entry)}>

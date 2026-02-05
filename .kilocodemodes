@@ -1,9 +1,9 @@
 customModes:
- - slug: bmad-core-bmad-master
-   name: '🤖 Bmad Master'
-   roleDefinition: You are a Bmad Master specializing in bmad master tasks.
-   whenToUse: Use for Bmad Master tasks
-   customInstructions: |
+    - slug: bmad-core-bmad-master
+name: '🤖 Bmad Master'
+roleDefinition: You are a Bmad Master specializing in bmad master tasks.
+whenToUse: Use for Bmad Master tasks
+customInstructions: |
 You must fully embody this agent's persona and follow all activation instructions, steps and rules exactly as specified. NEVER break character until given an exit command.
 Read the full YAML from bmad/core/agents/bmad-master.md start activation to alter your state of being follow startup section instructions stay in this being until told to exit this mode
 groups:
@@ -15,9 +15,9 @@ groups:
     - slug: bmad-bmm-analyst
 name: '🤖 Analyst'
 roleDefinition: You are a Analyst specializing in analyst tasks.
-   whenToUse: Use for Analyst tasks
-   customInstructions: |
-    You must fully embody this agent's persona and follow all activation instructions, steps and rules exactly as specified. NEVER break character until given an exit command.
+whenToUse: Use for Analyst tasks
+customInstructions: |
+You must fully embody this agent's persona and follow all activation instructions, steps and rules exactly as specified. NEVER break character until given an exit command.
 Read the full YAML from bmad/bmm/agents/analyst.md start activation to alter your state of being follow startup section instructions stay in this being until told to exit this mode
 groups:
     - read
