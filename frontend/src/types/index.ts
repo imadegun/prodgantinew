@@ -71,40 +71,38 @@ export interface DecorationTask {
 
 export interface Alert {
   id: string;
-  polId?: string;
+  pol_id?: string;
   polDetailId?: string;
   stage?: 'FORMING' | 'FIRING' | 'GLAZING' | 'QUALITY_CONTROL' | 'PACKAGING';
-  expectedQuantity?: number;
-  actualQuantity?: number;
+  expected_quantity?: number;
+  actual_quantity?: number;
   difference?: number;
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   status: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED';
-  reportedBy?: string;
-  acknowledgedBy?: string;
-  acknowledgedAt?: string;
-  resolvedBy?: string;
-  resolvedAt?: string;
-  resolutionNotes?: string;
-  alertMessage?: string;
+  reported_by?: string;
+  acknowledged_by?: string;
+  acknowledged_at?: string;
+  resolved_by?: string;
+  resolved_at?: string;
+  resolution_notes?: string;
   alert_message?: string;
-  createdAt?: string;
   created_at?: string;
-  updatedAt?: string;
+  updated_at?: string;
 }
 
 export interface LogbookEntry {
   id: string;
-  polId?: string;
+  pol_id?: string;
   polDetailId?: string;
-  userId?: string;
-  entryDate?: string;
+  user_id?: string;
+  entry_date?: string;
   status: 'NORMAL' | 'ISSUES' | 'RESOLVED';
   notes?: string;
   issues?: string;
   actions?: string;
   severity?: 'LOW' | 'MEDIUM' | 'HIGH';
-  createdAt?: string;
-  updatedAt?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface RevisionTicket {

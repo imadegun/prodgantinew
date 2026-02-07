@@ -232,8 +232,8 @@ A modern web application that:
 **FR-001.4: Tool Requirement Extraction**
 - System shall automatically extract and display tool requirements from gayafusionall database:
   - Casting tools
-  - Extruders
-  - Textures
+  - Extruders tools
+  - Textures tools
   - General tools
 
 **FR-001.5: Build Notes Display**

@@ -42,7 +42,7 @@ import {
   Send as SubmitIcon,
 } from '@mui/icons-material';
 import { RootState } from '../store';
-import { revisionService } from '../services/api';
+import { revisionService } from '../services/revision.service';
 import { RevisionTicket } from '../types';
 
 const RevisionTickets = (): JSX.Element => {

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate, useLocation, Outlet } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation, Outlet, Navigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import {
   Box,
@@ -35,8 +35,8 @@ import {
   Person as PersonIcon,
 } from '@mui/icons-material';
 import { RootState } from '../store';
-import { logout } from '../store/authSlice';
-import { authService } from '../services/api';
+import { logout } from '../store/slices/authSlice';
+import { authService } from '../services/auth.service';
 
 const drawerWidth = 260;
 
@@ -63,10 +63,23 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useDispatch();
-  const { user } = useSelector((state: RootState) => state.auth);
+  const { user, isAuthenticated, isLoading: authLoading } = useSelector((state: RootState) => state.auth);
   const { alerts } = useSelector((state: RootState) => state.alerts);
 
-  const unreadAlerts = alerts.filter((a) => a.status === 'OPEN' && (a.priority === 'HIGH' || a.priority === 'CRITICAL')).length;
+  // Small delay to ensure Redux state is updated before checking authentication
+  const [shouldCheckAuth, setShouldCheckAuth] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setShouldCheckAuth(true), 300);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Redirect to login if not authenticated and auth is not loading
+  if (!isAuthenticated && !authLoading && shouldCheckAuth) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const unreadAlerts = alerts.filter((a) => a.status === 'OPEN' && a.priority === 'CRITICAL').length;
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -82,7 +95,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const handleLogout = () => {
     authService.logout();
-    dispatch(logout());
+    dispatch(logout() as any);
     navigate('/login');
   };
 

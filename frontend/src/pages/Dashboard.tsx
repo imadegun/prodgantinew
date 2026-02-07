@@ -1,6 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useSelector } from 'react-redux';
+import React, { useEffect } from 'react';
 import {
   Box,
   Grid,
@@ -8,333 +6,310 @@ import {
   CardContent,
   Typography,
   Button,
+  Chip,
   LinearProgress,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  Divider,
-  Alert,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  IconButton,
 } from '@mui/material';
 import {
+  Refresh as RefreshIcon,
+  Add as AddIcon,
+  Visibility as VisibilityIcon,
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
-  Description as POLIcon,
-  Warning as WarningIcon,
-  Error as ErrorIcon,
-  Info as InfoIcon,
-  ArrowForward as ArrowForwardIcon,
-  Factory as ProductionIcon,
+  MoreVert as MoreVertIcon,
 } from '@mui/icons-material';
-import { RootState } from '../store';
-import { dashboardService, alertService } from '../services/api';
-import { DashboardStats, Alert as AlertType } from '../types';
+import { useAppSelector, useAppDispatch } from '../hooks/useAppSelector';
+import { fetchPOLs } from '../store/slices/polSlice';
+import { fetchAlerts } from '../store/slices/alertSlice';
 
-const Dashboard = (): JSX.Element => {
-  const navigate = useNavigate();
-  const { user } = useSelector((state: RootState) => state.auth);
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [alerts, setAlerts] = useState<AlertType[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+const Dashboard = () => {
+  const dispatch = useAppDispatch();
+  const { pols, isLoading: polsLoading } = useAppSelector((state) => state.pol);
+  const { alerts, isLoading: alertsLoading } = useAppSelector((state) => state.alerts);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const [statsData, alertsData] = await Promise.all([
-          dashboardService.getStats(),
-          alertService.getAll({ status: 'OPEN' }),
-        ]);
-        setStats(statsData);
-        const alertsArray = Array.isArray(alertsData) ? alertsData : (alertsData.alerts || []);
-        setAlerts(alertsArray.slice(0, 5));
-      } catch (err: any) {
-        setError(err.message || 'Failed to load dashboard data');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, []);
+    dispatch(fetchPOLs({ page: 1, limit: 10 }));
+    dispatch(fetchAlerts({ page: 1, limit: 5, status: 'OPEN' }));
+  }, [dispatch]);
 
-  const getStatusColor = (status: string): string => {
-    switch (status) {
-      case 'Active': return 'success';
-      case 'Pending': return 'warning';
-      case 'Delayed': return 'error';
-      case 'Completed': return 'info';
-      default: return 'default';
-    }
+  const activePOLs = pols.filter((pol) => pol.status === 'IN_PROGRESS');
+  const completedPOLs = pols.filter((pol) => pol.status === 'COMPLETED');
+  const criticalAlerts = alerts.filter((alert) => alert.priority === 'CRITICAL');
+
+  const handleRefresh = () => {
+    dispatch(fetchPOLs({ page: 1, limit: 10 }));
+    dispatch(fetchAlerts({ page: 1, limit: 5, status: 'OPEN' }));
   };
 
-  if (loading) {
-    return (
-      <Box sx={{ width: '100%' }}>
-        <LinearProgress />
-      </Box>
-    );
-  }
-
   return (
-    <Box>
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" sx={{ fontWeight: 600 }}>
-          Welcome back, {user?.fullName || 'User'}!
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Here is what is happening with your production today.
-        </Typography>
+    <Box sx={{ p: 3 }}>
+      {/* Header */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4">Dashboard</Typography>
+        <Button
+          variant="outlined"
+          startIcon={<RefreshIcon />}
+          onClick={handleRefresh}
+          disabled={polsLoading || alertsLoading}
+        >
+          Refresh
+        </Button>
       </Box>
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          {error}
-        </Alert>
-      )}
-
-      {/* Quick Stats Cards */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <Box>
-                  <Typography color="text.secondary" variant="body2" gutterBottom>
-                    Total POLs
-                  </Typography>
-                  <Typography variant="h4" sx={{ fontWeight: 700 }}>
-                    {stats?.total_pols || 0}
-                  </Typography>
-                </Box>
-                <Box sx={{ bgcolor: 'primary.light', p: 1, borderRadius: 2 }}>
-                  <POLIcon sx={{ color: 'primary.main' }} />
-                </Box>
-              </Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
-                <TrendingUpIcon sx={{ color: 'success.main', fontSize: 20, mr: 0.5 }} />
-                <Typography variant="body2" color="success.main">
-                  +12% from last month
-                </Typography>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <Box>
-                  <Typography color="text.secondary" variant="body2" gutterBottom>
-                    In Progress
-                  </Typography>
-                  <Typography variant="h4" sx={{ fontWeight: 700 }}>
-                    {stats?.active_pols || 0}
-                  </Typography>
-                </Box>
-                <Box sx={{ bgcolor: 'warning.light', p: 1, borderRadius: 2 }}>
-                  <ProductionIcon sx={{ color: 'warning.dark' }} />
-                </Box>
-              </Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
-                <Typography variant="body2" color="text.secondary">
-                  {stats?.completed_this_month || 0} completed this month
-                </Typography>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <Box>
-                  <Typography color="text.secondary" variant="body2" gutterBottom>
-                    Critical Alerts
-                  </Typography>
-                  <Typography variant="h4" sx={{ fontWeight: 700, color: 'error.main' }}>
-                    {stats?.critical_alerts || 0}
-                  </Typography>
-                </Box>
-                <Box sx={{ bgcolor: 'error.light', p: 1, borderRadius: 2 }}>
-                  <ErrorIcon sx={{ color: 'error.main' }} />
-                </Box>
-              </Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
-                <WarningIcon sx={{ color: 'warning.main', fontSize: 20, mr: 0.5 }} />
-                <Typography variant="body2" color="warning.main">
-                  {stats?.warning_alerts || 0} warnings
-                </Typography>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <Box>
-                  <Typography color="text.secondary" variant="body2" gutterBottom>
-                    Delayed
-                  </Typography>
-                  <Typography variant="h4" sx={{ fontWeight: 700, color: 'error.main' }}>
-                    {stats?.delayed_pols || 0}
-                  </Typography>
-                </Box>
-                <Box sx={{ bgcolor: 'error.light', p: 1, borderRadius: 2 }}>
-                  <TrendingDownIcon sx={{ color: 'error.main' }} />
-                </Box>
-              </Box>
-              <Button
-                size="small"
-                endIcon={<ArrowForwardIcon />}
-                onClick={() => navigate('/pols')}
-                sx={{ mt: 1 }}
-              >
-                View Details
-              </Button>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
 
       <Grid container spacing={3}>
-        {/* Critical Alerts */}
-        <Grid item xs={12} md={6}>
-          <Card sx={{ height: '100%' }}>
+        {/* Quick Stats */}
+        <Grid item xs={12} sm={6} md={3}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <Box>
+                  <Typography color="textSecondary" gutterBottom variant="overline">
+                    Total POLs
+                  </Typography>
+                  <Typography variant="h3">{pols.length}</Typography>
+                </Box>
+                <Chip
+                  label="+12%"
+                  color="success"
+                  size="small"
+                  icon={<TrendingUpIcon />}
+                />
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={3}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <Box>
+                  <Typography color="textSecondary" gutterBottom variant="overline">
+                    In Progress
+                  </Typography>
+                  <Typography variant="h3">{activePOLs.length}</Typography>
+                </Box>
+                <Chip
+                  label="Active"
+                  color="info"
+                  size="small"
+                />
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={3}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <Box>
+                  <Typography color="textSecondary" gutterBottom variant="overline">
+                    Completed This Month
+                  </Typography>
+                  <Typography variant="h3">{completedPOLs.length}</Typography>
+                </Box>
+                <Chip
+                  label="+8%"
+                  color="success"
+                  size="small"
+                  icon={<TrendingUpIcon />}
+                />
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={3}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <Box>
+                  <Typography color="textSecondary" gutterBottom variant="overline">
+                    Active Alerts
+                  </Typography>
+                  <Typography variant="h3" color="error">
+                    {criticalAlerts.length}
+                  </Typography>
+                </Box>
+                <Chip
+                  label="Critical"
+                  color="error"
+                  size="small"
+                />
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Active Alerts */}
+        <Grid item xs={12} md={8}>
+          <Card>
             <CardContent>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                  Critical Alerts
-                </Typography>
-                <Button size="small" onClick={() => navigate('/alerts')}>
+                <Typography variant="h6">Active Alerts</Typography>
+                <Button size="small" variant="text">
                   View All
                 </Button>
               </Box>
-              {alerts.length === 0 ? (
-                <Box sx={{ py: 4, textAlign: 'center' }}>
-                  <Typography color="text.secondary">No critical alerts</Typography>
-                </Box>
+              
+              {alertsLoading ? (
+                <Typography>Loading alerts...</Typography>
+              ) : alerts.length === 0 ? (
+                <Typography color="textSecondary">No active alerts</Typography>
               ) : (
-                <List disablePadding>
-                  {alerts.map((alert, index) => (
-                    <React.Fragment key={alert.id}>
-                      <ListItem sx={{ px: 0 }}>
-                        <ListItemIcon sx={{ minWidth: 40 }}>
-                          {alert.priority === 'CRITICAL' || alert.priority === 'HIGH' ? (
-                            <ErrorIcon color="error" />
-                          ) : alert.priority === 'WARNING' || alert.priority === 'MEDIUM' ? (
-                            <WarningIcon color="warning" />
-                          ) : (
-                            <InfoIcon color="info" />
-                          )}
-                        </ListItemIcon>
-                        <ListItemText
-                          primary={alert.alertMessage || alert.alert_message || 'Alert'}
-                          secondary={new Date(alert.createdAt || alert.created_at || '').toLocaleString()}
-                        />
-                      </ListItem>
-                      {index < alerts.length - 1 && <Divider />}
-                    </React.Fragment>
-                  ))}
-                </List>
+                alerts.slice(0, 3).map((alert) => (
+                  <Box
+                    key={alert.alertId}
+                    sx={{
+                      p: 2,
+                      mb: 1,
+                      border: 1,
+                      borderColor: alert.priority === 'CRITICAL' ? 'error.main' : 'warning.main',
+                      borderRadius: 1,
+                      backgroundColor: alert.priority === 'CRITICAL' ? 'error.light' : 'warning.light',
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Box>
+                        <Typography variant="body2" fontWeight="bold">
+                          {alert.alertType}
+                        </Typography>
+                        <Typography variant="caption" color="textSecondary">
+                          {new Date(alert.createdAt).toLocaleString()}
+                        </Typography>
+                      </Box>
+                      <Chip
+                        label={alert.priority}
+                        color={alert.priority === 'CRITICAL' ? 'error' : 'warning'}
+                        size="small"
+                      />
+                    </Box>
+                    <Typography variant="body2" sx={{ mt: 1 }}>
+                      {alert.alertMessage}
+                    </Typography>
+                  </Box>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Recent POLs */}
+        <Grid item xs={12} md={4}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6">Recent POLs</Typography>
+                <Button size="small" variant="text">
+                  View All
+                </Button>
+              </Box>
+              
+              {polsLoading ? (
+                <Typography>Loading...</Typography>
+              ) : pols.length === 0 ? (
+                <Typography color="textSecondary">No POLs found</Typography>
+              ) : (
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>PO Number</TableCell>
+                        <TableCell>Client</TableCell>
+                        <TableCell>Status</TableCell>
+                        <TableCell align="right">Action</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {pols.slice(0, 5).map((pol) => (
+                        <TableRow key={pol.polId} hover>
+                          <TableCell>{pol.poNumber}</TableCell>
+                          <TableCell>{pol.clientName}</TableCell>
+                          <TableCell>
+                            <Chip
+                              label={pol.status.replace('_', ' ')}
+                              color={
+                                pol.status === 'COMPLETED' ? 'success' :
+                                pol.status === 'IN_PROGRESS' ? 'info' :
+                                pol.status === 'CANCELLED' ? 'error' : 'default'
+                              }
+                              size="small"
+                            />
+                          </TableCell>
+                          <TableCell align="right">
+                            <IconButton size="small">
+                              <VisibilityIcon fontSize="small" />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
               )}
             </CardContent>
           </Card>
         </Grid>
 
         {/* Production Progress */}
-        <Grid item xs={12} md={6}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent>
-              <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>
-                Production Progress Overview
-              </Typography>
-              {(stats?.production_progress || []).map((stage) => (
-                <Box key={stage.stage} sx={{ mb: 2 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                    <Typography variant="body2">{stage.stage}</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                      {stage.progress}%
-                    </Typography>
-                  </Box>
-                  <LinearProgress
-                    variant="determinate"
-                    value={stage.progress}
-                    sx={{ height: 8, borderRadius: 4 }}
-                  />
-                </Box>
-              ))}
-              <Button
-                fullWidth
-                variant="outlined"
-                startIcon={<ProductionIcon />}
-                onClick={() => navigate('/production')}
-                sx={{ mt: 2 }}
-              >
-                View Production Tracking
-              </Button>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Quick Actions */}
         <Grid item xs={12}>
           <Card>
             <CardContent>
-              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-                Quick Actions
-              </Typography>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6} md={3}>
-                  <Button
-                    fullWidth
-                    variant="contained"
-                    onClick={() => navigate('/pols/create')}
-                    sx={{ py: 1.5 }}
-                  >
-                    Create New POL
-                  </Button>
-                </Grid>
-                <Grid item xs={12} sm={6} md={3}>
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    onClick={() => navigate('/production')}
-                    sx={{ py: 1.5 }}
-                  >
-                    Enter Production Data
-                  </Button>
-                </Grid>
-                <Grid item xs={12} sm={6} md={3}>
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    onClick={() => navigate('/reports')}
-                    sx={{ py: 1.5 }}
-                  >
-                    Generate Reports
-                  </Button>
-                </Grid>
-                <Grid item xs={12} sm={6} md={3}>
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    color="secondary"
-                    onClick={() => navigate('/logbook')}
-                    sx={{ py: 1.5 }}
-                  >
-                    Log Issue
-                  </Button>
-                </Grid>
-              </Grid>
+              <Typography variant="h6" gutterBottom>Production Progress Overview</Typography>
+              
+              <Box sx={{ mb: 3 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="body2">Forming Stage</Typography>
+                  <Typography variant="body2">75%</Typography>
+                </Box>
+                <LinearProgress variant="determinate" value={75} color="primary" />
+              </Box>
+              
+              <Box sx={{ mb: 3 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="body2">Firing Stage</Typography>
+                  <Typography variant="body2">60%</Typography>
+                </Box>
+                <LinearProgress variant="determinate" value={60} color="secondary" />
+              </Box>
+              
+              <Box sx={{ mb: 3 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="body2">Glazing Stage</Typography>
+                  <Typography variant="body2">40%</Typography>
+                </Box>
+                <LinearProgress variant="determinate" value={40} color="success" />
+              </Box>
+              
+              <Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="body2">Quality Control</Typography>
+                  <Typography variant="body2">15%</Typography>
+                </Box>
+                <LinearProgress variant="determinate" value={15} color="warning" />
+              </Box>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
+
+      {/* Quick Actions */}
+      <Box sx={{ mt: 4, display: 'flex', gap: 2 }}>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          size="large"
+        >
+          Create New POL
+        </Button>
+      </Box>
     </Box>
   );
 };

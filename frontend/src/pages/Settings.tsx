@@ -3,8 +3,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Box, Typography, Card, CardContent, Grid, TextField, Button, Switch, FormControlLabel, Divider, Avatar, Alert, AlertTitle, CircularProgress, Tab, Tabs, IconButton } from '@mui/material';
 import { Save as SaveIcon, PhotoCamera as PhotoCameraIcon } from '@mui/icons-material';
 import { RootState } from '../store';
-import { updateProfile } from '../store/authSlice';
-import { authService } from '../services/api';
+import { setUser } from '../store/slices/authSlice';
+import { authService } from '../services/auth.service';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -61,7 +61,7 @@ const Settings = (): JSX.Element => {
     setSuccess(null);
     try {
       const updated = await authService.updateProfile(profileData);
-      dispatch(updateProfile(updated));
+      dispatch(setUser(updated));
       setSuccess('Profile updated successfully');
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {

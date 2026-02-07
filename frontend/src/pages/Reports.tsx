@@ -1,420 +1,358 @@
 import React, { useState } from 'react';
-import { useSelector } from 'react-redux';
 import {
   Box,
-  Typography,
+  Grid,
   Card,
   CardContent,
-  Grid,
-  FormControl,
-  InputLabel,
+  Typography,
+  Button,
+  TextField,
   Select,
   MenuItem,
-  Button,
   Table,
   TableBody,
   TableCell,
+  TableContainer,
   TableHead,
   TableRow,
-  LinearProgress,
-  Alert,
-  AlertTitle,
+  CircularProgress,
   Chip,
-  TextField,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Skeleton,
+  Divider,
 } from '@mui/material';
 import {
-  PictureAsPdf as PdfIcon,
-  TableChart as ExcelIcon,
-  Description as CsvIcon,
-  Refresh as RefreshIcon,
+  Assessment as AssessmentIcon,
   Download as DownloadIcon,
+  Print as PrintIcon,
+  Refresh as RefreshIcon,
+  FilterList as FilterIcon,
 } from '@mui/icons-material';
-import { RootState } from '../store';
-import { reportService } from '../services/api';
+import { useAppSelector, useAppDispatch } from '../hooks/useAppSelector';
+import { generatePOLSummaryReport, generateFormingAnalysisReport, generateQCAnalysisReport, generateProductionProgressReport } from '../store/slices/reportSlice';
 
-interface ReportData {
-  poNumber: string;
-  client: string;
-  orderQty: number;
-  delivered: number;
-  status: string;
-  onTime: boolean | null;
-}
+const Reports = () => {
+  const dispatch = useAppDispatch();
+  const { isLoading } = useAppSelector((state) => state.reports);
 
-const Reports = (): JSX.Element => {
-  const { user } = useSelector((state: RootState) => state.auth);
-  const [reportType, setReportType] = useState<string>('');
-  const [loading, setLoading] = useState(false);
-  const [generating, setGenerating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [reportData, setReportData] = useState<ReportData[]>([]);
-  const [exportDialogOpen, setExportDialogOpen] = useState(false);
-  const [exportFormat, setExportFormat] = useState<'pdf' | 'excel' | 'csv'>('pdf');
-
-  // Filters
-  const [dateFrom, setDateFrom] = useState<string>('');
-  const [dateTo, setDateTo] = useState<string>('');
-  const [clientFilter, setClientFilter] = useState<string>('all');
-
-  const reportTypes = [
-    { value: 'pol-summary', label: 'POL Order Summary', description: 'Overview of all POL orders with delivery status' },
-    { value: 'forming', label: 'Forming Analysis', description: 'Detailed analysis of forming stage production' },
-    { value: 'qc', label: 'QC Analysis', description: 'Quality control metrics and reject rates' },
-    { value: 'production', label: 'Production Progress', description: 'Overall production progress across all stages' },
-    { value: 'logbook', label: 'Logbook Summary', description: 'Summary of logbook entries and issues' },
-    { value: 'alerts', label: 'Alerts Summary', description: 'Summary of all alerts and resolutions' },
-  ];
+  const [reportType, setReportType] = useState('POL_SUMMARY');
+  const [format, setFormat] = useState('JSON');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [generatedReport, setGeneratedReport] = useState<any>(null);
+  const [openPreviewDialog, setOpenPreviewDialog] = useState(false);
 
   const handleGenerateReport = async () => {
-    if (!reportType) {
-      setError('Please select a report type');
+    try {
+      let reportData;
+      
+      switch (reportType) {
+        case 'POL_SUMMARY':
+          reportData = await dispatch(generatePOLSummaryReport({
+            fromDate: fromDate || undefined,
+            toDate: toDate || undefined,
+          }));
+          break;
+        case 'FORMING_ANALYSIS':
+          reportData = await dispatch(generateFormingAnalysisReport({
+            fromDate: fromDate || undefined,
+            toDate: toDate || undefined,
+          }));
+          break;
+        case 'QC_ANALYSIS':
+          reportData = await dispatch(generateQCAnalysisReport({
+            fromDate: fromDate || undefined,
+            toDate: toDate || undefined,
+          }));
+          break;
+        case 'PRODUCTION_PROGRESS':
+          reportData = await dispatch(generateProductionProgressReport({
+            fromDate: fromDate || undefined,
+            toDate: toDate || undefined,
+          }));
+          break;
+        default:
+          alert('Please select a report type');
+          return;
+      }
+
+      setGeneratedReport(reportData);
+    } catch (error) {
+      console.error('Error generating report:', error);
+      alert('Failed to generate report. Please try again.');
+    }
+  };
+
+  const handleDownload = () => {
+    if (!generatedReport) {
+      alert('Please generate a report first');
       return;
     }
 
-    setGenerating(true);
-    setError(null);
-    setSuccess(null);
+    let content = '';
+    let filename = '';
+    let type = 'text/plain';
 
-    try {
-      const filters: any = {};
-      if (dateFrom) filters.dateFrom = dateFrom;
-      if (dateTo) filters.dateTo = dateTo;
-      if (clientFilter !== 'all') filters.client = clientFilter;
-
-      const result = await reportService.generate(reportType, filters);
-      setReportData(result.data || result);
-      setSuccess('Report generated successfully');
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err: any) {
-      setError(err.message || 'Failed to generate report');
-    } finally {
-      setGenerating(false);
+    switch (format) {
+      case 'JSON':
+        content = JSON.stringify(generatedReport, null, 2);
+        filename = `${reportType.toLowerCase()}_report_${new Date().toISOString().split('T')[0]}.json`;
+        type = 'application/json';
+        break;
+      case 'CSV':
+        content = generateCSV(generatedReport);
+        filename = `${reportType.toLowerCase()}_report_${new Date().toISOString().split('T')[0]}.csv`;
+        type = 'text/csv';
+        break;
+      case 'EXCEL':
+        content = generateCSV(generatedReport);
+        filename = `${reportType.toLowerCase()}_report_${new Date().toISOString().split('T')[0]}.csv`;
+        type = 'text/csv';
+        break;
+      case 'PDF':
+        alert('PDF export requires backend implementation. Please use CSV or JSON format.');
+        return;
+      default:
+        return;
     }
+
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
-  const handleExport = async (format: 'pdf' | 'excel' | 'csv') => {
-    setExportFormat(format);
-    setExportDialogOpen(true);
-  };
-
-  const confirmExport = async () => {
-    setExportDialogOpen(false);
-    setLoading(true);
-    try {
-      const blob = await reportService.export('current-report', exportFormat);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `report.${exportFormat === 'excel' ? 'xlsx' : exportFormat}`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      setSuccess('Report exported successfully');
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err: any) {
-      setError(err.message || 'Failed to export report');
-    } finally {
-      setLoading(false);
+  const generateCSV = (data: any) => {
+    if (!data || !data.data) {
+      return '';
     }
+
+    const headers = Object.keys(data.data[0] || {}).join(',');
+    const rows = data.data.map((row: any) => 
+      Object.values(row).map((value: any) => 
+        typeof value === 'object' ? JSON.stringify(value).replace(/"/g, '""') : value
+      ).join(',')
+    );
+
+    return [headers, ...rows].join('\n');
   };
 
-  const handleViewHistory = async () => {
-    setLoading(true);
-    try {
-      const history = await reportService.getHistory();
-      // In a real app, this would show a dialog with report history
-      console.log('Report history:', history);
-      setSuccess('Report history loaded');
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load report history');
-    } finally {
-      setLoading(false);
-    }
+  const handlePreview = () => {
+    setOpenPreviewDialog(true);
   };
 
-  const calculateProgress = (delivered: number, orderQty: number) => {
-    if (orderQty === 0) return 0;
-    return Math.round((delivered / orderQty) * 100);
+  const handleClosePreview = () => {
+    setOpenPreviewDialog(false);
   };
 
   return (
-    <Box>
-      <Typography variant="h4" sx={{ fontWeight: 600, mb: 3 }}>
-        📊 Reports & Analytics
-      </Typography>
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
-          <AlertTitle>Error</AlertTitle>
-          {error}
-        </Alert>
-      )}
-
-      {success && (
-        <Alert severity="success" sx={{ mb: 3 }} onClose={() => setSuccess(null)}>
-          {success}
-        </Alert>
-      )}
-
-      {generating && <LinearProgress sx={{ mb: 3 }} />}
+    <Box sx={{ p: 3 }}>
+      {/* Header */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4">Reports & Analytics</Typography>
+        <Button
+          variant="outlined"
+          startIcon={<RefreshIcon />}
+          onClick={handleGenerateReport}
+          disabled={isLoading}
+        >
+          Refresh Reports
+        </Button>
+      </Box>
 
       <Grid container spacing={3}>
-        {/* Report Configuration */}
+        {/* Report Type Selection */}
         <Grid item xs={12} md={4}>
           <Card>
             <CardContent>
-              <Typography variant="h6" sx={{ mb: 2 }}>Generate Report</Typography>
-              <FormControl fullWidth sx={{ mb: 2 }}>
-                <InputLabel>Report Type</InputLabel>
-                <Select
-                  value={reportType}
-                  label="Report Type"
-                  onChange={(e) => setReportType(e.target.value)}
-                >
-                  {reportTypes.map((type) => (
-                    <MenuItem key={type.value} value={type.value}>
-                      <Box>
-                        <Typography>{type.label}</Typography>
-                        <Typography variant="caption" color="text.secondary">{type.description}</Typography>
-                      </Box>
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <Typography variant="subtitle2" sx={{ mb: 1, mt: 2 }}>Filters</Typography>
-              <Grid container spacing={2}>
-                <Grid item xs={6}>
-                  <TextField
-                    fullWidth
-                    type="date"
-                    size="small"
-                    label="From"
-                    value={dateFrom}
-                    onChange={(e) => setDateFrom(e.target.value)}
-                    InputLabelProps={{ shrink: true }}
-                  />
-                </Grid>
-                <Grid item xs={6}>
-                  <TextField
-                    fullWidth
-                    type="date"
-                    size="small"
-                    label="To"
-                    value={dateTo}
-                    onChange={(e) => setDateTo(e.target.value)}
-                    InputLabelProps={{ shrink: true }}
-                  />
-                </Grid>
-                <Grid item xs={12}>
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Client</InputLabel>
-                    <Select
-                      value={clientFilter}
-                      label="Client"
-                      onChange={(e) => setClientFilter(e.target.value)}
-                    >
-                      <MenuItem value="all">All Clients</MenuItem>
-                      <MenuItem value="abc">ABC Corp</MenuItem>
-                      <MenuItem value="xyz">XYZ Ltd</MenuItem>
-                      <MenuItem value="123">123 Inc</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-              </Grid>
-
-              <Button
-                variant="contained"
+              <Typography variant="h6" gutterBottom>Report Type</Typography>
+              <TextField
                 fullWidth
-                onClick={handleGenerateReport}
-                disabled={generating || !reportType}
-                sx={{ mt: 3 }}
+                select
+                label="Select Report"
+                value={reportType}
+                onChange={(e) => setReportType(e.target.value)}
               >
-                {generating ? 'Generating...' : 'Generate Report'}
-              </Button>
+                <MenuItem value="POL_SUMMARY">POL Order Summary</MenuItem>
+                <MenuItem value="FORMING_ANALYSIS">Forming Analysis</MenuItem>
+                <MenuItem value="QC_ANALYSIS">QC Analysis</MenuItem>
+                <MenuItem value="PRODUCTION_PROGRESS">Production Progress</MenuItem>
+              </TextField>
             </CardContent>
           </Card>
         </Grid>
 
-        {/* Export Options */}
-        <Grid item xs={12} md={8}>
-          <Card sx={{ mb: 3 }}>
+        {/* Date Range */}
+        <Grid item xs={12} md={4}>
+          <Card>
             <CardContent>
-              <Typography variant="h6" sx={{ mb: 2 }}>Export Options</Typography>
-              <Box sx={{ display: 'flex', gap: 2 }}>
-                <Button
-                  variant="outlined"
-                  startIcon={<PdfIcon />}
-                  onClick={() => handleExport('pdf')}
-                  disabled={reportData.length === 0}
-                >
-                  Export PDF
-                </Button>
-                <Button
-                  variant="outlined"
-                  startIcon={<ExcelIcon />}
-                  onClick={() => handleExport('excel')}
-                  disabled={reportData.length === 0}
-                >
-                  Export Excel
-                </Button>
-                <Button
-                  variant="outlined"
-                  startIcon={<CsvIcon />}
-                  onClick={() => handleExport('csv')}
-                  disabled={reportData.length === 0}
-                >
-                  Export CSV
-                </Button>
-                <Button
-                  variant="outlined"
-                  startIcon={<RefreshIcon />}
-                  onClick={handleViewHistory}
-                >
-                  View History
-                </Button>
+              <Typography variant="h6" gutterBottom>Date Range</Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <TextField
+                  fullWidth
+                  label="From Date"
+                  type="date"
+                  value={fromDate}
+                  onChange={(e) => setFromDate(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                />
+                <TextField
+                  fullWidth
+                  label="To Date"
+                  type="date"
+                  value={toDate}
+                  onChange={(e) => setToDate(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                />
               </Box>
             </CardContent>
           </Card>
+        </Grid>
 
-          {/* Report Results */}
+        {/* Export Format */}
+        <Grid item xs={12} md={4}>
           <Card>
             <CardContent>
-              <Typography variant="h6" sx={{ mb: 2 }}>
-                Report Results
-                {reportType && (
-                  <Chip
-                    label={reportTypes.find(t => t.value === reportType)?.label}
-                    size="small"
-                    sx={{ ml: 1 }}
-                  />
-                )}
-              </Typography>
-
-              {reportData.length === 0 ? (
-                <Box sx={{ py: 4, textAlign: 'center' }}>
-                  <Typography color="text.secondary">
-                    Select a report type and click "Generate Report" to view results
-                  </Typography>
-                </Box>
-              ) : (
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>PO Number</TableCell>
-                      <TableCell>Client</TableCell>
-                      <TableCell align="center">Order Qty</TableCell>
-                      <TableCell align="center">Delivered</TableCell>
-                      <TableCell>Progress</TableCell>
-                      <TableCell>Status</TableCell>
-                      <TableCell>On-Time</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {reportData.map((row, index) => (
-                      <TableRow key={index}>
-                        <TableCell>{row.poNumber}</TableCell>
-                        <TableCell>{row.client}</TableCell>
-                        <TableCell align="center">{row.orderQty}</TableCell>
-                        <TableCell align="center">{row.delivered}</TableCell>
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <LinearProgress
-                              variant="determinate"
-                              value={calculateProgress(row.delivered, row.orderQty)}
-                              sx={{ width: 80, height: 6, borderRadius: 3 }}
-                            />
-                            <Typography variant="caption">
-                              {calculateProgress(row.delivered, row.orderQty)}%
-                            </Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={row.status}
-                            color={row.status === 'Completed' ? 'success' : row.status === 'In Progress' ? 'warning' : 'default'}
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          {row.onTime === null ? (
-                            <Typography variant="body2" color="text.secondary">-</Typography>
-                          ) : (
-                            <Chip
-                              label={row.onTime ? 'Yes' : 'No'}
-                              color={row.onTime ? 'success' : 'error'}
-                              size="small"
-                              variant="outlined"
-                            />
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
+              <Typography variant="h6" gutterBottom>Export Format</Typography>
+              <TextField
+                fullWidth
+                select
+                label="Format"
+                value={format}
+                onChange={(e) => setFormat(e.target.value)}
+              >
+                <MenuItem value="JSON">JSON</MenuItem>
+                <MenuItem value="CSV">CSV</MenuItem>
+                <MenuItem value="EXCEL">Excel</MenuItem>
+                <MenuItem value="PDF">PDF</MenuItem>
+              </TextField>
             </CardContent>
           </Card>
         </Grid>
-
-        {/* Summary Stats */}
-        {reportData.length > 0 && (
-          <Grid item xs={12}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" sx={{ mb: 2 }}>Summary Statistics</Typography>
-                <Grid container spacing={3}>
-                  <Grid item xs={6} md={2}>
-                    <Typography variant="subtitle2" color="text.secondary">Total Orders</Typography>
-                    <Typography variant="h5">{reportData.length}</Typography>
-                  </Grid>
-                  <Grid item xs={6} md={3}>
-                    <Typography variant="subtitle2" color="text.secondary">Total Order Quantity</Typography>
-                    <Typography variant="h5">{reportData.reduce((sum, r) => sum + r.orderQty, 0)}</Typography>
-                  </Grid>
-                  <Grid item xs={6} md={3}>
-                    <Typography variant="subtitle2" color="text.secondary">Total Delivered</Typography>
-                    <Typography variant="h5">{reportData.reduce((sum, r) => sum + r.delivered, 0)}</Typography>
-                  </Grid>
-                  <Grid item xs={6} md={2}>
-                    <Typography variant="subtitle2" color="text.secondary">Completion Rate</Typography>
-                    <Typography variant="h5" color="success.main">
-                      {Math.round((reportData.reduce((sum, r) => sum + r.delivered, 0) / reportData.reduce((sum, r) => sum + r.orderQty, 0)) * 100)}%
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} md={2}>
-                    <Typography variant="subtitle2" color="text.secondary">On-Time Rate</Typography>
-                    <Typography variant="h5" color="primary.main">
-                      {Math.round((reportData.filter(r => r.onTime === true).length / reportData.filter(r => r.onTime !== null).length) * 100)}%
-                    </Typography>
-                  </Grid>
-                </Grid>
-              </CardContent>
-            </Card>
-          </Grid>
-        )}
       </Grid>
 
-      {/* Export Confirmation Dialog */}
-      <Dialog open={exportDialogOpen} onClose={() => setExportDialogOpen(false)}>
-        <DialogTitle>Confirm Export</DialogTitle>
+      {/* Actions */}
+      <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
+        <Button
+          variant="contained"
+          startIcon={<AssessmentIcon />}
+          onClick={handleGenerateReport}
+          disabled={isLoading}
+          size="large"
+        >
+          Generate Report
+        </Button>
+        {generatedReport && (
+          <>
+            <Button
+              variant="outlined"
+              startIcon={<DownloadIcon />}
+              onClick={handleDownload}
+            >
+              Download
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<PrintIcon />}
+              onClick={handlePreview}
+            >
+              Preview
+            </Button>
+          </>
+        )}
+      </Box>
+
+      {/* Report Preview */}
+      {generatedReport && (
+        <Card>
+          <CardContent>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6">Report Preview</Typography>
+              <Chip
+                label={format}
+                color="primary"
+                size="small"
+              />
+            </Box>
+            
+            {isLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                <CircularProgress />
+              </Box>
+            ) : (
+              <Box sx={{ maxHeight: 500, overflow: 'auto' }}>
+                <Typography variant="body2" paragraph>
+                  <strong>Report Type:</strong> {reportType}
+                </Typography>
+                
+                <Typography variant="body2" paragraph>
+                  <strong>Date Range:</strong> {fromDate || 'All Time'} - {toDate || 'Present'}
+                </Typography>
+
+                <Divider sx={{ my: 2 }} />
+
+                {generatedReport.summary && (
+                  <>
+                    <Typography variant="h6" gutterBottom>Summary</Typography>
+                    {Object.entries(generatedReport.summary).map(([key, value]) => (
+                      <Box key={key} sx={{ mb: 1 }}>
+                        <Typography variant="body2" color="textSecondary">
+                          <strong>{key}:</strong> {String(value)}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </>
+                )}
+
+                {generatedReport.data && generatedReport.data.length > 0 && (
+                  <>
+                    <Typography variant="h6" gutterBottom>Details</Typography>
+                    <TableContainer>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            {Object.keys(generatedReport.data[0]).map((key) => (
+                              <TableCell key={key}>{key}</TableCell>
+                            ))}
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {generatedReport.data.map((row: any, index: number) => (
+                            <TableRow key={index}>
+                              {Object.values(row).map((value: any, cellIndex: number) => (
+                                <TableCell key={cellIndex}>
+                                  {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                                </TableCell>
+                              ))}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </>
+                )}
+              </Box>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Report Preview Dialog */}
+      <Dialog open={openPreviewDialog} onClose={handleClosePreviewDialog} maxWidth="lg" fullWidth>
+        <DialogTitle>Report Preview</DialogTitle>
         <DialogContent>
-          <Typography>
-            Export report as {exportFormat.toUpperCase()}?
-          </Typography>
+          <Box sx={{ maxHeight: 600, overflow: 'auto' }}>
+            {generatedReport && (
+              <Typography variant="body2" component="pre" sx={{ whiteSpace: 'pre-wrap' }}>
+                {JSON.stringify(generatedReport, null, 2)}
+              </Typography>
+            )}
+          </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setExportDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={confirmExport} disabled={loading}>
-            {loading ? 'Exporting...' : 'Export'}
-          </Button>
+          <Button onClick={handleClosePreviewDialog}>Close</Button>
         </DialogActions>
       </Dialog>
     </Box>

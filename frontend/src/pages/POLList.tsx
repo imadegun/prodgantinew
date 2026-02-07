@@ -37,8 +37,8 @@ import {
   Delete as DeleteIcon,
 } from '@mui/icons-material';
 import { RootState } from '../store';
-import { fetchPOLsStart, fetchPOLsSuccess, setFilters, deletePOLSuccess } from '../store/polSlice';
-import { polService } from '../services/api';
+import { fetchPOLs, setFilters, deletePOL } from '../store/slices/polSlice';
+import { polService } from '../services/pol.service';
 import { POL } from '../types';
 
 const POLList = (): JSX.Element => {
@@ -53,16 +53,14 @@ const POLList = (): JSX.Element => {
 
   useEffect(() => {
     const fetchPOLs = async () => {
-      dispatch(fetchPOLsStart());
       try {
-        const data = await polService.getAll(filters);
-        dispatch(fetchPOLsSuccess(data));
+        await dispatch(fetchPOLs({ page: page + 1, limit: rowsPerPage, ...filters }));
       } catch (error: any) {
         console.error('Failed to fetch POLs:', error);
       }
     };
     fetchPOLs();
-  }, [dispatch, filters]);
+  }, [dispatch, filters, page, rowsPerPage]);
 
   const handleChangePage = (_event: unknown, newPage: number) => {
     setPage(newPage);
@@ -86,8 +84,7 @@ const POLList = (): JSX.Element => {
   const handleDelete = async () => {
     if (selectedPOL) {
       try {
-        await polService.delete(Number(selectedPOL.id));
-        dispatch(deletePOLSuccess(selectedPOL.id));
+        await dispatch(deletePOL(selectedPOL.id));
       } catch (error) {
         console.error('Failed to delete POL:', error);
       }

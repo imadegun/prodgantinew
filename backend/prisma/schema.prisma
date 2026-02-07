@@ -1,3 +1,6 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,28 +14,57 @@ datasource db {
 enum UserRole {
   MANAGER
   ADMIN
-  WORKER
 }
 
 enum POLStatus {
-  PENDING
+  DRAFT
   IN_PROGRESS
   COMPLETED
   CANCELLED
 }
 
+enum ProductType {
+  PLAIN
+  DECOR
+  HAND_BUILT
+  SLAB_TRAY
+}
+
 enum ProductionStage {
-  FORMING
-  FIRING
-  GLAZING
-  QUALITY_CONTROL
-  PACKAGING
+  // Forming stages
+  THROWING
+  TRIMMING
+  DECORATION
+  DRYING
+  LOAD_BISQUE
+  
+  // Firing stages
+  OUT_BISQUE
+  LOAD_HIGH_FIRING
+  OUT_HIGH_FIRING
+  LOAD_RAKU_FIRING
+  OUT_RAKU_FIRING
+  LOAD_LUSTER_FIRING
+  OUT_LUSTER_FIRING
+  
+  // Glazing stages
+  SANDING
+  WAXING
+  DIPPING
+  SPRAYING
+  COLOR_DECORATION
+  
+  // QC stages
+  QC_GOOD
+  QC_REJECT
+  QC_RE_FIRING
+  QC_SECOND
 }
 
 enum AlertPriority {
-  LOW
-  MEDIUM
-  HIGH
+  CRITICAL
+  WARNING
+  INFORMATIONAL
 }
 
 enum AlertStatus {
@@ -53,132 +85,148 @@ enum Severity {
   LOW
   MEDIUM
   HIGH
+  CRITICAL
 }
 
 enum LogStatus {
-  NORMAL
-  ISSUES
+  OPEN
+  IN_PROGRESS
   RESOLVED
 }
 
 enum RevisionStatus {
   DRAFT
-  PENDING_APPROVAL
+  SUBMITTED
   APPROVED
   REJECTED
+  IMPLEMENTED
 }
 
 enum RevisionType {
-  DESIGN
-  PRODUCTION
-  MATERIAL
+  DESIGN_CHANGE
+  MATERIAL_CHANGE
+  PROCESS_CHANGE
   OTHER
 }
 
 // User table
 model User {
-  id             String    @id @default(uuid())
-  username        String    @unique
-  password        String
-  fullName        String
-  role            UserRole
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  lastLogin       DateTime?
+  id            String    @id @default(uuid())
+  username       String    @unique
+  email          String    @unique
+  password_hash  String
+  full_name      String
+  role           UserRole
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+  last_login     DateTime?
+  is_active      Boolean   @default(true)
   
+  // Relationships
   pols                  POL[]              @relation("POLCreatedBy")
-  productionRecords      ProductionRecord[]
-  logbookEntries        LogbookEntry[]
-  revisionTickets       RevisionTicket[]    @relation("RevisionCreatedBy")
-  approvedRevisions     RevisionTicket[]    @relation("RevisionApprovedBy")
-  activityLogs          ActivityLog[]
-  reportedAlerts       DiscrepancyAlert[] @relation("AlertReportedBy")
-  acknowledgedAlerts    DiscrepancyAlert[] @relation("AlertAcknowledgedBy")
-  resolvedAlerts        DiscrepancyAlert[] @relation("AlertResolvedBy")
+  production_records    ProductionRecord[]
+  logbook_entries       LogbookEntry[]
+  revision_tickets      RevisionTicket[]     @relation("RevisionCreatedBy")
+  approved_revisions    RevisionTicket[]     @relation("RevisionApprovedBy")
+  activity_logs         ActivityLog[]
+  reported_alerts       DiscrepancyAlert[] @relation("AlertReportedBy")
+  acknowledged_alerts   DiscrepancyAlert[] @relation("AlertAcknowledgedBy")
+  resolved_alerts        DiscrepancyAlert[] @relation("AlertResolvedBy")
   
   @@map("users")
 }
 
-// POL (Production Order List) table
+// POL (Purchase Order List) table
 model POL {
   id            String     @id @default(uuid())
-  polNumber     String     @unique
-  customerName  String
-  orderDate     DateTime   @default(now())
-  deliveryDate  DateTime
-  status        POLStatus  @default(PENDING)
+  po_number     String     @unique
+  client_name   String
+  total_order   Int        @default(0)
+  po_date       DateTime   @default(now())
+  delivery_date  DateTime
+  status        POLStatus  @default(DRAFT)
   notes         String?
-  createdBy     String
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  created_by    String
+  created_at    DateTime   @default(now())
+  updated_at    DateTime   @updatedAt
   
-  creator               User?              @relation("POLCreatedBy", fields: [createdBy], references: [id])
-  details               POLDetail[]
-  logbookEntries        LogbookEntry[]
-  revisionTickets       RevisionTicket[]
-  discrepancyAlerts     DiscrepancyAlert[]
+  // Relationships
+  creator               User?              @relation("POLCreatedBy", fields: [created_by], references: [id])
+  pol_details           POLDetail[]
+  logbook_entries       LogbookEntry[]
+  revision_tickets      RevisionTicket[]
+  discrepancy_alerts   DiscrepancyAlert[]
   
   @@map("pols")
 }
 
 // POL Detail table (products within a POL)
 model POLDetail {
-  id            String   @id @default(uuid())
-  polId         String
-  productCode   String
-  productName   String
-  quantity      Int
-  productType   String   @default("PLAIN")
-  color         String?
-  texture       String?
-  material      String?
-  size          String?
-  finalSize     String?
-  notes         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id             String      @id @default(uuid())
+  pol_id         String
+  product_code   String
+  product_name   String
+  quantity       Int
+  extra_buffer   Int         @default(15) // Percentage
+  product_type   ProductType @default(PLAIN)
+  color          String?
+  texture        String?
+  material       String?
+  size           String?
+  final_size     String?
+  notes          String?
+  created_at     DateTime    @default(now())
+  updated_at     DateTime    @updatedAt
   
-  pol                   POL                 @relation(fields: [polId], references: [id], onDelete: Cascade)
-  productionRecords      ProductionRecord[]
-  decorationTasks       DecorationTask[]
-  discrepancyAlerts     DiscrepancyAlert[]
-  logbookEntries        LogbookEntry[]
-  revisionTickets       RevisionTicket[]
+  // Relationships
+  pol                   POL                 @relation(fields: [pol_id], references: [id], onDelete: Cascade)
+  production_records    ProductionRecord[]
+  decoration_tasks      DecorationTask[]
+  discrepancy_alerts   DiscrepancyAlert[]
+  logbook_entries       LogbookEntry[]
+  revision_tickets      RevisionTicket[]
   
   @@map("pol_details")
 }
 
 // Production Record table
 model ProductionRecord {
-  id            String          @id @default(uuid())
-  polDetailId   String
-  stage         ProductionStage
-  quantity      Int
-  userId        String
-  notes         String?
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  id              String          @id @default(uuid())
+  pol_detail_id   String
+  stage           ProductionStage
+  quantity        Int
+  reject_quantity Int             @default(0)
+  remake_cycle    Int             @default(0)
+  notes           String?
+  created_by      String
+  created_at      DateTime        @default(now())
+  updated_at      DateTime        @updatedAt
   
-  polDetail    POLDetail  @relation(fields: [polDetailId], references: [id], onDelete: Cascade)
-  user         User       @relation(fields: [userId], references: [id])
+  // Relationships
+  pol_detail    POLDetail  @relation(fields: [pol_detail_id], references: [id], onDelete: Cascade)
+  user         User       @relation(fields: [created_by], references: [id])
   
   @@map("production_records")
 }
 
 // Decoration Task table
 model DecorationTask {
-  id            String   @id @default(uuid())
-  polDetailId   String
-  taskName      String
-  description   String?
-  quantity      Int      @default(0)
-  completed     Boolean  @default(false)
-  userId        String?
-  completedAt   DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                String   @id @default(uuid())
+  pol_detail_id     String
+  task_name          String
+  task_description  String?
+  quantity_required  Int      @default(0)
+  quantity_completed Int      @default(0)
+  quantity_rejected  Int      @default(0)
+  status            String   @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED
+  notes             String?
+  created_by         String?
+  completed_at       DateTime?
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
   
-  polDetail     POLDetail @relation(fields: [polDetailId], references: [id], onDelete: Cascade)
+  // Relationships
+  pol_detail POLDetail @relation(fields: [pol_detail_id], references: [id], onDelete: Cascade)
   
   @@map("decoration_tasks")
 }
@@ -186,28 +234,31 @@ model DecorationTask {
 // Discrepancy Alert table
 model DiscrepancyAlert {
   id               String        @id @default(uuid())
-  polId            String
-  polDetailId       String
-  stage             ProductionStage
-  expectedQuantity   Int
-  actualQuantity    Int
+  pol_id           String
+  pol_detail_id     String
+  stage            ProductionStage
+  expected_quantity Int
+  actual_quantity    Int
   difference        Int
-  priority          AlertPriority @default(MEDIUM)
-  status            AlertStatus   @default(OPEN)
-  reportedBy        String
-  acknowledgedBy    String?
-  acknowledgedAt    DateTime?
-  resolvedBy        String?
-  resolvedAt        DateTime?
-  resolutionNotes   String?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  alert_type       String
+  alert_message    String
+  priority         AlertPriority @default(WARNING)
+  status           AlertStatus   @default(OPEN)
+  reported_by      String
+  acknowledged_by   String?
+  acknowledged_at   DateTime?
+  resolved_by       String?
+  resolved_at       DateTime?
+  resolution_notes  String?
+  created_at        DateTime      @default(now())
+  updated_at        DateTime      @updatedAt
   
-  pol               POL         @relation(fields: [polId], references: [id], onDelete: Cascade)
-  polDetail         POLDetail   @relation(fields: [polDetailId], references: [id], onDelete: Cascade)
-  reportedByUser    User        @relation("AlertReportedBy", fields: [reportedBy], references: [id])
-  acknowledgedByUser User?       @relation("AlertAcknowledgedBy", fields: [acknowledgedBy], references: [id])
-  resolvedByUser     User?       @relation("AlertResolvedBy", fields: [resolvedBy], references: [id])
+  // Relationships
+  pol               POL         @relation(fields: [pol_id], references: [id], onDelete: Cascade)
+  pol_detail        POLDetail  @relation(fields: [pol_detail_id], references: [id], onDelete: Cascade)
+  reported_by_user   User        @relation("AlertReportedBy", fields: [reported_by], references: [id])
+  acknowledged_by_user User?       @relation("AlertAcknowledgedBy", fields: [acknowledged_by], references: [id])
+  resolved_by_user     User?       @relation("AlertResolvedBy", fields: [resolved_by], references: [id])
   
   @@map("discrepancy_alerts")
 }
@@ -215,20 +266,22 @@ model DiscrepancyAlert {
 // Logbook Entry table
 model LogbookEntry {
   id            String      @id @default(uuid())
-  polId         String?
-  polDetailId    String?
-  userId        String
-  entryDate     DateTime
-  status        LogStatus   @default(NORMAL)
-  notes         String
-  issues        String?
-  actions       String?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  pol_id        String?
+  pol_detail_id String?
+  stage         String?
+  issue_type    IssueType
+  description   String
+  severity      Severity
+  resolution    String?
+  status        LogStatus   @default(OPEN)
+  created_by    String
+  created_at    DateTime   @default(now())
+  updated_at    DateTime @updatedAt
   
-  pol           POL?        @relation(fields: [polId], references: [id])
-  polDetail     POLDetail?  @relation(fields: [polDetailId], references: [id])
-  user          User        @relation(fields: [userId], references: [id])
+  // Relationships
+  pol           POL?        @relation(fields: [pol_id], references: [id])
+  pol_detail     POLDetail? @relation(fields: [pol_detail_id], references: [id])
+  user          User        @relation(fields: [created_by], references: [id])
   
   @@map("logbook_entries")
 }
@@ -236,26 +289,29 @@ model LogbookEntry {
 // Revision Ticket table
 model RevisionTicket {
   id                String          @id @default(uuid())
-  polId             String
-  polDetailId        String?
-  createdBy          String
-  type               RevisionType
-  issueType          String
+  ticket_number      String          @unique
+  pol_id             String
+  pol_detail_id      String?
+  created_by         String
+  revision_type      RevisionType
+  issue_type        String
   severity           Severity
   description        String
-  proposedSolution   String?
-  status             RevisionStatus  @default(DRAFT)
-  submittedAt        DateTime?
-  approvedBy         String?
-  approvedAt         DateTime?
-  managerNotes       String?
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @updatedAt
+  reason             String
+  impact_assessment  String?
+  status             RevisionStatus   @default(DRAFT)
+  submitted_at        DateTime?
+  approved_by         String?
+  approved_at         DateTime?
+  manager_notes      String?
+  created_at         DateTime        @default(now())
+  updated_at          DateTime        @updatedAt
   
-  pol               POL         @relation(fields: [polId], references: [id])
-  polDetail          POLDetail?  @relation(fields: [polDetailId], references: [id])
-  creator           User        @relation("RevisionCreatedBy", fields: [createdBy], references: [id])
-  approvedByUser     User?       @relation("RevisionApprovedBy", fields: [approvedBy], references: [id])
+  // Relationships
+  pol               POL         @relation(fields: [pol_id], references: [id])
+  pol_detail         POLDetail? @relation(fields: [pol_detail_id], references: [id])
+  creator           User        @relation("RevisionCreatedBy", fields: [created_by], references: [id])
+  approved_by_user   User?       @relation("RevisionApprovedBy", fields: [approved_by], references: [id])
   
   @@map("revision_tickets")
 }
@@ -263,16 +319,17 @@ model RevisionTicket {
 // Activity Log table (for audit)
 model ActivityLog {
   id          String   @id @default(uuid())
-  userId       String
+  user_id     String
   action      String
-  entityType  String
-  entityId    String?
+  entity_type String
+  entity_id   String?
   details     String?
-  ipAddress   String?
-  userAgent   String?
-  createdAt   DateTime @default(now())
+  ip_address  String?
+  user_agent  String?
+  created_at  DateTime @default(now())
   
-  user        User     @relation(fields: [userId], references: [id])
+  // Relationships
+  user User @relation(fields: [user_id], references: [id])
   
   @@map("activity_logs")
 }

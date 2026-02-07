@@ -26,10 +26,10 @@ import {
   DialogContent,
   DialogActions,
 } from '@mui/material';
-import { ArrowBack as ArrowBackIcon, Add as AddIcon, Delete as DeleteIcon, Search as SearchIcon } from '@mui/icons-material';
+import { ArrowBack as ArrowBackIcon, Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { RootState } from '../store';
-import { createPOLSuccess } from '../store/polSlice';
-import { polService, productService } from '../services/api';
+import { createPOL } from '../store/slices/polSlice';
+import { polService } from '../services/pol.service';
 
 const steps = ['POL Details', 'Add Products', 'Review & Confirm'];
 
@@ -61,9 +61,6 @@ const POLCreate = (): JSX.Element => {
   });
   
   const [products, setProducts] = useState<ProductItem[]>([]);
-  const [productSearch, setProductSearch] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [searching, setSearching] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [newProduct, setNewProduct] = useState<Partial<ProductItem>>({
     productCode: '',
@@ -92,20 +89,6 @@ const POLCreate = (): JSX.Element => {
     setActiveStep((prev) => prev - 1);
   };
 
-  const handleSearchProduct = async () => {
-    if (!productSearch.trim()) return;
-    setSearching(true);
-    try {
-      const results = await productService.search(productSearch);
-      setSearchResults(results);
-    } catch (err) {
-      console.error('Failed to search products:', err);
-      setSearchResults([]);
-    } finally {
-      setSearching(false);
-    }
-  };
-
   const handleAddProduct = (product: any) => {
     const newItem: ProductItem = {
       id: `temp-${Date.now()}`,
@@ -117,8 +100,6 @@ const POLCreate = (): JSX.Element => {
       quantity: 1,
     };
     setProducts([...products, newItem]);
-    setProductSearch('');
-    setSearchResults([]);
   };
 
   const handleAddCustomProduct = () => {
@@ -169,8 +150,7 @@ const POLCreate = (): JSX.Element => {
         })),
       };
       
-      const created = await polService.create(polData);
-      dispatch(createPOLSuccess(created));
+      await dispatch(createPOL(polData));
       navigate('/pols');
     } catch (err: any) {
       setError(err.message || 'Failed to create POL');
@@ -274,37 +254,6 @@ const POLCreate = (): JSX.Element => {
             <Box>
               <Typography variant="h6" sx={{ mb: 3 }}>Step 2: Add Products</Typography>
               
-              <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
-                <TextField
-                  fullWidth
-                  placeholder="Search products by code or name..."
-                  value={productSearch}
-                  onChange={(e) => setProductSearch(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSearchProduct()}
-                />
-                <Button variant="outlined" startIcon={<SearchIcon />} onClick={handleSearchProduct} disabled={searching}>
-                  Search
-                </Button>
-              </Box>
-
-              {searchResults.length > 0 && (
-                <Box sx={{ mb: 3 }}>
-                  <Typography variant="subtitle2" sx={{ mb: 1 }}>Search Results:</Typography>
-                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                    {searchResults.map((product) => (
-                      <Chip
-                        key={product.code}
-                        label={`${product.code} - ${product.name}`}
-                        onClick={() => handleAddProduct(product)}
-                        onDelete={() => {}}
-                        deleteIcon={<AddIcon />}
-                        clickable
-                      />
-                    ))}
-                  </Box>
-                </Box>
-              )}
-
               <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
                 <Button variant="contained" startIcon={<AddIcon />} onClick={() => setAddDialogOpen(true)}>
                   Add Custom Product

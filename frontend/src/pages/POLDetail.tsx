@@ -4,8 +4,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Box, Typography, Card, CardContent, Grid, Chip, LinearProgress, Button, Divider, Table, TableBody, TableCell, TableHead, TableRow, Alert, Skeleton, Tabs, Tab } from '@mui/material';
 import { ArrowBack as ArrowBackIcon, Edit as EditIcon, CheckCircle as CheckCircleIcon, Warning as WarningIcon } from '@mui/icons-material';
 import { RootState } from '../store';
-import { fetchPOLDetailSuccess } from '../store/polSlice';
-import { polService } from '../services/api';
+import { fetchPOLById } from '../store/slices/polSlice';
+import { polService } from '../services/pol.service';
 import { POL, POLDetail as POLDetailType } from '../types';
 
 const POLDetail = (): JSX.Element => {
@@ -21,8 +21,7 @@ const POLDetail = (): JSX.Element => {
       if (id) {
         setLocalLoading(true);
         try {
-          const polData = await polService.getById(Number(id));
-          dispatch(fetchPOLDetailSuccess(polData));
+          await dispatch(fetchPOLById(id));
         } catch (err) {
           console.error('Failed to fetch POL details:', err);
         } finally {

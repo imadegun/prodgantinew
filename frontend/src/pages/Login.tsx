@@ -1,132 +1,122 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useDispatch } from 'react-redux';
-import {
-  Box,
-  Card,
-  CardContent,
-  TextField,
-  Button,
-  Typography,
-  Alert,
-  CircularProgress,
-  InputAdornment,
-  IconButton,
-} from '@mui/material';
-import { Visibility, VisibilityOff } from '@mui/icons-material';
-import { loginStart, loginSuccess, loginFailure } from '../store/authSlice';
-import { authService } from '../services/api';
+import { useNavigate, Link } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import { Box, Container, TextField, Button, Typography, Alert, Paper } from '@mui/material';
+import { login } from '../store/slices/authSlice';
+import { showSnackbar } from '../store/slices/uiSlice';
+import { RootState } from '../store';
 
 const Login: React.FC = () => {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   const dispatch = useDispatch();
+  const { isLoading, error } = useSelector((state: RootState) => state.auth);
+
+  const [formData, setFormData] = useState({
+    username: '',
+    password: '',
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError(null);
-    dispatch(loginStart());
 
     try {
-      const response = await authService.login(username, password);
-      dispatch(loginSuccess({ user: response.user, token: response.token }));
-      navigate('/');
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.message || 'Login failed. Please try again.';
-      dispatch(loginFailure(errorMessage));
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
+      const result = await dispatch(login({ username: formData.username, password: formData.password }) as any);
+      if (login.fulfilled.match(result)) {
+        dispatch(showSnackbar({ message: 'Login successful', severity: 'success' }));
+        // Small delay to ensure Redux state is updated before navigating
+        setTimeout(() => navigate('/'), 100);
+      } else {
+        dispatch(showSnackbar({ message: result.payload as string || 'Login failed', severity: 'error' }));
+      }
+    } catch (error: any) {
+      dispatch(showSnackbar({ message: error.message || 'Login failed', severity: 'error' }));
     }
   };
 
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
+  };
+
   return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        bgcolor: 'background.default',
-        p: 2,
-      }}
-    >
-      <Card sx={{ maxWidth: 440, width: '100%', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
-        <CardContent sx={{ p: 4 }}>
-          <Box sx={{ textAlign: 'center', mb: 4 }}>
-            <Typography variant="h4" sx={{ fontWeight: 700, color: 'primary.main', mb: 1 }}>
-              🏭 ProdGantiNew
-            </Typography>
-            <Typography variant="body1" color="text.secondary">
-              Production Tracking System
-            </Typography>
-          </Box>
+    <Container maxWidth="sm">
+      <Box
+        sx={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Paper
+          elevation={3}
+          sx={{
+            padding: 4,
+            width: '100%',
+            maxWidth: 400,
+          }}
+        >
+          <Typography variant="h4" component="h1" gutterBottom align="center">
+            ProdGantiNew
+          </Typography>
+          <Typography variant="body2" color="text.secondary" align="center" gutterBottom>
+            Production Tracking System
+          </Typography>
 
           {error && (
-            <Alert severity="error" sx={{ mb: 3 }}>
+            <Alert severity="error" sx={{ mb: 2 }}>
               {error}
             </Alert>
           )}
 
-          <form onSubmit={handleSubmit}>
+          <Box component="form" onSubmit={handleSubmit}>
             <TextField
               fullWidth
-              label="Username or Email"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              label="Username"
+              name="username"
+              value={formData.username}
+              onChange={handleChange}
               margin="normal"
-              required
+              disabled={isLoading}
+              autoComplete="username"
               autoFocus
             />
             <TextField
               fullWidth
               label="Password"
-              type={showPassword ? 'text' : 'password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              name="password"
+              type="password"
+              value={formData.password}
+              onChange={handleChange}
               margin="normal"
-              required
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton onClick={() => setShowPassword(!showPassword)} edge="end">
-                      {showPassword ? <VisibilityOff /> : <Visibility />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
+              disabled={isLoading}
             />
             <Button
               type="submit"
               fullWidth
               variant="contained"
+              color="primary"
               size="large"
-              disabled={loading}
-              sx={{ mt: 3, mb: 2, py: 1.5 }}
+              sx={{ mt: 3, mb: 2 }}
+              disabled={isLoading || !formData.username || !formData.password}
             >
-              {loading ? <CircularProgress size={24} color="inherit" /> : 'Sign In'}
+              {isLoading ? 'Signing in...' : 'Sign In'}
             </Button>
-          </form>
+          </Box>
 
-          <Box sx={{ mt: 3, p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
-            <Typography variant="caption" color="text.secondary" display="block" textAlign="center">
-              Demo Credentials:
-            </Typography>
-            <Typography variant="caption" color="text.secondary" display="block" textAlign="center">
-              Manager: manager / manager123
-            </Typography>
-            <Typography variant="caption" color="text.secondary" display="block" textAlign="center">
-              Admin: admin / admin123
+          <Box sx={{ mt: 2, textAlign: 'center' }}>
+            <Typography variant="body2">
+              Don't have an account?{' '}
+              <Link to="/register" style={{ marginLeft: 8 }}>
+                Register here
+              </Link>
             </Typography>
           </Box>
-        </CardContent>
-      </Card>
-    </Box>
+        </Paper>
+      </Box>
+    </Container>
   );
 };
 

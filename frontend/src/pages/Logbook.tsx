@@ -36,7 +36,7 @@ import {
   Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { RootState } from '../store';
-import { logbookService } from '../services/api';
+import { logbookService } from '../services/logbook.service';
 import { LogbookEntry } from '../types';
 
 const Logbook = (): JSX.Element => {

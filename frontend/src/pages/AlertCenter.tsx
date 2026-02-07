@@ -3,8 +3,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Box, Typography, Card, CardContent, Grid, Chip, List, ListItem, ListItemText, ListItemIcon, Button, FormControl, InputLabel, Select, MenuItem, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Alert as MuiAlert, AlertTitle, Skeleton, IconButton, Tooltip, Tabs, Tab } from '@mui/material';
 import { Warning as WarningIcon, Error as ErrorIcon, Info as InfoIcon, CheckCircle as AcknowledgeIcon, CheckCircle as ResolveIcon, Visibility as ViewIcon, Refresh as RefreshIcon } from '@mui/icons-material';
 import { RootState } from '../store';
-import { fetchAlertsStart, fetchAlertsSuccess, acknowledgeAlertSuccess, resolveAlertSuccess } from '../store/alertSlice';
-import { alertService } from '../services/api';
+import { fetchAlerts, acknowledgeAlert, resolveAlert } from '../store/slices/alertSlice';
+import { alertService } from '../services/alert.service';
 import { Alert } from '../types';
 
 const AlertCenter = (): JSX.Element => {
@@ -26,11 +26,10 @@ const AlertCenter = (): JSX.Element => {
   const fetchAlertsData = async () => {
     setLocalLoading(true);
     try {
-      dispatch(fetchAlertsStart());
-      const alertsData = await alertService.getAll();
-      dispatch(fetchAlertsSuccess(alertsData));
-      const statsData = await alertService.getStats();
-      setStats(statsData);
+      const alertsData = await alertService.getAlerts();
+      dispatch(fetchAlerts({ page: 1, limit: 10, status: 'OPEN' }));
+      const unreadCount = await alertService.getUnreadCount();
+      setStats({ critical: 0, warning: 0, info: unreadCount });
     } catch (err) {
       console.error('Failed to fetch alerts:', err);
     } finally {
@@ -40,8 +39,8 @@ const AlertCenter = (): JSX.Element => {
 
   const handleAcknowledge = async (alertId: string) => {
     try {
-      await alertService.acknowledge(Number(alertId));
-      dispatch(acknowledgeAlertSuccess({ id: Number(alertId), userId: Number(user?.id) }));
+      await alertService.acknowledgeAlert(alertId);
+      dispatch(acknowledgeAlert(alertId));
       fetchAlertsData();
     } catch (err) {
       console.error('Failed to acknowledge alert:', err);
@@ -52,7 +51,7 @@ const AlertCenter = (): JSX.Element => {
     if (!selectedAlert) return;
     try {
       await alertService.resolve(Number(selectedAlert.id), resolveNotes);
-      dispatch(resolveAlertSuccess({ id: Number(selectedAlert.id), userId: Number(user?.id), notes: resolveNotes }));
+      dispatch(resolveAlert({ alertId: Number(selectedAlert.id), resolutionNotes: resolveNotes }));
       setResolveDialogOpen(false);
       setResolveNotes('');
       setSelectedAlert(null);

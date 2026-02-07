@@ -1,283 +1,334 @@
-import { useEffect, useState } from 'react';
-import { useSelector } from 'react-redux';
-import { Box, Typography, Card, CardContent, Grid, TextField, FormControl, InputLabel, Select, MenuItem, Button, Table, TableBody, TableCell, TableHead, TableRow, LinearProgress, Chip, Stepper, Step, StepLabel, Alert, Skeleton, IconButton, Tooltip } from '@mui/material';
-import { Save as SaveIcon, Refresh as RefreshIcon, CheckCircle as CheckCircleIcon, Warning as WarningIcon, Error as ErrorIcon } from '@mui/icons-material';
-import { RootState } from '../store';
-import { productionService, polService } from '../services/api';
-import { POL, POLDetail } from '../types';
+import React, { useState, useEffect } from 'react';
+import {
+  Box,
+  Grid,
+  Card,
+  CardContent,
+  Typography,
+  Button,
+  TextField,
+  Chip,
+  Stepper,
+  Step,
+  StepLabel,
+  StepContent,
+  LinearProgress,
+  Alert as MuiAlert,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+} from '@mui/material';
+import {
+  ExpandMore as ExpandMoreIcon,
+  Refresh as RefreshIcon,
+  Save as SaveIcon,
+  Warning as WarningIcon,
+  Error as ErrorIcon,
+  CheckCircle as CheckCircleIcon,
+} from '@mui/icons-material';
+import { useAppSelector, useAppDispatch } from '../hooks/useAppSelector';
+import { fetchProductionStages, trackProduction } from '../store/slices/productionSlice';
+import { fetchPOLs } from '../store/slices/polSlice';
 
-const productionStages = [
-  { key: 'FORMING', label: 'Forming', stages: ['Throwing', 'Trimming', 'Drying'] },
-  { key: 'FIRING', label: 'Firing', stages: ['Load Bisque', 'Out Bisque'] },
-  { key: 'GLAZING', label: 'Glazing', stages: ['Sanding', 'Waxing', 'Dipping'] },
-  { key: 'QC', label: 'Quality Control', stages: ['QC - Good', 'QC - Reject'] },
-];
+const stageNames: Record<string, string> = {
+  THROWING: 'Throwing',
+  TRIMMING: 'Trimming',
+  DECORATION: 'Decoration',
+  DRYING: 'Drying',
+  LOAD_BISQUE: 'Load Bisque',
+  OUT_BISQUE: 'Out Bisque',
+  LOAD_HIGH_FIRING: 'Load High Firing',
+  OUT_HIGH_FIRING: 'Out High Firing',
+  LOAD_RAKU_FIRING: 'Load Raku Firing',
+  OUT_RAKU_FIRING: 'Out Raku Firing',
+  LOAD_LUSTER_FIRING: 'Load Luster Firing',
+  OUT_LUSTER_FIRING: 'Out Luster Firing',
+  SANDING: 'Sanding',
+  WAXING: 'Waxing',
+  DIPPING: 'Dipping',
+  SPRAYING: 'Spraying',
+  COLOR_DECORATION: 'Color Decoration',
+  QC_GOOD: 'QC Good',
+  QC_REJECT: 'QC Reject',
+  QC_RE_FIRING: 'QC Re-firing',
+  QC_SECOND: 'QC Second',
+};
 
-const ProductionTracking = (): JSX.Element => {
-  const { user } = useSelector((state: RootState) => state.auth);
-  const [pols, setPOLs] = useState<POL[]>([]);
-  const [selectedPOL, setSelectedPOL] = useState<POL | null>(null);
-  const [selectedProduct, setSelectedProduct] = useState<POLDetail | null>(null);
-  const [productionData, setProductionData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-
+const ProductionTracking = () => {
+  const dispatch = useAppDispatch();
+  const { pols } = useAppSelector((state) => state.pol);
+   
+  const [selectedPOL, setSelectedPOL] = useState('');
+  const [selectedProduct, setSelectedProduct] = useState('');
+  const [currentStage, setCurrentStage] = useState('THROWING');
+  const [quantity, setQuantity] = useState('');
+  const [rejectQuantity, setRejectQuantity] = useState('');
+  const [notes, setNotes] = useState('');
+  const [expanded, setExpanded] = useState<string | false>(false);
+  const [discrepancyAlert, setDiscrepancyAlert] = useState<any>(null);
+ 
   useEffect(() => {
-    fetchPOLs();
-  }, []);
-
-  const fetchPOLs = async () => {
-    setLoading(true);
+    dispatch(fetchPOLs({ page: 1, limit: 50 }));
+  }, [dispatch]);
+ 
+  const handlePOLChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSelectedPOL(event.target.value);
+  };
+ 
+  const handleProductChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSelectedProduct(event.target.value);
+  };
+ 
+  const handleStageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setCurrentStage(event.target.value);
+  };
+ 
+  const handleSubmit = async () => {
     try {
-      const data = await polService.getAll({ status: 'IN_PROGRESS' });
-      setPOLs(data);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load POLs');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePOLChange = (polId: string) => {
-    const pol = pols.find((p) => p.id === polId);
-    setSelectedPOL(pol || null);
-    setSelectedProduct(null);
-    setProductionData([]);
-    
-    if (pol) {
-      setProductionData([
-        { stage: 'Throwing', previousQty: 0, currentQty: 0, rejects: 0, notes: '', status: 'pending' },
-        { stage: 'Trimming', previousQty: 0, currentQty: 0, rejects: 0, notes: '', status: 'pending' },
-        { stage: 'Drying', previousQty: 0, currentQty: 0, rejects: 0, notes: '', status: 'pending' },
-      ]);
-    }
-  };
-
-  const handleProductionChange = (stage: string, field: string, value: any) => {
-    setProductionData((prev) =>
-      prev.map((row) => (row.stage === stage ? { ...row, [field]: value } : row))
-    );
-  };
-
-  const handleSave = async () => {
-    if (!selectedPOL) return;
-    setSaving(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      for (const record of productionData) {
-        if (record.currentQty > 0 || record.rejects > 0) {
-          await productionService.addRecord(Number(selectedPOL.id), {
-            stage: record.stage,
-            quantity: record.currentQty,
-            rejects: record.rejects,
-            notes: record.notes,
-            userId: user?.id,
-          });
-        }
+      const result = await dispatch(trackProduction({
+        polDetailId: selectedProduct,
+        stage: currentStage,
+        quantity: parseInt(quantity),
+        rejectQuantity: parseInt(rejectQuantity) || 0,
+        notes,
+      }));
+ 
+      if (result.payload?.discrepancyDetected) {
+        setDiscrepancyAlert(result.payload);
+      } else {
+        setQuantity('');
+        setRejectQuantity('');
+        setNotes('');
       }
-      setSuccess('Production data saved successfully');
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err: any) {
-      setError(err.message || 'Failed to save production data');
-    } finally {
-      setSaving(false);
+    } catch (error) {
+      console.error('Error tracking production:', error);
     }
   };
-
-  const getStatusColor = (status: string): string => {
-    switch (status) {
-      case 'completed': return 'success';
-      case 'in_progress': return 'warning';
-      case 'pending': return 'default';
-      case 'delayed': return 'error';
-      default: return 'default';
-    }
+ 
+  const handleAlertClose = () => {
+    setDiscrepancyAlert(null);
   };
-
-  const calculateProgress = () => {
-    if (productionData.length === 0) return 0;
-    const completed = productionData.filter((r) => r.status === 'completed').length;
-    return Math.round((completed / productionData.length) * 100);
+ 
+  const handleAccordionChange = (panel: string) => (_: React.SyntheticEvent, isExpanded: boolean) => {
+    setExpanded(isExpanded ? panel : false);
   };
-
-  if (loading) {
-    return (
-      <Box>
-        <Typography variant="h4" sx={{ fontWeight: 600, mb: 3 }}>Production Tracking</Typography>
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={4}>
-            <Skeleton variant="rectangular" height={200} />
-          </Grid>
-          <Grid item xs={12} md={8}>
-            <Skeleton variant="rectangular" height={300} />
-          </Grid>
-        </Grid>
-      </Box>
-    );
-  }
-
+ 
+  const stages = [
+    'THROWING',
+    'TRIMMING',
+    'DECORATION',
+    'DRYING',
+    'LOAD_BISQUE',
+    'OUT_BISQUE',
+    'LOAD_HIGH_FIRING',
+    'OUT_HIGH_FIRING',
+    'LOAD_RAKU_FIRING',
+    'OUT_RAKU_FIRING',
+    'LOAD_LUSTER_FIRING',
+    'OUT_LUSTER_FIRING',
+    'SANDING',
+    'WAXING',
+    'DIPPING',
+    'SPRAYING',
+    'COLOR_DECORATION',
+    'QC_GOOD',
+    'QC_REJECT',
+    'QC_RE_FIRING',
+    'QC_SECOND',
+  ];
+ 
   return (
-    <Box>
+    <Box sx={{ p: 3 }}>
+      {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" sx={{ fontWeight: 600 }}>Production Tracking</Typography>
-        <Tooltip title="Refresh POLs">
-          <IconButton onClick={fetchPOLs}>
-            <RefreshIcon />
-          </IconButton>
-        </Tooltip>
+        <Typography variant="h4">Production Tracking</Typography>
+        <Button
+          variant="outlined"
+          startIcon={<RefreshIcon />}
+          onClick={() => dispatch(fetchPOLs({ page: 1, limit: 50 }))}
+        >
+          Refresh
+        </Button>
       </Box>
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-
-      {success && (
-        <Alert severity="success" sx={{ mb: 3 }} onClose={() => setSuccess(null)}>
-          {success}
-        </Alert>
-      )}
-
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={4}>
+ 
+      {/* POL and Product Selection */}
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid item xs={12} sm={6}>
           <Card>
             <CardContent>
-              <Typography variant="h6" sx={{ mb: 2 }}>Select POL & Product</Typography>
-              <FormControl fullWidth sx={{ mb: 2 }}>
-                <InputLabel>POL</InputLabel>
-                <Select value={selectedPOL?.id || ''} label="POL" onChange={(e) => handlePOLChange(e.target.value)}>
-                  {pols.map((pol) => (
-                    <MenuItem key={pol.id} value={pol.id}>
-                      {pol.po_number || `PO-${pol.id}`} - {pol.client_name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              
-              {selectedPOL && selectedPOL.details && selectedPOL.details.length > 0 && (
-                <FormControl fullWidth sx={{ mb: 2 }}>
-                  <InputLabel>Product</InputLabel>
-                  <Select
-                    value={selectedProduct?.id || ''}
-                    label="Product"
-                    onChange={(e) => {
-                      const product = selectedPOL.details?.find((d) => d.id === e.target.value);
-                      setSelectedProduct(product || null);
-                    }}
-                  >
-                    {selectedPOL.details.map((detail) => (
-                      <MenuItem key={detail.id} value={detail.id}>
-                        {detail.productCode} - {detail.productName}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              )}
-
-              {selectedPOL && (
-                <Box sx={{ mt: 2 }}>
-                  <Typography variant="subtitle2" color="text.secondary">Order Quantity</Typography>
-                  <Typography variant="h5">{selectedProduct?.quantity || selectedPOL.total_order || 0}</Typography>
-                </Box>
-              )}
+              <Typography variant="h6" gutterBottom>Select POL</Typography>
+              <TextField
+                fullWidth
+                select
+                label="POL"
+                value={selectedPOL}
+                onChange={handlePOLChange}
+                SelectProps={{ native: true }}
+              >
+                <option value="">Select a POL...</option>
+                {pols.map((pol) => (
+                  <option key={pol.polId} value={pol.polId}>
+                    {pol.poNumber} - {pol.clientName}
+                  </option>
+                ))}
+              </TextField>
             </CardContent>
           </Card>
         </Grid>
-
-        <Grid item xs={12} md={8}>
+ 
+        <Grid item xs={12} sm={6}>
           <Card>
             <CardContent>
-              <Typography variant="h6" sx={{ mb: 2 }}>Production Progress</Typography>
-              
-              {!selectedPOL ? (
-                <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
-                  Select a POL to view production progress
-                </Typography>
-              ) : (
-                <Stepper alternativeLabel>
-                  {productionStages.map((group) => (
-                    <Step key={group.key}>
-                      <StepLabel>{group.label}</StepLabel>
-                    </Step>
-                  ))}
-                </Stepper>
-              )}
-              
-              {selectedPOL && (
-                <Box sx={{ mt: 2 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                    <Typography variant="body2">Overall Progress</Typography>
-                    <Typography variant="body2">{calculateProgress()}%</Typography>
-                  </Box>
-                  <LinearProgress variant="determinate" value={calculateProgress()} sx={{ height: 10, borderRadius: 5 }} />
-                </Box>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                <Typography variant="h6">Enter Production Data</Typography>
-                {selectedPOL && (
-                  <Button variant="contained" startIcon={<SaveIcon />} onClick={handleSave} disabled={saving || productionData.length === 0}>
-                    {saving ? 'Saving...' : 'Save Production Data'}
-                  </Button>
-                )}
-              </Box>
-
-              {!selectedPOL ? (
-                <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
-                  Select a POL above to enter production data
-                </Typography>
-              ) : productionData.length === 0 ? (
-                <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
-                  No production stages available
-                </Typography>
-              ) : (
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Stage</TableCell>
-                      <TableCell>Previous Qty</TableCell>
-                      <TableCell>Current Qty</TableCell>
-                      <TableCell>Rejects</TableCell>
-                      <TableCell>Notes</TableCell>
-                      <TableCell>Status</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {productionData.map((row) => (
-                      <TableRow key={row.stage}>
-                        <TableCell>{row.stage}</TableCell>
-                        <TableCell>{row.previousQty}</TableCell>
-                        <TableCell>
-                          <TextField type="number" size="small" value={row.currentQty} onChange={(e) => handleProductionChange(row.stage, 'currentQty', parseInt(e.target.value) || 0)} sx={{ width: 100 }} inputProps={{ min: 0 }} />
-                        </TableCell>
-                        <TableCell>
-                          <TextField type="number" size="small" value={row.rejects} onChange={(e) => handleProductionChange(row.stage, 'rejects', parseInt(e.target.value) || 0)} sx={{ width: 80 }} inputProps={{ min: 0 }} />
-                        </TableCell>
-                        <TableCell>
-                          <TextField size="small" value={row.notes} onChange={(e) => handleProductionChange(row.stage, 'notes', e.target.value)} sx={{ width: 200 }} placeholder="Add notes..." />
-                        </TableCell>
-                        <TableCell>
-                          <Chip label={row.status} color={getStatusColor(row.status) as any} size="small" />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
+              <Typography variant="h6" gutterBottom>Select Product</Typography>
+              <TextField
+                fullWidth
+                select
+                label="Product"
+                value={selectedProduct}
+                onChange={handleProductChange}
+                disabled={!selectedPOL}
+                SelectProps={{ native: true }}
+              >
+                <option value="">Select a product...</option>
+                {/* This would be populated from POL details */}
+                <option value="sample-product-1">Sample Product 1</option>
+                <option value="sample-product-2">Sample Product 2</option>
+              </TextField>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
+ 
+      {/* Production Stages */}
+      <Card>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>Production Stages</Typography>
+          
+          <Box sx={{ mt: 3 }}>
+            <Stepper activeStep={stages.indexOf(currentStage)} alternativeLabel>
+              {stages.map((stage) => (
+                <Step key={stage}>
+                  <StepLabel>{stageNames[stage]}</StepLabel>
+                  <StepContent>
+                    <Box sx={{ p: 2, border: '1px solid #e0e0e0', borderRadius: 1, minHeight: 100 }}>
+                      <Typography variant="body2" color="textSecondary">
+                        {stageNames[stage]}
+                      </Typography>
+                      <Box sx={{ mt: 2 }}>
+                        <Grid container spacing={2} alignItems="center">
+                          <Grid item xs={6}>
+                            <TextField
+                              fullWidth
+                              label="Quantity"
+                              type="number"
+                              value={quantity}
+                              onChange={(e) => setQuantity(e.target.value)}
+                              disabled={stage !== currentStage}
+                            />
+                          </Grid>
+                          <Grid item xs={6}>
+                            <TextField
+                              fullWidth
+                              label="Rejects"
+                              type="number"
+                              value={rejectQuantity}
+                              onChange={(e) => setRejectQuantity(e.target.value)}
+                              disabled={stage !== currentStage}
+                            />
+                          </Grid>
+                          <Grid item xs={12}>
+                            <TextField
+                              fullWidth
+                              label="Notes"
+                              multiline
+                              rows={2}
+                              value={notes}
+                              onChange={(e) => setNotes(e.target.value)}
+                              disabled={stage !== currentStage}
+                            />
+                          </Grid>
+                        </Grid>
+                        </Box>
+                      </Box>
+                    </StepContent>
+                  </Step>
+                ))}
+              </Stepper>
+          </Box>
+          
+          {currentStage && (
+            <Box sx={{ mt: 2 }}>
+              <Button
+                variant="contained"
+                fullWidth
+                startIcon={<SaveIcon />}
+                onClick={handleSubmit}
+                disabled={!quantity || parseInt(quantity) <= 0}
+              >
+                Save Production Data
+              </Button>
+            </Box>
+          )}
+        </CardContent>
+      </Card>
+ 
+      {/* Discrepancy Alert Dialog */}
+      <Dialog open={Boolean(discrepancyAlert)} onClose={handleAlertClose}>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <WarningIcon color="warning" fontSize="large" />
+            <Typography variant="h6">Quantity Discrepancy Detected</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ mb: 2 }}>
+            <MuiAlert severity="warning" sx={{ mb: 2 }}>
+              <Typography variant="body2">
+                {discrepancyAlert?.alertMessage}
+              </Typography>
+            </MuiAlert>
+          </Box>
+          
+          {discrepancyAlert?.alerts && discrepancyAlert.alerts.length > 0 && (
+            <Box>
+              <Typography variant="subtitle2" gutterBottom>Generated Alerts:</Typography>
+              {discrepancyAlert.alerts.map((alert: any, index: number) => (
+                <Box
+                  key={index}
+                  sx={{
+                    p: 2,
+                    mb: 1,
+                    border: '1px solid #e0e0e0',
+                    borderRadius: 1,
+                    backgroundColor: alert.priority === 'CRITICAL' ? '#ffebee' : '#fff3e0',
+                  }}
+                >
+                  <Typography variant="body2" fontWeight="bold">
+                    {alert.alertType}
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 1 }}>
+                    {alert.alertMessage}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+          )}
+          
+          <DialogActions>
+            <Button onClick={handleAlertClose}>Close</Button>
+          </DialogActions>
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 };
