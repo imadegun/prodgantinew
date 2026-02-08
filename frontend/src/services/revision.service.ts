@@ -16,41 +16,41 @@ export const revisionService = {
     status?: string;
     type?: string;
   }): Promise<RevisionTicket[]> {
-    const response = await apiClient.get<RevisionTicket[]>('/revision-tickets', filters);
-    return response;
+    const response = await apiClient.get<{ tickets: RevisionTicket[] }>('/revisions', filters);
+    return response.tickets || [];
   },
 
   async getById(ticketId: string): Promise<RevisionTicket> {
-    const response = await apiClient.get<RevisionTicket>(`/revision-tickets/${ticketId}`);
+    const response = await apiClient.get<RevisionTicket>(`/revisions/${ticketId}`);
     return response;
   },
 
   async create(data: CreateRevisionTicketRequest): Promise<RevisionTicket> {
-    const response = await apiClient.post<RevisionTicket>('/revision-tickets', data);
+    const response = await apiClient.post<RevisionTicket>('/revisions', data);
     return response;
   },
 
   async submit(ticketId: number): Promise<RevisionTicket> {
-    const response = await apiClient.post<RevisionTicket>(`/revision-tickets/${ticketId}/submit`, {});
+    const response = await apiClient.post<RevisionTicket>(`/revisions/${ticketId}/submit`, {});
     return response;
   },
 
   async approve(ticketId: number): Promise<RevisionTicket> {
-    const response = await apiClient.post<RevisionTicket>(`/revision-tickets/${ticketId}/approve`, {});
+    const response = await apiClient.post<RevisionTicket>(`/revisions/${ticketId}/approve`, {});
     return response;
   },
 
   async reject(ticketId: number, reason: string): Promise<RevisionTicket> {
-    const response = await apiClient.post<RevisionTicket>(`/revision-tickets/${ticketId}/reject`, { reason });
+    const response = await apiClient.post<RevisionTicket>(`/revisions/${ticketId}/reject`, { reason });
     return response;
   },
 
   async update(ticketId: string, data: Partial<CreateRevisionTicketRequest>): Promise<RevisionTicket> {
-    const response = await apiClient.put<RevisionTicket>(`/revision-tickets/${ticketId}`, data);
+    const response = await apiClient.put<RevisionTicket>(`/revisions/${ticketId}`, data);
     return response;
   },
 
   async delete(ticketId: string): Promise<void> {
-    await apiClient.delete(`/revision-tickets/${ticketId}`);
+    await apiClient.delete(`/revisions/${ticketId}`);
   },
 };

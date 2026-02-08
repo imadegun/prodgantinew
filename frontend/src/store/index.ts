@@ -3,6 +3,7 @@ import authReducer from './slices/authSlice';
 import polReducer from './slices/polSlice';
 import productionReducer from './slices/productionSlice';
 import alertReducer from './slices/alertSlice';
+import reportReducer from './slices/reportSlice';
 import uiReducer from './slices/uiSlice';
 
 export const store = configureStore({
@@ -11,6 +12,7 @@ export const store = configureStore({
     pol: polReducer,
     production: productionReducer,
     alerts: alertReducer,
+    reports: reportReducer,
     ui: uiReducer,
   },
   middleware: (getDefaultMiddleware) =>

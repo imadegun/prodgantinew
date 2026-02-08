@@ -18,7 +18,7 @@ interface UIState {
   };
 }
 
-const initialState: UIState = {
+  const initialState: UIState = {
   sidebarOpen: true,
   alertDialogOpen: false,
   alertDialogAlert: null,
@@ -32,7 +32,6 @@ const initialState: UIState = {
     open: false,
     title: '',
     content: '',
-    onConfirm: () => {},
   },
 };
 
@@ -76,13 +75,13 @@ const uiSlice = createSlice({
     openModal: (state, action: PayloadAction<{
       title: string;
       content: string;
-      onConfirm: () => void;
+      onConfirm?: () => void;
     }>) => {
       state.modal = {
         open: true,
         title: action.payload.title,
         content: action.payload.content,
-        onConfirm: action.payload.onConfirm,
+        onConfirm: action.payload.onConfirm || (() => {}),
       };
     },
     closeModal: (state) => {

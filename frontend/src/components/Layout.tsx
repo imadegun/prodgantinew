@@ -65,17 +65,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const dispatch = useDispatch();
   const { user, isAuthenticated, isLoading: authLoading } = useSelector((state: RootState) => state.auth);
   const { alerts } = useSelector((state: RootState) => state.alerts);
-
-  // Small delay to ensure Redux state is updated before checking authentication
-  const [shouldCheckAuth, setShouldCheckAuth] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setShouldCheckAuth(true), 300);
-    return () => clearTimeout(timer);
-  }, []);
-
+  
+  // Check if there's a token in localStorage to determine if user should be authenticated
+  const hasToken = localStorage.getItem('token');
+  
   // Redirect to login if not authenticated and auth is not loading
-  if (!isAuthenticated && !authLoading && shouldCheckAuth) {
+  // Only redirect if there's no token in localStorage (user was never logged in)
+  if (!isAuthenticated && !authLoading && !hasToken) {
     return <Navigate to="/login" replace />;
   }
 

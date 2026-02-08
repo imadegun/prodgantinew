@@ -21,10 +21,11 @@ const Login: React.FC = () => {
 
     try {
       const result = await dispatch(login({ username: formData.username, password: formData.password }) as any);
+      
       if (login.fulfilled.match(result)) {
         dispatch(showSnackbar({ message: 'Login successful', severity: 'success' }));
-        // Small delay to ensure Redux state is updated before navigating
-        setTimeout(() => navigate('/'), 100);
+        // Navigate immediately - Redux state is already updated by the fulfilled action
+        navigate('/');
       } else {
         dispatch(showSnackbar({ message: result.payload as string || 'Login failed', severity: 'error' }));
       }
@@ -59,7 +60,7 @@ const Login: React.FC = () => {
           }}
         >
           <Typography variant="h4" component="h1" gutterBottom align="center">
-            ProdGantiNew
+            Gaya Produksi 2026
           </Typography>
           <Typography variant="body2" color="text.secondary" align="center" gutterBottom>
             Production Tracking System

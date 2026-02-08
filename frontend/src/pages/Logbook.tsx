@@ -80,9 +80,10 @@ const Logbook = (): JSX.Element => {
       if (severityFilter !== 'all') filters.severity = severityFilter;
       
       const data = await logbookService.getAll(filters);
-      setEntries(data);
+      setEntries(data.entries || []);
     } catch (err: any) {
       setError(err.message || 'Failed to fetch logbook entries');
+      setEntries([]);
     } finally {
       setLoading(false);
     }

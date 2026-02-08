@@ -91,6 +91,7 @@ const RevisionTickets = (): JSX.Element => {
       setTickets(data);
     } catch (err: any) {
       setError(err.message || 'Failed to fetch revision tickets');
+      setTickets([]);
     } finally {
       setLoading(false);
     }

@@ -6,7 +6,7 @@ interface User {
   username: string;
   email: string;
   fullName: string;
-  role: 'MANAGER' | 'ADMIN';
+  role: 'MANAGER' | 'ADMIN' | 'WORKER';
 }
 
 interface LoginRequest {
@@ -14,11 +14,21 @@ interface LoginRequest {
   password: string;
 }
 
+interface BackendLoginResponse {
+  user: {
+    id: string;
+    username: string;
+    fullName: string;
+    role: 'MANAGER' | 'ADMIN' | 'WORKER';
+  };
+  accessToken: string;
+  refreshToken: string;
+}
+
 interface LoginResponse {
   user: User;
   token: string;
   refreshToken: string;
-  expiresIn: number;
 }
 
 interface AuthState {
@@ -41,10 +51,26 @@ export const login = createAsyncThunk(
   'auth/login',
   async (credentials: LoginRequest, { rejectWithValue }) => {
     try {
-      const response = await apiClient.post<LoginResponse>('/auth/login', credentials);
-      localStorage.setItem('token', response.token);
+      const response = await apiClient.post<BackendLoginResponse>('/auth/login', credentials);
+      
+      // Transform backend response to match frontend expectations
+      const token = response.accessToken;
+      const user: User = {
+        userId: response.user.id,
+        username: response.user.username,
+        email: '', // Backend doesn't provide email, use empty string
+        fullName: response.user.fullName,
+        role: response.user.role,
+      };
+      
+      localStorage.setItem('token', token);
       localStorage.setItem('refreshToken', response.refreshToken);
-      return response;
+      
+      return {
+        user,
+        token,
+        refreshToken: response.refreshToken,
+      };
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.error?.message || 'Login failed');
     }

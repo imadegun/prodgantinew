@@ -6,17 +6,27 @@ interface LoginRequest {
   password: string;
 }
 
+interface BackendLoginResponse {
+  user: {
+    id: string;
+    username: string;
+    fullName: string;
+    role: 'MANAGER' | 'ADMIN' | 'WORKER';
+  };
+  accessToken: string;
+  refreshToken: string;
+}
+
 interface LoginResponse {
   user: {
     userId: string;
     username: string;
     email: string;
     fullName: string;
-    role: 'MANAGER' | 'ADMIN';
+    role: 'MANAGER' | 'ADMIN' | 'WORKER';
   };
   token: string;
   refreshToken: string;
-  expiresIn: number;
 }
 
 interface RegisterRequest {
@@ -24,13 +34,24 @@ interface RegisterRequest {
   email: string;
   password: string;
   fullName: string;
-  role: 'MANAGER' | 'ADMIN';
+  role: 'MANAGER' | 'ADMIN' | 'WORKER';
 }
 
 export const authService = {
   async login(credentials: LoginRequest): Promise<LoginResponse> {
-    const response = await apiClient.post<LoginResponse>('/auth/login', credentials);
-    return response;
+    const response = await apiClient.post<BackendLoginResponse>('/auth/login', credentials);
+    // Transform backend response to match frontend expectations
+    return {
+      user: {
+        userId: response.user.id,
+        username: response.user.username,
+        email: '', // Backend doesn't provide email
+        fullName: response.user.fullName,
+        role: response.user.role,
+      },
+      token: response.accessToken,
+      refreshToken: response.refreshToken,
+    };
   },
 
   async register(data: RegisterRequest): Promise<any> {
@@ -45,19 +66,35 @@ export const authService = {
   },
 
   async refreshToken(refreshToken: string): Promise<LoginResponse> {
-    const response = await apiClient.post<LoginResponse>('/auth/refresh', {
+    const response = await apiClient.post<{ accessToken: string; refreshToken: string }>('/auth/refresh', {
       refreshToken,
     });
-    if (response.token) {
-      localStorage.setItem('token', response.token);
+    if (response.accessToken) {
+      localStorage.setItem('token', response.accessToken);
       localStorage.setItem('refreshToken', response.refreshToken);
     }
-    return response;
+    return {
+      user: {
+        userId: '', // Will be filled by caller
+        username: '',
+        email: '',
+        fullName: '',
+        role: 'MANAGER',
+      },
+      token: response.accessToken,
+      refreshToken: response.refreshToken,
+    };
   },
 
   async getCurrentUser(): Promise<LoginResponse['user']> {
-    const response = await apiClient.get<LoginResponse['user']>('/auth/me');
-    return response;
+    const response = await apiClient.get<{ id: string; username: string; fullName: string; role: 'MANAGER' | 'ADMIN' | 'WORKER' }>('/auth/me');
+    return {
+      userId: response.id,
+      username: response.username,
+      email: '', // Backend doesn't provide email
+      fullName: response.fullName,
+      role: response.role,
+    };
   },
 
   async resetPassword(email: string): Promise<void> {

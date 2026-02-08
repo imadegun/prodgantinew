@@ -34,9 +34,12 @@ class ApiClient {
     this.client.interceptors.response.use(
       (response) => response,
       (error: AxiosError) => {
-        if (error.response?.status === 401) {
-          localStorage.removeItem('token');
-          window.location.href = '/login';
+        // Only handle 401 errors if we're not on the login page
+        // This prevents redirecting to login when we're already there
+        if (error.response?.status === 401 && window.location.pathname !== '/login') {
+          // Don't automatically remove the token or redirect
+          // Let the application handle this through proper error handling
+          // This prevents the issue where a valid user gets logged out
         }
         return Promise.reject(error);
       }

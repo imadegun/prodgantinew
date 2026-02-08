@@ -12,7 +12,7 @@ const POLDetail = (): JSX.Element => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const { currentPOL, polDetails, loading, error } = useSelector((state: RootState) => state.pol);
+  const { currentPOL, currentPOLDetails, isLoading, error } = useSelector((state: RootState) => state.pol);
   const [activeTab, setActiveTab] = useState(0);
   const [localLoading, setLocalLoading] = useState(true);
 
@@ -48,7 +48,7 @@ const POLDetail = (): JSX.Element => {
     return index >= 0 ? ((index + 1) / stages.length) * 100 : 0;
   };
 
-  if (localLoading || loading) {
+  if (localLoading || isLoading) {
     return (
       <Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
@@ -81,7 +81,7 @@ const POLDetail = (): JSX.Element => {
     );
   }
 
-  const details = polDetails.length > 0 ? polDetails : (currentPOL.details || []);
+  const details = currentPOLDetails.length > 0 ? currentPOLDetails : (currentPOL.details || []);
 
   return (
     <Box>
