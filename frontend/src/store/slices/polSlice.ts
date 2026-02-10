@@ -66,7 +66,11 @@ interface POLState {
   currentPOL: POL | null;
   currentPOLDetails: POLDetail[];
   isLoading: boolean;
+  loading: boolean;
   error: string | null;
+  filters: {
+    status: string;
+  };
   meta: {
     page: number;
     limit: number;
@@ -80,7 +84,11 @@ const initialState: POLState = {
   currentPOL: null,
   currentPOLDetails: [],
   isLoading: false,
+  loading: false,
   error: null,
+  filters: {
+    status: 'All',
+  },
   meta: {
     page: 1,
     limit: 10,
@@ -177,6 +185,9 @@ const polSlice = createSlice({
       state.currentPOL = null;
       state.currentPOLDetails = [];
     },
+    setFilters: (state, action: PayloadAction<Partial<POLState['filters']>>) => {
+      state.filters = { ...state.filters, ...action.payload };
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -255,5 +266,5 @@ const polSlice = createSlice({
   },
 });
 
-export const { clearError, setCurrentPOL, clearCurrentPOL } = polSlice.actions;
+export const { clearError, setCurrentPOL, clearCurrentPOL, setFilters } = polSlice.actions;
 export default polSlice.reducer;

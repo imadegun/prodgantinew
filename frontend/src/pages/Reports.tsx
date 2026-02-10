@@ -43,7 +43,7 @@ const Reports = () => {
   const handleGenerateReport = async () => {
     try {
       let reportData;
-      
+
       switch (reportType) {
         case 'POL_SUMMARY':
           reportData = await dispatch(generatePOLSummaryReport({
@@ -130,8 +130,8 @@ const Reports = () => {
     }
 
     const headers = Object.keys(data.data[0] || {}).join(',');
-    const rows = data.data.map((row: any) => 
-      Object.values(row).map((value: any) => 
+    const rows = data.data.map((row: any) =>
+      Object.values(row).map((value: any) =>
         typeof value === 'object' ? JSON.stringify(value).replace(/"/g, '""') : value
       ).join(',')
     );
@@ -276,7 +276,7 @@ const Reports = () => {
                 size="small"
               />
             </Box>
-            
+
             {isLoading ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
                 <CircularProgress />
@@ -286,7 +286,7 @@ const Reports = () => {
                 <Typography variant="body2" paragraph>
                   <strong>Report Type:</strong> {reportType}
                 </Typography>
-                
+
                 <Typography variant="body2" paragraph>
                   <strong>Date Range:</strong> {fromDate || 'All Time'} - {toDate || 'Present'}
                 </Typography>

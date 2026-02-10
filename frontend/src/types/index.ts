@@ -10,8 +10,9 @@ export interface User {
 // API Response types (snake_case from backend)
 export interface POL {
   id: string;
+  polId?: string;
   po_number?: string;
-  polNumber?: string;
+  poNumber?: string;
   client_name?: string;
   customerName?: string;
   orderDate?: string;

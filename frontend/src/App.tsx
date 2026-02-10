@@ -11,7 +11,9 @@ import Layout from './components/Layout';
 // Pages
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
-import POLManagement from './pages/POLDetail';
+import POLList from './pages/POLList';
+import POLCreate from './pages/POLCreate';
+import POLDetail from './pages/POLDetail';
 import ProductionTracking from './pages/ProductionTracking';
 import Alerts from './pages/AlertCenter';
 import Reports from './pages/Reports';
@@ -31,7 +33,9 @@ function App() {
           {/* Protected Routes */}
           <Route path="/" element={<Layout />}>
             <Route index element={<Dashboard />} />
-            <Route path="pols" element={<POLManagement />} />
+            <Route path="pols" element={<POLList />} />
+            <Route path="pols/create" element={<POLCreate />} />
+            <Route path="pols/:id" element={<POLDetail />} />
             <Route path="production" element={<ProductionTracking />} />
             <Route path="alerts" element={<Alerts />} />
             <Route path="reports" element={<Reports />} />

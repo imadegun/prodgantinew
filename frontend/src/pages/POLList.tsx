@@ -52,14 +52,7 @@ const POLList = (): JSX.Element => {
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    const fetchPOLs = async () => {
-      try {
-        await dispatch(fetchPOLs({ page: page + 1, limit: rowsPerPage, ...filters }));
-      } catch (error: any) {
-        console.error('Failed to fetch POLs:', error);
-      }
-    };
-    fetchPOLs();
+    dispatch(fetchPOLs({ page: page + 1, limit: rowsPerPage, ...filters }));
   }, [dispatch, filters, page, rowsPerPage]);
 
   const handleChangePage = (_event: unknown, newPage: number) => {
@@ -81,21 +74,17 @@ const POLList = (): JSX.Element => {
     setSelectedPOL(null);
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (selectedPOL) {
-      try {
-        await dispatch(deletePOL(selectedPOL.id));
-      } catch (error) {
-        console.error('Failed to delete POL:', error);
-      }
+      dispatch(deletePOL(selectedPOL.id));
+      handleMenuClose();
     }
-    handleMenuClose();
   };
 
   const getStatusColor = (status: string): 'success' | 'default' | 'info' | 'error' => {
     switch (status) {
       case 'IN_PROGRESS': return 'success';
-      case 'DRAFT': return 'default';
+      case 'PENDING': return 'default';
       case 'COMPLETED': return 'info';
       case 'CANCELLED': return 'error';
       default: return 'default';
@@ -150,7 +139,7 @@ const POLList = (): JSX.Element => {
                   onChange={(e) => dispatch(setFilters({ status: e.target.value }))}
                 >
                   <MenuItem value="All">All Status</MenuItem>
-                  <MenuItem value="DRAFT">Draft</MenuItem>
+                  <MenuItem value="PENDING">Pending</MenuItem>
                   <MenuItem value="IN_PROGRESS">In Progress</MenuItem>
                   <MenuItem value="COMPLETED">Completed</MenuItem>
                   <MenuItem value="CANCELLED">Cancelled</MenuItem>
