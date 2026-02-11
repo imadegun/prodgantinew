@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
+import { productionService } from '../services/production.service';
 
 const router = Router();
 
@@ -8,49 +9,19 @@ router.get('/:polDetailId/stages', authenticate, async (req, res) => {
   try {
     const { polDetailId } = req.params;
     
-    // TODO: Implement production stages retrieval
+    const result = await productionService.getProductionStages(polDetailId);
+    
     res.json({
       success: true,
-      data: {
-        polDetailId,
-        productCode: 'TP-MAIN',
-        productName: 'Teapot (Main Body)',
-        orderQuantity: 50,
-        currentStage: 'TRIMMING',
-        stages: [
-          {
-            stage: 'THROWING',
-            displayName: 'Throwing',
-            quantity: 50,
-            rejectQuantity: 0,
-            remakeCycle: 0,
-            completedAt: '2026-01-20T10:00:00Z',
-            completedBy: { userId: 'user-1', fullName: 'Jane Admin' },
-            notes: null,
-            isComplete: true,
-            canTransition: true,
-          },
-          {
-            stage: 'TRIMMING',
-            displayName: 'Trimming',
-            quantity: 52,
-            rejectQuantity: 2,
-            remakeCycle: 0,
-            completedAt: null,
-            completedBy: null,
-            notes: null,
-            isComplete: false,
-            canTransition: true,
-          },
-        ],
-      },
+      data: result,
     });
-  } catch (error) {
-    res.status(500).json({
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
       success: false,
       error: {
-        code: 'FETCH_STAGES_FAILED',
-        message: 'Failed to fetch production stages',
+        code: error.code || 'FETCH_STAGES_FAILED',
+        message: error.message || 'Failed to fetch production stages',
       },
     });
   }
@@ -61,33 +32,26 @@ router.post('/track', authenticate, async (req, res) => {
   try {
     const { polDetailId, stage, quantity, rejectQuantity, remakeCycle, notes } = req.body;
     
-    // TODO: Implement production tracking
+    const result = await productionService.trackProduction({
+      polDetailId,
+      stage,
+      quantity,
+      rejectQuantity: rejectQuantity || 0,
+      remakeCycle: remakeCycle || 0,
+      notes,
+    });
+    
     res.status(201).json({
       success: true,
-      data: {
-        recordId: 'record-uuid',
-        stage,
-        quantity,
-        rejectQuantity: rejectQuantity || 0,
-        remakeCycle: remakeCycle || 0,
-        createdAt: new Date().toISOString(),
-        discrepancyDetected: quantity > 50,
-        alerts: quantity > 50 ? [
-          {
-            alertId: 'alert-uuid',
-            alertType: 'QUANTITY_DISCREPANCY',
-            alertMessage: `Quantity (${quantity}) exceeds previous stage quantity (50)`,
-            priority: 'WARNING',
-          },
-        ] : [],
-      },
+      data: result,
     });
-  } catch (error) {
-    res.status(500).json({
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
       success: false,
       error: {
-        code: 'TRACK_PRODUCTION_FAILED',
-        message: 'Failed to track production',
+        code: error.code || 'TRACK_PRODUCTION_FAILED',
+        message: error.message || 'Failed to track production',
       },
     });
   }
@@ -96,31 +60,19 @@ router.post('/track', authenticate, async (req, res) => {
 // Get active production tasks
 router.get('/active', authenticate, async (req, res) => {
   try {
-    // TODO: Implement active tasks retrieval
+    const result = await productionService.getActiveTasks();
+    
     res.json({
       success: true,
-      data: {
-        tasks: [
-          {
-            polDetailId: 'pol-detail-uuid',
-            polNumber: 'PO-2026-001',
-            productCode: 'TP-MAIN',
-            productName: 'Teapot (Main Body)',
-            currentStage: 'TRIMMING',
-            displayName: 'Trimming',
-            pendingQuantity: 48,
-            deliveryDate: '2026-02-15',
-            urgency: 'NORMAL',
-          },
-        ],
-      },
+      data: result,
     });
-  } catch (error) {
-    res.status(500).json({
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
       success: false,
       error: {
-        code: 'FETCH_ACTIVE_TASKS_FAILED',
-        message: 'Failed to fetch active tasks',
+        code: error.code || 'FETCH_ACTIVE_TASKS_FAILED',
+        message: error.message || 'Failed to fetch active tasks',
       },
     });
   }

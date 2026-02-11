@@ -1,47 +1,41 @@
 import { Router } from 'express';
 import { authenticate, authorize } from '../middleware/auth.middleware';
+import { polService } from '../services/pol.service';
 
 const router = Router();
 
 // Get all POLs
 router.get('/', authenticate, async (req, res) => {
   try {
-    const { page = 1, limit = 10, status, clientName, fromDate, toDate } = req.query;
+    const { page = 1, limit = 10, status, customerName, fromDate, toDate } = req.query;
     
-    // TODO: Implement POL listing with filters
+    let filters: any = {};
+    if (status) filters.status = status;
+    if (customerName) filters.customerName = customerName;
+    if (fromDate) {
+      filters.startDate = new Date(fromDate as string);
+    }
+    if (toDate) {
+      filters.endDate = new Date(toDate as string);
+    }
+    
+    const result = await polService.listPOLs(
+      Number(page),
+      Number(limit),
+      filters
+    );
+    
     res.json({
       success: true,
-      data: {
-        pols: [
-          {
-            polId: 'pol-uuid-1',
-            poNumber: 'PO-2026-001',
-            clientName: 'ABC Corp',
-            totalOrder: 100,
-            poDate: '2026-01-15',
-            deliveryDate: '2026-02-15',
-            status: 'IN_PROGRESS',
-            createdAt: '2026-01-15T10:00:00Z',
-            createdBy: {
-              userId: 'user-uuid',
-              fullName: 'John Manager',
-            },
-          },
-        ],
-      },
-      meta: {
-        page: Number(page),
-        limit: Number(limit),
-        total: 50,
-        totalPages: 5,
-      },
+      data: result,
     });
-  } catch (error) {
-    res.status(500).json({
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
       success: false,
       error: {
-        code: 'FETCH_POLs_FAILED',
-        message: 'Failed to fetch POLs',
+        code: error.code || 'FETCH_POLs_FAILED',
+        message: error.message || 'Failed to fetch POLs',
       },
     });
   }
@@ -52,35 +46,19 @@ router.get('/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     
-    // TODO: Implement POL detail retrieval
+    const result = await polService.getPOLById(id);
+    
     res.json({
       success: true,
-      data: {
-        pol: {
-          polId: id,
-          poNumber: 'PO-2026-001',
-          clientName: 'ABC Corp',
-          totalOrder: 100,
-          poDate: '2026-01-15',
-          deliveryDate: '2026-02-15',
-          status: 'IN_PROGRESS',
-          createdAt: '2026-01-15T10:00:00Z',
-          updatedAt: '2026-01-20T14:30:00Z',
-          createdBy: {
-            userId: 'user-uuid',
-            fullName: 'John Manager',
-          },
-        },
-        details: [],
-        activeAlerts: [],
-      },
+      data: result,
     });
-  } catch (error) {
-    res.status(500).json({
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
       success: false,
       error: {
-        code: 'FETCH_POL_FAILED',
-        message: 'Failed to fetch POL',
+        code: error.code || 'FETCH_POL_FAILED',
+        message: error.message || 'Failed to fetch POL',
       },
     });
   }
@@ -89,27 +67,32 @@ router.get('/:id', authenticate, async (req, res) => {
 // Create POL
 router.post('/', authenticate, authorize('MANAGER'), async (req, res) => {
   try {
-    const { clientName, deliveryDate, products } = req.body;
+    const { customerName, deliveryDate, products } = req.body;
     
-    // TODO: Implement POL creation
+    const result = await polService.createPOL({
+      customerName,
+      orderDate: new Date(),
+      deliveryDate: new Date(deliveryDate),
+      notes: ''
+    });
+    
+    // Add products to POL
+    for (const product of products) {
+      await polService.addProductToPOL(result.id, product);
+    }
+    
     res.status(201).json({
       success: true,
-      data: {
-        polId: 'new-pol-uuid',
-        poNumber: 'PO-2026-002',
-        clientName,
-        totalOrder: products.reduce((sum: number, p: any) => sum + p.orderQuantity, 0),
-        deliveryDate,
-        status: 'DRAFT',
-      },
+      data: result,
       message: 'POL created successfully',
     });
-  } catch (error) {
-    res.status(500).json({
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
       success: false,
       error: {
-        code: 'CREATE_POL_FAILED',
-        message: 'Failed to create POL',
+        code: error.code || 'CREATE_POL_FAILED',
+        message: error.message || 'Failed to create POL',
       },
     });
   }
@@ -119,25 +102,33 @@ router.post('/', authenticate, authorize('MANAGER'), async (req, res) => {
 router.put('/:id', authenticate, authorize('MANAGER'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { clientName, deliveryDate, status } = req.body;
+    const { customerName, deliveryDate, status } = req.body;
     
-    // TODO: Implement POL update
+    const updateData: any = {};
+    if (customerName !== undefined) {
+      updateData.customerName = customerName;
+    }
+    if (deliveryDate !== undefined) {
+      updateData.deliveryDate = new Date(deliveryDate);
+    }
+    if (status !== undefined) {
+      updateData.status = status;
+    }
+    
+    const result = await polService.updatePOL(id, updateData);
+    
     res.json({
       success: true,
-      data: {
-        polId: id,
-        clientName,
-        deliveryDate,
-        status,
-      },
+      data: result,
       message: 'POL updated successfully',
     });
-  } catch (error) {
-    res.status(500).json({
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
       success: false,
       error: {
-        code: 'UPDATE_POL_FAILED',
-        message: 'Failed to update POL',
+        code: error.code || 'UPDATE_POL_FAILED',
+        message: error.message || 'Failed to update POL',
       },
     });
   }
@@ -148,17 +139,19 @@ router.delete('/:id', authenticate, authorize('MANAGER'), async (req, res) => {
   try {
     const { id } = req.params;
     
-    // TODO: Implement POL deletion
+    await polService.deletePOL(id);
+    
     res.json({
       success: true,
       message: 'POL deleted successfully',
     });
-  } catch (error) {
-    res.status(500).json({
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
       success: false,
       error: {
-        code: 'DELETE_POL_FAILED',
-        message: 'Failed to delete POL',
+        code: error.code || 'DELETE_POL_FAILED',
+        message: error.message || 'Failed to delete POL',
       },
     });
   }

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
+import { productService } from '../services/product.service';
 
 const router = Router();
 
@@ -8,47 +9,22 @@ router.get('/search', authenticate, async (req, res) => {
   try {
     const { q, limit = 50 } = req.query;
     
-    // TODO: Implement product search from gayafusionall
+    const result = await productService.searchProducts(
+      q as string || '',
+      Number(limit)
+    );
+    
     res.json({
       success: true,
-      data: {
-        products: [
-          {
-            productCode: 'TP-MAIN',
-            productName: 'Teapot (Main Body)',
-            color: 'Blue',
-            texture: 'Smooth',
-            material: 'Stoneware',
-            size: '500ml',
-            finalSize: '500ml',
-          },
-          {
-            productCode: 'TP-LID',
-            productName: 'Teapot (Lid)',
-            color: 'Blue',
-            texture: 'Smooth',
-            material: 'Stoneware',
-            size: '500ml',
-            finalSize: '500ml',
-          },
-          {
-            productCode: 'CP-MAIN',
-            productName: 'Cup (Main Body)',
-            color: 'White',
-            texture: 'Smooth',
-            material: 'Porcelain',
-            size: '250ml',
-            finalSize: '250ml',
-          },
-        ],
-      },
+      data: result,
     });
-  } catch (error) {
-    res.status(500).json({
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
       success: false,
       error: {
-        code: 'SEARCH_PRODUCTS_FAILED',
-        message: 'Failed to search products',
+        code: error.code || 'SEARCH_PRODUCTS_FAILED',
+        message: error.message || 'Failed to search products',
       },
     });
   }
@@ -59,38 +35,19 @@ router.get('/:code', authenticate, async (req, res) => {
   try {
     const { code } = req.params;
     
-    // TODO: Implement product retrieval from gayafusionall
+    const product = await productService.getProductByCode(code);
+    
     res.json({
       success: true,
-      data: {
-        product: {
-          productCode: code,
-          productName: 'Teapot (Main Body)',
-          color: 'Blue',
-          texture: 'Smooth',
-          material: 'Stoneware',
-          size: '500ml',
-          finalSize: '500ml',
-          clayType: 'Stoneware',
-          clayQuantity: 2.5,
-          glaze: 'Blue Glaze',
-          engobe: null,
-          luster: null,
-          stainsOxides: null,
-          castingTools: 'Teapot Mold (500ml)',
-          extruders: null,
-          textures: null,
-          generalTools: 'Sponge, Rib, Wire cutter',
-          buildNotes: 'Form by throwing, handle separately',
-        },
-      },
+      data: { product },
     });
-  } catch (error) {
-    res.status(500).json({
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
       success: false,
       error: {
-        code: 'GET_PRODUCT_FAILED',
-        message: 'Failed to get product',
+        code: error.code || 'GET_PRODUCT_FAILED',
+        message: error.message || 'Failed to get product',
       },
     });
   }
@@ -101,28 +58,29 @@ router.get('/:code/materials', authenticate, async (req, res) => {
   try {
     const { code } = req.params;
     
-    // TODO: Implement material requirements retrieval
+    const materials = await productService.getMaterialRequirements(code);
+    
+    if (!materials) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'PRODUCT_NOT_FOUND',
+          message: 'Product not found',
+        },
+      });
+    }
+    
     res.json({
       success: true,
-      data: {
-        productCode: code,
-        materials: {
-          clay: [
-            { type: 'Stoneware', quantity: 2.5 },
-          ],
-          glazes: ['Blue Glaze'],
-          engobes: [],
-          lusters: [],
-          stainsOxides: [],
-        },
-      },
+      data: materials,
     });
-  } catch (error) {
-    res.status(500).json({
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
       success: false,
       error: {
-        code: 'GET_MATERIALS_FAILED',
-        message: 'Failed to get material requirements',
+        code: error.code || 'GET_MATERIALS_FAILED',
+        message: error.message || 'Failed to get material requirements',
       },
     });
   }
@@ -133,25 +91,29 @@ router.get('/:code/tools', authenticate, async (req, res) => {
   try {
     const { code } = req.params;
     
-    // TODO: Implement tool requirements retrieval
+    const tools = await productService.getToolRequirements(code);
+    
+    if (!tools) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'PRODUCT_NOT_FOUND',
+          message: 'Product not found',
+        },
+      });
+    }
+    
     res.json({
       success: true,
-      data: {
-        productCode: code,
-        tools: {
-          castingTools: ['Teapot Mold (500ml)'],
-          extruders: [],
-          textures: [],
-          generalTools: ['Sponge', 'Rib', 'Wire cutter'],
-        },
-      },
+      data: tools,
     });
-  } catch (error) {
-    res.status(500).json({
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
       success: false,
       error: {
-        code: 'GET_TOOLS_FAILED',
-        message: 'Failed to get tool requirements',
+        code: error.code || 'GET_TOOLS_FAILED',
+        message: error.message || 'Failed to get tool requirements',
       },
     });
   }
@@ -162,20 +124,32 @@ router.get('/:code/notes', authenticate, async (req, res) => {
   try {
     const { code } = req.params;
     
-    // TODO: Implement build notes retrieval
+    const buildNotes = await productService.getBuildNotes(code);
+    
+    if (buildNotes === null) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'PRODUCT_NOT_FOUND',
+          message: 'Product not found',
+        },
+      });
+    }
+    
     res.json({
       success: true,
       data: {
         productCode: code,
-        buildNotes: 'Form by throwing, handle separately. Allow to dry slowly to prevent cracking. Bisque fire to Cone 04, glaze fire to Cone 6.',
+        buildNotes,
       },
     });
-  } catch (error) {
-    res.status(500).json({
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
       success: false,
       error: {
-        code: 'GET_NOTES_FAILED',
-        message: 'Failed to get build notes',
+        code: error.code || 'GET_NOTES_FAILED',
+        message: error.message || 'Failed to get build notes',
       },
     });
   }

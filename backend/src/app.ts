@@ -16,6 +16,7 @@ import revisionRoutes from './routes/revision.routes';
 import productRoutes from './routes/product.routes';
 import { errorHandler } from './middleware/error.middleware';
 import { notFoundHandler } from './middleware/error.middleware';
+import { initializeMySQL, closeMySQL } from './config/mysql';
 
 // Load environment variables
 dotenv.config();
@@ -106,15 +107,42 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 // Start server
-app.listen(PORT, () => {
-  console.log('╔════════════════════════════════════════════════════════╗');
-  console.log('║           ProdGantiNew Production Tracking API          ║');
-  console.log('╠════════════════════════════════════════════════════════╣');
-  console.log(`║  🚀 Server running on port ${PORT}                            ║`);
-  console.log(`║  🌐 Environment: ${(process.env.NODE_ENV || 'development').padEnd(27)}║`);
-  console.log(`║  📝 API Base URL: http://localhost:${PORT}/api/v1          ║`);
-  console.log(`║  🔗 Health Check: http://localhost:${PORT}/api/health      ║`);
-  console.log('╚════════════════════════════════════════════════════════╝');
+async function startServer() {
+  // Initialize MySQL connection for gayafusionall
+  try {
+    await initializeMySQL();
+    console.log('✅ MySQL connection initialized successfully');
+  } catch (error) {
+    console.warn('⚠️  MySQL connection failed - gayafusionall integration will be unavailable');
+    console.warn('   Error:', error instanceof Error ? error.message : String(error));
+    // Continue without MySQL - app will still work for PostgreSQL features
+  }
+
+  app.listen(PORT, () => {
+    console.log('╔════════════════════════════════════════════════════════╗');
+    console.log('║           ProdGantiNew Production Tracking API          ║');
+    console.log('╠════════════════════════════════════════════════════════╣');
+    console.log(`║  🚀 Server running on port ${PORT}                            ║`);
+    console.log(`║  🌐 Environment: ${(process.env.NODE_ENV || 'development').padEnd(27)}║`);
+    console.log(`║  📝 API Base URL: http://localhost:${PORT}/api/v1          ║`);
+    console.log(`║  🔗 Health Check: http://localhost:${PORT}/api/health      ║`);
+    console.log('╚════════════════════════════════════════════════════════╝');
+  });
+}
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM received, shutting down gracefully...');
+  await closeMySQL();
+  process.exit(0);
 });
+
+process.on('SIGINT', async () => {
+  console.log('SIGINT received, shutting down gracefully...');
+  await closeMySQL();
+  process.exit(0);
+});
+
+startServer();
 
 export default app;

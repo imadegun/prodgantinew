@@ -3,15 +3,15 @@ import { AppError } from '../middleware/error.middleware';
 import { POLStatus } from '@prisma/client';
 
 interface CreatePOLData {
-  polNumber: string;
-  customerName: string;
-  orderDate: Date;
+  poNumber: string;
+  clientName: string;
+  poDate: Date;
   deliveryDate: Date;
   notes?: string;
 }
 
 interface UpdatePOLData {
-  customerName?: string;
+  clientName?: string;
   deliveryDate?: Date;
   notes?: string;
   status?: POLStatus;
@@ -19,7 +19,7 @@ interface UpdatePOLData {
 
 interface POLFilters {
   status?: POLStatus;
-  customerName?: string;
+  clientName?: string;
   startDate?: Date;
   endDate?: Date;
 }
@@ -37,20 +37,20 @@ export class POLService {
       where.status = filters.status;
     }
 
-    if (filters.customerName) {
-      where.customerName = {
-        contains: filters.customerName,
+    if (filters.clientName) {
+      where.clientName = {
+        contains: filters.clientName,
         mode: 'insensitive',
       };
     }
 
     if (filters.startDate || filters.endDate) {
-      where.orderDate = {};
+      where.poDate = {};
       if (filters.startDate) {
-        where.orderDate.gte = filters.startDate;
+        where.poDate.gte = filters.startDate;
       }
       if (filters.endDate) {
-        where.orderDate.lte = filters.endDate;
+        where.poDate.lte = filters.endDate;
       }
     }
 
@@ -59,7 +59,7 @@ export class POLService {
         where,
         skip,
         take: limit,
-        orderBy: { orderDate: 'desc' },
+        orderBy: { poDate: 'desc' },
         include: {
           details: {
             include: {
@@ -96,10 +96,19 @@ export class POLService {
           include: {
             productionRecords: {
               orderBy: { createdAt: 'desc' },
+              take: 1,
             },
-            decorationTasks: {
-              orderBy: { createdAt: 'desc' },
-            },
+          },
+          decorationTasks: {
+            orderBy: { createdAt: 'desc' },
+              take: 1,
+          },
+        },
+        createdBy: {
+          select: {
+            id: true,
+            username: true,
+            fullName: true,
           },
         },
       },
@@ -257,7 +266,9 @@ export class POLService {
 
     // Check if detail has production records
     const hasProductionRecords = await prisma.productionRecord.findFirst({
-      where: { polDetailId: detailId },
+      where: {
+        polDetailId: detailId,
+      },
     });
 
     if (hasProductionRecords) {

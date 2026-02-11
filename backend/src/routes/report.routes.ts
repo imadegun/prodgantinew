@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
+import { reportService } from '../services/report.service';
 
 const router = Router();
 
@@ -8,26 +9,25 @@ router.get('/pol-summary', authenticate, async (req, res) => {
   try {
     const { fromDate, toDate, polId, status, format = 'JSON' } = req.query;
     
-    // TODO: Implement POL summary report
+    const result = await reportService.getPOLSummary({
+      fromDate: fromDate as string,
+      toDate: toDate as string,
+      polId: polId as string,
+      status: status as string,
+      format: format as string,
+    });
+    
     res.json({
       success: true,
-      data: {
-        report: {
-          period: { fromDate, toDate },
-          totalPOLs: 48,
-          completedPOLs: 16,
-          inProgressPOLs: 28,
-          delayedPOLs: 4,
-          onTimeDeliveryRate: 85,
-        },
-      },
+      data: result,
     });
-  } catch (error) {
-    res.status(500).json({
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
       success: false,
       error: {
-        code: 'GENERATE_REPORT_FAILED',
-        message: 'Failed to generate report',
+        code: error.code || 'GENERATE_REPORT_FAILED',
+        message: error.message || 'Failed to generate report',
       },
     });
   }
@@ -38,25 +38,24 @@ router.get('/forming-analysis', authenticate, async (req, res) => {
   try {
     const { fromDate, toDate, polId, format = 'JSON' } = req.query;
     
-    // TODO: Implement forming analysis report
+    const result = await reportService.getFormingAnalysis({
+      fromDate: fromDate as string,
+      toDate: toDate as string,
+      polId: polId as string,
+      format: format as string,
+    });
+    
     res.json({
       success: true,
-      data: {
-        report: {
-          period: { fromDate, toDate },
-          totalItems: 1250,
-          completedItems: 937,
-          rejectRate: 5.2,
-          remakeCount: 23,
-        },
-      },
+      data: result,
     });
-  } catch (error) {
-    res.status(500).json({
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
       success: false,
       error: {
-        code: 'GENERATE_REPORT_FAILED',
-        message: 'Failed to generate report',
+        code: error.code || 'GENERATE_REPORT_FAILED',
+        message: error.message || 'Failed to generate report',
       },
     });
   }
@@ -67,26 +66,23 @@ router.get('/qc-analysis', authenticate, async (req, res) => {
   try {
     const { fromDate, toDate, format = 'JSON' } = req.query;
     
-    // TODO: Implement QC analysis report
+    const result = await reportService.getQCAnalysis({
+      fromDate: fromDate as string,
+      toDate: toDate as string,
+      format: format as string,
+    });
+    
     res.json({
       success: true,
-      data: {
-        report: {
-          period: { fromDate, toDate },
-          goodItems: 890,
-          rejectedItems: 47,
-          reFiringItems: 12,
-          secondQualityItems: 8,
-          passRate: 94.8,
-        },
-      },
+      data: result,
     });
-  } catch (error) {
-    res.status(500).json({
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
       success: false,
       error: {
-        code: 'GENERATE_REPORT_FAILED',
-        message: 'Failed to generate report',
+        code: error.code || 'GENERATE_REPORT_FAILED',
+        message: error.message || 'Failed to generate report',
       },
     });
   }
@@ -97,26 +93,22 @@ router.get('/production-progress', authenticate, async (req, res) => {
   try {
     const { polId, includeAlerts } = req.query;
     
-    // TODO: Implement production progress report
+    const result = await reportService.getProductionProgress({
+      polId: polId as string,
+      includeAlerts: includeAlerts === 'true',
+    });
+    
     res.json({
       success: true,
-      data: {
-        report: {
-          overallProgress: 65,
-          formingProgress: 75,
-          firingProgress: 60,
-          glazingProgress: 40,
-          qcProgress: 15,
-          activeAlerts: 8,
-        },
-      },
+      data: result,
     });
-  } catch (error) {
-    res.status(500).json({
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
       success: false,
       error: {
-        code: 'GENERATE_REPORT_FAILED',
-        message: 'Failed to generate report',
+        code: error.code || 'GENERATE_REPORT_FAILED',
+        message: error.message || 'Failed to generate report',
       },
     });
   }

@@ -1,47 +1,38 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
+import { logbookService } from '../services/logbook.service';
 
 const router = Router();
 
 // Get logbook entries
 router.get('/', authenticate, async (req, res) => {
   try {
-    const { page = 1, limit = 10, status, severity, issueType, polId, fromDate, toDate } = req.query;
+    const { page = 1, limit = 10, status, polId, fromDate, toDate } = req.query;
     
-    // TODO: Implement logbook entries retrieval
+    const filters: any = {};
+    if (status) filters.status = status;
+    if (polId) filters.polId = polId;
+    if (fromDate) filters.startDate = new Date(fromDate as string);
+    if (toDate) filters.endDate = new Date(toDate as string);
+    
+    const result = await logbookService.listLogEntries(
+      Number(page),
+      Number(limit),
+      filters
+    );
+    
     res.json({
       success: true,
-      data: {
-        entries: [
-          {
-            entryId: 'entry-uuid',
-            polId: 'pol-uuid',
-            polNumber: 'PO-2026-001',
-            polDetailId: 'pol-detail-uuid',
-            productName: 'Teapot (Main Body)',
-            stage: 'FIRING',
-            issueType: 'PROCESS_ISSUE',
-            description: 'Firing temperature too low',
-            severity: 'MEDIUM',
-            status: 'OPEN',
-            createdAt: '2026-01-20T14:00:00Z',
-            createdBy: { userId: 'user-uuid', fullName: 'Jane Admin' },
-          },
-        ],
-      },
-      meta: {
-        page: Number(page),
-        limit: Number(limit),
-        total: 156,
-        totalPages: 16,
-      },
+      data: result.entries,
+      meta: result.pagination,
     });
-  } catch (error) {
-    res.status(500).json({
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
       success: false,
       error: {
-        code: 'FETCH_LOGBOOK_FAILED',
-        message: 'Failed to fetch logbook entries',
+        code: error.code || 'FETCH_LOGBOOK_FAILED',
+        message: error.message || 'Failed to fetch logbook entries',
       },
     });
   }
@@ -52,21 +43,47 @@ router.post('/', authenticate, async (req, res) => {
   try {
     const { polId, polDetailId, stage, issueType, description, severity, resolution, status } = req.body;
     
-    // TODO: Implement logbook entry creation
+    // Get user ID from auth middleware
+    const authReq = req as any;
+    const userId = authReq.user?.userId;
+    
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'User not authenticated',
+        },
+      });
+    }
+    
+    // Combine notes, issues, and actions into notes field
+    const notes = description || '';
+    const issues = issueType ? `${issueType}${severity ? ` (${severity})` : ''}` : '';
+    const actions = resolution || '';
+    
+    const result = await logbookService.createLogEntry({
+      polId,
+      userId,
+      entryDate: new Date(),
+      status: status || 'NORMAL',
+      notes,
+      issues: issues || undefined,
+      actions: actions || undefined,
+    });
+    
     res.status(201).json({
       success: true,
-      data: {
-        entryId: 'new-entry-uuid',
-        status: 'OPEN',
-      },
+      data: result,
       message: 'Logbook entry created successfully',
     });
-  } catch (error) {
-    res.status(500).json({
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
       success: false,
       error: {
-        code: 'CREATE_LOGBOOK_FAILED',
-        message: 'Failed to create logbook entry',
+        code: error.code || 'CREATE_LOGBOOK_FAILED',
+        message: error.message || 'Failed to create logbook entry',
       },
     });
   }
@@ -78,21 +95,30 @@ router.put('/:id', authenticate, async (req, res) => {
     const { id } = req.params;
     const { stage, issueType, description, severity, resolution, status } = req.body;
     
-    // TODO: Implement logbook entry update
+    // Combine notes, issues, and actions
+    const notes = description;
+    const issues = issueType ? `${issueType}${severity ? ` (${severity})` : ''}` : undefined;
+    const actions = resolution;
+    
+    const result = await logbookService.updateLogEntry(id, {
+      status,
+      notes,
+      issues,
+      actions,
+    });
+    
     res.json({
       success: true,
-      data: {
-        entryId: id,
-        status,
-      },
+      data: result,
       message: 'Logbook entry updated successfully',
     });
-  } catch (error) {
-    res.status(500).json({
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
       success: false,
       error: {
-        code: 'UPDATE_LOGBOOK_FAILED',
-        message: 'Failed to update logbook entry',
+        code: error.code || 'UPDATE_LOGBOOK_FAILED',
+        message: error.message || 'Failed to update logbook entry',
       },
     });
   }
