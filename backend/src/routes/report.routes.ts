@@ -10,8 +10,8 @@ router.get('/pol-summary', authenticate, async (req, res) => {
     const { fromDate, toDate, polId, status, format = 'JSON' } = req.query;
     
     const result = await reportService.getPOLSummary({
-      fromDate: fromDate as string,
-      toDate: toDate as string,
+      startDate: fromDate ? new Date(fromDate as string) : undefined,
+      endDate: toDate ? new Date(toDate as string) : undefined,
       polId: polId as string,
       status: status as string,
       format: format as string,
@@ -39,8 +39,8 @@ router.get('/forming-analysis', authenticate, async (req, res) => {
     const { fromDate, toDate, polId, format = 'JSON' } = req.query;
     
     const result = await reportService.getFormingAnalysis({
-      fromDate: fromDate as string,
-      toDate: toDate as string,
+      startDate: fromDate ? new Date(fromDate as string) : undefined,
+      endDate: toDate ? new Date(toDate as string) : undefined,
       polId: polId as string,
       format: format as string,
     });
@@ -67,8 +67,8 @@ router.get('/qc-analysis', authenticate, async (req, res) => {
     const { fromDate, toDate, format = 'JSON' } = req.query;
     
     const result = await reportService.getQCAnalysis({
-      fromDate: fromDate as string,
-      toDate: toDate as string,
+      startDate: fromDate ? new Date(fromDate as string) : undefined,
+      endDate: toDate ? new Date(toDate as string) : undefined,
       format: format as string,
     });
     

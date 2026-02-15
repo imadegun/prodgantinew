@@ -64,12 +64,14 @@ router.post('/', authenticate, async (req, res) => {
     
     const result = await logbookService.createLogEntry({
       polId,
+      polDetailId,
       userId,
-      entryDate: new Date(),
-      status: status || 'NORMAL',
-      notes,
-      issues: issues || undefined,
-      actions: actions || undefined,
+      stage,
+      issueType,
+      description,
+      severity,
+      resolution,
+      status: status || 'OPEN',
     });
     
     res.status(201).json({
@@ -101,10 +103,12 @@ router.put('/:id', authenticate, async (req, res) => {
     const actions = resolution;
     
     const result = await logbookService.updateLogEntry(id, {
+      stage,
+      issueType,
+      description,
+      severity,
+      resolution,
       status,
-      notes,
-      issues,
-      actions,
     });
     
     res.json({

@@ -61,7 +61,7 @@ export class POLService {
         take: limit,
         orderBy: { poDate: 'desc' },
         include: {
-          details: {
+          polDetails: {
             include: {
               productionRecords: {
                 orderBy: { createdAt: 'desc' },
@@ -92,19 +92,19 @@ export class POLService {
     const pol = await prisma.pOL.findUnique({
       where: { id },
       include: {
-        details: {
+        polDetails: {
           include: {
             productionRecords: {
               orderBy: { createdAt: 'desc' },
               take: 1,
             },
-          },
-          decorationTasks: {
-            orderBy: { createdAt: 'desc' },
+            decorationTasks: {
+              orderBy: { createdAt: 'desc' },
               take: 1,
+            },
           },
         },
-        createdBy: {
+        creator: {
           select: {
             id: true,
             username: true,
@@ -127,7 +127,7 @@ export class POLService {
   async createPOL(data: CreatePOLData) {
     // Check if POL number already exists
     const existingPOL = await prisma.pOL.findUnique({
-      where: { polNumber: data.polNumber },
+      where: { poNumber: data.poNumber },
     });
 
     if (existingPOL) {
@@ -136,12 +136,12 @@ export class POLService {
 
     const pol = await prisma.pOL.create({
       data: {
-        polNumber: data.polNumber,
-        customerName: data.customerName,
-        orderDate: data.orderDate,
+        poNumber: data.poNumber,
+        clientName: data.clientName,
+        poDate: data.poDate,
         deliveryDate: data.deliveryDate,
         notes: data.notes,
-        status: 'PENDING',
+        status: 'DRAFT',
       },
     });
 

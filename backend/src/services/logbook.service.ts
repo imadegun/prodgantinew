@@ -4,21 +4,26 @@ import { LogStatus } from '@prisma/client';
 
 interface CreateLogEntryData {
   polId?: string;
+  polDetailId?: string;
   userId: string;
-  entryDate: Date;
-  status: LogStatus;
-  notes: string;
-  issues?: string;
-  actions?: string;
+  stage?: string;
+  issueType?: any;
+  description: string;
+  severity?: any;
+  resolution?: string;
+  status?: LogStatus;
 }
 
 interface UpdateLogEntryData {
   polId?: string;
-  entryDate?: Date;
+  polDetailId?: string;
+  stage?: string;
+  issueType?: string;
+  description?: string;
+  severity?: string;
+  resolution?: string;
   status?: LogStatus;
   notes?: string;
-  issues?: string;
-  actions?: string;
 }
 
 interface LogFilters {
@@ -51,12 +56,12 @@ export class LogbookService {
     }
 
     if (filters.startDate || filters.endDate) {
-      where.entryDate = {};
+      where.createdAt = {};
       if (filters.startDate) {
-        where.entryDate.gte = filters.startDate;
+        where.createdAt.gte = filters.startDate;
       }
       if (filters.endDate) {
-        where.entryDate.lte = filters.endDate;
+        where.createdAt.lte = filters.endDate;
       }
     }
 
@@ -65,13 +70,9 @@ export class LogbookService {
         where,
         skip,
         take: limit,
-        orderBy: { entryDate: 'desc' },
+        orderBy: { createdAt: 'desc' },
         include: {
-          pol: {
-            include: {
-              details: true,
-            },
-          },
+          pol: true,
           user: {
             select: {
               id: true,
@@ -102,11 +103,7 @@ export class LogbookService {
     const entry = await prisma.logbookEntry.findUnique({
       where: { id },
       include: {
-        pol: {
-          include: {
-            details: true,
-          },
-        },
+        pol: true,
         user: {
           select: {
             id: true,
@@ -142,12 +139,14 @@ export class LogbookService {
     const entry = await prisma.logbookEntry.create({
       data: {
         polId: data.polId,
-        userId: data.userId,
-        entryDate: data.entryDate,
-        status: data.status,
-        notes: data.notes,
-        issues: data.issues,
-        actions: data.actions,
+        polDetailId: data.polDetailId,
+        stage: data.stage,
+        issueType: data.issueType,
+        description: data.description,
+        severity: data.severity,
+        resolution: data.resolution,
+        status: data.status || 'OPEN',
+        createdBy: data.userId,
       },
       include: {
         pol: true,
@@ -189,7 +188,7 @@ export class LogbookService {
 
     const updatedEntry = await prisma.logbookEntry.update({
       where: { id },
-      data,
+      data: data as any,
       include: {
         pol: true,
         user: {
@@ -230,12 +229,12 @@ export class LogbookService {
   async getLogbookStatistics() {
     const [total, normal, issues, resolved, todayEntries] = await Promise.all([
       prisma.logbookEntry.count(),
-      prisma.logbookEntry.count({ where: { status: 'NORMAL' } }),
-      prisma.logbookEntry.count({ where: { status: 'ISSUES' } }),
+      prisma.logbookEntry.count({ where: { status: 'OPEN' } }),
+      prisma.logbookEntry.count({ where: { status: 'IN_PROGRESS' } }),
       prisma.logbookEntry.count({ where: { status: 'RESOLVED' } }),
       prisma.logbookEntry.count({
         where: {
-          entryDate: {
+          createdAt: {
             gte: new Date(new Date().setHours(0, 0, 0, 0)),
           },
         },
@@ -245,8 +244,8 @@ export class LogbookService {
     return {
       total,
       byStatus: {
-        normal,
-        issues,
+        open: normal,
+        inProgress: issues,
         resolved,
       },
       todayEntries,
@@ -259,7 +258,7 @@ export class LogbookService {
   async getRecentEntries(limit: number = 10) {
     const entries = await prisma.logbookEntry.findMany({
       take: limit,
-      orderBy: { entryDate: 'desc' },
+      orderBy: { createdAt: 'desc' },
       include: {
         pol: true,
         user: {

@@ -7,11 +7,11 @@ const router = Router();
 // Get all POLs
 router.get('/', authenticate, async (req, res) => {
   try {
-    const { page = 1, limit = 10, status, customerName, fromDate, toDate } = req.query;
+    const { page = 1, limit = 10, status, clientName, fromDate, toDate } = req.query;
     
     let filters: any = {};
     if (status) filters.status = status;
-    if (customerName) filters.customerName = customerName;
+    if (clientName) filters.clientName = clientName;
     if (fromDate) {
       filters.startDate = new Date(fromDate as string);
     }
@@ -67,11 +67,12 @@ router.get('/:id', authenticate, async (req, res) => {
 // Create POL
 router.post('/', authenticate, authorize('MANAGER'), async (req, res) => {
   try {
-    const { customerName, deliveryDate, products } = req.body;
+    const { poNumber, clientName, poDate, deliveryDate, products } = req.body;
     
     const result = await polService.createPOL({
-      customerName,
-      orderDate: new Date(),
+      poNumber,
+      clientName,
+      poDate: poDate ? new Date(poDate) : new Date(),
       deliveryDate: new Date(deliveryDate),
       notes: ''
     });
@@ -102,11 +103,11 @@ router.post('/', authenticate, authorize('MANAGER'), async (req, res) => {
 router.put('/:id', authenticate, authorize('MANAGER'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { customerName, deliveryDate, status } = req.body;
+    const { clientName, deliveryDate, status } = req.body;
     
     const updateData: any = {};
-    if (customerName !== undefined) {
-      updateData.customerName = customerName;
+    if (clientName !== undefined) {
+      updateData.clientName = clientName;
     }
     if (deliveryDate !== undefined) {
       updateData.deliveryDate = new Date(deliveryDate);

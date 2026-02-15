@@ -16,9 +16,10 @@ interface LoginCredentials {
 
 interface RegisterData {
   username: string;
+  email: string;
   password: string;
   fullName: string;
-  role: 'MANAGER' | 'ADMIN' | 'WORKER';
+  role: 'MANAGER' | 'ADMIN';
 }
 
 interface TokenPayload {
@@ -44,7 +45,7 @@ export class AuthService {
     }
 
     // Verify password
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
     if (!isPasswordValid) {
       throw new AppError('Invalid username or password', 401, 'INVALID_CREDENTIALS');
     }
@@ -84,7 +85,7 @@ export class AuthService {
    * Register a new user
    */
   async register(data: RegisterData) {
-    const { username, password, fullName, role } = data;
+    const { username, email, password, fullName, role } = data;
 
     // Check if username already exists
     const existingUser = await prisma.user.findUnique({
@@ -102,7 +103,8 @@ export class AuthService {
     const user = await prisma.user.create({
       data: {
         username,
-        password: hashedPassword,
+        email,
+        passwordHash: hashedPassword,
         fullName,
         role,
       },

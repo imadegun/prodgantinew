@@ -6,6 +6,8 @@ interface TrackProductionData {
   polDetailId: string;
   stage: ProductionStage;
   quantity: number;
+  rejectQuantity?: number;
+  remakeCycle?: number;
   userId: string;
   notes?: string;
 }
@@ -44,13 +46,29 @@ export class ProductionService {
       stageRecords[record.stage].push(record);
     });
 
-    // Calculate quantities per stage
+    // Calculate quantities per stage - using actual ProductionStage enum values
     const stages = [
-      'FORMING',
-      'FIRING',
-      'GLAZING',
-      'QUALITY_CONTROL',
-      'PACKAGING',
+      'THROWING',
+      'TRIMMING',
+      'DECORATION',
+      'DRYING',
+      'LOAD_BISQUE',
+      'OUT_BISQUE',
+      'LOAD_HIGH_FIRING',
+      'OUT_HIGH_FIRING',
+      'LOAD_RAKU_FIRING',
+      'OUT_RAKU_FIRING',
+      'LOAD_LUSTER_FIRING',
+      'OUT_LUSTER_FIRING',
+      'SANDING',
+      'WAXING',
+      'DIPPING',
+      'SPRAYING',
+      'COLOR_DECORATION',
+      'QC_GOOD',
+      'QC_REJECT',
+      'QC_RE_FIRING',
+      'QC_SECOND',
     ] as ProductionStage[];
 
     const stageData = stages.map((stage) => {
@@ -76,7 +94,7 @@ export class ProductionService {
    * Track production quantity at a stage
    */
   async trackProduction(data: TrackProductionData) {
-    const { polDetailId, stage, quantity, userId, notes } = data;
+    const { polDetailId, stage, quantity, rejectQuantity, remakeCycle, userId, notes } = data;
 
     // Validate POL detail exists
     const detail = await prisma.pOLDetail.findUnique({
@@ -104,7 +122,9 @@ export class ProductionService {
         polDetailId,
         stage,
         quantity,
-        userId,
+        rejectQuantity: rejectQuantity || 0,
+        remakeCycle: remakeCycle || 0,
+        createdBy: userId,
         notes,
       },
     });
@@ -136,7 +156,7 @@ export class ProductionService {
       where: {
         pol: {
           status: {
-            in: ['IN_PROGRESS', 'PENDING'],
+            in: ['IN_PROGRESS', 'DRAFT'],
           },
         },
       },
@@ -157,7 +177,7 @@ export class ProductionService {
     const activeTasks = tasks
       .filter((detail) => {
         // Check if there are incomplete stages
-        const stages: ProductionStage[] = ['FORMING', 'FIRING', 'GLAZING', 'QUALITY_CONTROL', 'PACKAGING'];
+        const stages: ProductionStage[] = ['THROWING', 'TRIMMING', 'DECORATION', 'DRYING', 'LOAD_BISQUE', 'OUT_BISQUE', 'LOAD_HIGH_FIRING', 'OUT_HIGH_FIRING', 'LOAD_RAKU_FIRING', 'OUT_RAKU_FIRING', 'LOAD_LUSTER_FIRING', 'OUT_LUSTER_FIRING', 'SANDING', 'WAXING', 'DIPPING', 'SPRAYING', 'COLOR_DECORATION', 'QC_GOOD', 'QC_REJECT', 'QC_RE_FIRING', 'QC_SECOND'];
         const completedStages = new Set(
           detail.productionRecords.map((r) => r.stage)
         );
@@ -169,8 +189,8 @@ export class ProductionService {
 
         return {
           id: detail.id,
-          polNumber: detail.pol.polNumber,
-          customerName: detail.pol.customerName,
+          poNumber: detail.pol.poNumber,
+          clientName: detail.pol.clientName,
           productCode: detail.productCode,
           productName: detail.productName,
           quantity: detail.quantity,
@@ -190,7 +210,7 @@ export class ProductionService {
     stage: ProductionStage,
     quantity: number
   ): Promise<DiscrepancyData | null> {
-    const stageOrder = ['FORMING', 'FIRING', 'GLAZING', 'QUALITY_CONTROL', 'PACKAGING'];
+    const stageOrder = ['THROWING', 'TRIMMING', 'DECORATION', 'DRYING', 'LOAD_BISQUE', 'OUT_BISQUE', 'LOAD_HIGH_FIRING', 'OUT_HIGH_FIRING', 'LOAD_RAKU_FIRING', 'OUT_RAKU_FIRING', 'LOAD_LUSTER_FIRING', 'OUT_LUSTER_FIRING', 'SANDING', 'WAXING', 'DIPPING', 'SPRAYING', 'COLOR_DECORATION', 'QC_GOOD', 'QC_REJECT', 'QC_RE_FIRING', 'QC_SECOND'];
     const currentIndex = stageOrder.indexOf(stage);
 
     if (currentIndex === 0) {
@@ -242,7 +262,7 @@ export class ProductionService {
     difference: number;
     userId: string;
   }) {
-    const priority = Math.abs(data.difference) > data.expected * 0.2 ? 'HIGH' : 'MEDIUM';
+    const priority = Math.abs(data.difference) > data.expected * 0.2 ? 'CRITICAL' : 'WARNING';
 
     await prisma.discrepancyAlert.create({
       data: {
@@ -252,6 +272,8 @@ export class ProductionService {
         expectedQuantity: data.expected,
         actualQuantity: data.actual,
         difference: data.difference,
+        alertType: 'QUANTITY_DISCREPANCY',
+        alertMessage: `Quantity discrepancy detected: expected ${data.expected}, actual ${data.actual}, difference ${data.difference}`,
         priority,
         status: 'OPEN',
         reportedBy: data.userId,
@@ -263,10 +285,10 @@ export class ProductionService {
    * Get next production stage
    */
   private getNextStage(currentStage?: ProductionStage): ProductionStage | null {
-    const stageOrder = ['FORMING', 'FIRING', 'GLAZING', 'QUALITY_CONTROL', 'PACKAGING'];
+    const stageOrder = ['THROWING', 'TRIMMING', 'DECORATION', 'DRYING', 'LOAD_BISQUE', 'OUT_BISQUE', 'LOAD_HIGH_FIRING', 'OUT_HIGH_FIRING', 'LOAD_RAKU_FIRING', 'OUT_RAKU_FIRING', 'LOAD_LUSTER_FIRING', 'OUT_LUSTER_FIRING', 'SANDING', 'WAXING', 'DIPPING', 'SPRAYING', 'COLOR_DECORATION', 'QC_GOOD', 'QC_REJECT', 'QC_RE_FIRING', 'QC_SECOND'];
     
     if (!currentStage) {
-      return 'FORMING' as ProductionStage;
+      return 'THROWING' as ProductionStage;
     }
 
     const currentIndex = stageOrder.indexOf(currentStage);
@@ -292,7 +314,7 @@ export class ProductionService {
     let anyInProgress = false;
 
     for (const detail of details) {
-      const stages = ['FORMING', 'FIRING', 'GLAZING', 'QUALITY_CONTROL', 'PACKAGING'];
+      const stages = ['THROWING', 'TRIMMING', 'DECORATION', 'DRYING', 'LOAD_BISQUE', 'OUT_BISQUE', 'LOAD_HIGH_FIRING', 'OUT_HIGH_FIRING', 'LOAD_RAKU_FIRING', 'OUT_RAKU_FIRING', 'LOAD_LUSTER_FIRING', 'OUT_LUSTER_FIRING', 'SANDING', 'WAXING', 'DIPPING', 'SPRAYING', 'COLOR_DECORATION', 'QC_GOOD', 'QC_REJECT', 'QC_RE_FIRING', 'QC_SECOND'];
       const completedStages = new Set(
         detail.productionRecords.map((r) => r.stage)
       );
@@ -306,14 +328,14 @@ export class ProductionService {
       }
     }
 
-    let status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
+    let status: 'DRAFT' | 'IN_PROGRESS' | 'COMPLETED';
 
     if (allComplete) {
       status = 'COMPLETED';
     } else if (anyInProgress) {
       status = 'IN_PROGRESS';
     } else {
-      status = 'PENDING';
+      status = 'DRAFT';
     }
 
     await prisma.pOL.update({

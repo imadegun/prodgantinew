@@ -75,7 +75,7 @@ export class RevisionService {
         include: {
           pol: {
             include: {
-              details: true,
+              polDetails: true,
             },
           },
           polDetail: true,
@@ -118,7 +118,7 @@ export class RevisionService {
         include: {
           pol: {
             include: {
-              details: true,
+              polDetails: true,
             },
           },
           polDetail: true,
@@ -175,13 +175,13 @@ export class RevisionService {
         polId: data.polId,
         polDetailId: data.polDetailId,
         createdBy: data.userId,
-        type: data.type,
+        revisionType: data.type,
         issueType: data.issueType,
         severity: data.severity,
         description: data.description,
         proposedSolution: data.proposedSolution,
         status: 'DRAFT',
-      },
+      } as any,
       include: {
         pol: true,
           creator: {
@@ -251,7 +251,7 @@ export class RevisionService {
     const updatedRevision = await prisma.revisionTicket.update({
       where: { id },
       data: {
-        status: 'PENDING_APPROVAL',
+        status: 'SUBMITTED',
         submittedAt: new Date(),
       },
     });
@@ -271,8 +271,8 @@ export class RevisionService {
       throw new AppError('Revision ticket not found', 404, 'REVISION_NOT_FOUND');
     }
 
-    if (revision.status !== 'PENDING_APPROVAL') {
-      throw new AppError('Only PENDING_APPROVAL revisions can be approved/rejected', 400, 'INVALID_STATUS');
+    if (revision.status !== 'SUBMITTED') {
+      throw new AppError('Only SUBMITTED revisions can be approved/rejected', 400, 'INVALID_STATUS');
     }
 
     const updatedRevision = await prisma.revisionTicket.update({
@@ -320,7 +320,7 @@ export class RevisionService {
       await Promise.all([
         prisma.revisionTicket.count(),
         prisma.revisionTicket.count({ where: { status: 'DRAFT' } }),
-        prisma.revisionTicket.count({ where: { status: 'PENDING_APPROVAL' } }),
+        prisma.revisionTicket.count({ where: { status: 'SUBMITTED' } }),
         prisma.revisionTicket.count({ where: { status: 'APPROVED' } }),
         prisma.revisionTicket.count({ where: { status: 'REJECTED' } }),
         prisma.revisionTicket.count({ where: { severity: 'HIGH' } }),
@@ -353,7 +353,7 @@ export class RevisionService {
       orderBy: { createdAt: 'desc' },
       where: {
         status: {
-          in: ['DRAFT', 'PENDING_APPROVAL'],
+          in: ['DRAFT', 'SUBMITTED'],
         },
       },
       include: {

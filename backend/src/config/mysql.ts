@@ -48,10 +48,7 @@ export async function initializeMySQL(): Promise<void> {
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0,
-      enableKeepAlive: true,
-      keepAliveInitialDelay: 0,
-      keepAlive: 10000,
-    });
+    } as any);
 
     // Test connection
     const connection = await pool.getConnection();

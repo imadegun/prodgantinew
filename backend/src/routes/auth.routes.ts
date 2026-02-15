@@ -42,17 +42,17 @@ router.post('/register', async (req, res) => {
   try {
     const { username, email, password, fullName, role } = req.body;
     
-    if (!username || !password || !fullName) {
+    if (!username || !email || !password || !fullName) {
       return res.status(400).json({
         success: false,
         error: {
           code: 'MISSING_FIELDS',
-          message: 'Username, password, and fullName are required',
+          message: 'Username, email, password, and fullName are required',
         },
       });
     }
     
-    const result = await authService.register({ username, password, fullName, role: role || 'WORKER' });
+    const result = await authService.register({ username, email, password, fullName, role: role || 'MANAGER' });
     
     res.status(201).json({
       success: true,

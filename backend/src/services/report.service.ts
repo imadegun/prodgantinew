@@ -6,6 +6,11 @@ interface ReportFilters {
   endDate?: Date;
   polId?: string;
   productCode?: string;
+  fromDate?: string;
+  toDate?: string;
+  format?: string;
+  includeAlerts?: boolean;
+  status?: string;
 }
 
 export class ReportService {
@@ -16,12 +21,12 @@ export class ReportService {
     const where: any = {};
 
     if (filters.startDate || filters.endDate) {
-      where.orderDate = {};
+      where.poDate = {};
       if (filters.startDate) {
-        where.orderDate.gte = filters.startDate;
+        where.poDate.gte = filters.startDate;
       }
       if (filters.endDate) {
-        where.orderDate.lte = filters.endDate;
+        where.poDate.lte = filters.endDate;
       }
     }
 
@@ -32,40 +37,40 @@ export class ReportService {
     const pols = await prisma.pOL.findMany({
       where,
       include: {
-        details: {
+        polDetails: {
           include: {
             productionRecords: true,
           },
         },
       },
-      orderBy: { orderDate: 'desc' },
-    });
+      orderBy: { poDate: 'desc' },
+    }) as any;
 
-    const summary = pols.map((pol) => {
-      const totalQuantity = pol.details.reduce((sum, d) => sum + d.quantity, 0);
-      const completedQuantity = pol.details.reduce((sum, d) => {
-        const qcRecords = d.productionRecords.filter((r) => r.stage === 'QUALITY_CONTROL');
-        return sum + qcRecords.reduce((s, r) => s + r.quantity, 0);
+    const summary = pols.map((pol: any) => {
+      const totalQuantity = pol.polDetails.reduce((sum: number, d: any) => sum + d.quantity, 0);
+      const completedQuantity = pol.polDetails.reduce((sum: number, d: any) => {
+        const qcRecords = d.productionRecords.filter((r: any) => r.stage === 'QC_GOOD');
+        return sum + qcRecords.reduce((s: number, r: any) => s + r.quantity, 0);
       }, 0);
 
       return {
-        polNumber: pol.polNumber,
-        customerName: pol.customerName,
-        orderDate: pol.orderDate,
+        poNumber: pol.poNumber,
+        clientName: pol.clientName,
+        poDate: pol.poDate,
         deliveryDate: pol.deliveryDate,
         status: pol.status,
         totalQuantity,
         completedQuantity,
         progress: totalQuantity > 0 ? (completedQuantity / totalQuantity) * 100 : 0,
-        productCount: pol.details.length,
+        productCount: pol.polDetails.length,
       };
     });
 
     return {
       summary,
       totalPOLs: pols.length,
-      totalQuantity: summary.reduce((sum, s) => sum + s.totalQuantity, 0),
-      totalCompleted: summary.reduce((sum, s) => sum + s.completedQuantity, 0),
+      totalQuantity: summary.reduce((sum: number, s: any) => sum + s.totalQuantity, 0),
+      totalCompleted: summary.reduce((sum: number, s: any) => sum + s.completedQuantity, 0),
     };
   }
 
@@ -74,7 +79,7 @@ export class ReportService {
    */
   async getFormingAnalysis(filters: ReportFilters = {}) {
     const where: any = {
-      stage: 'FORMING',
+      stage: 'THROWING',
     };
 
     if (filters.startDate || filters.endDate) {
@@ -104,12 +109,12 @@ export class ReportService {
         },
       },
       orderBy: { createdAt: 'desc' },
-    });
+    }) as any;
 
     // Group by user
     const byUser: Record<string, any> = {};
-    records.forEach((record) => {
-      const userId = record.userId;
+    records.forEach((record: any) => {
+      const userId = record.createdBy;
       if (!byUser[userId]) {
         byUser[userId] = {
           user: record.user,
@@ -123,7 +128,7 @@ export class ReportService {
 
     // Group by product
     const byProduct: Record<string, any> = {};
-    records.forEach((record) => {
+    records.forEach((record: any) => {
       const productCode = record.polDetail.productCode;
       if (!byProduct[productCode]) {
         byProduct[productCode] = {
@@ -139,7 +144,7 @@ export class ReportService {
 
     return {
       totalRecords: records.length,
-      totalQuantity: records.reduce((sum, r) => sum + r.quantity, 0),
+      totalQuantity: records.reduce((sum: number, r: any) => sum + r.quantity, 0),
       byUser: Object.values(byUser),
       byProduct: Object.values(byProduct),
       records,
@@ -151,7 +156,7 @@ export class ReportService {
    */
   async getQCAnalysis(filters: ReportFilters = {}) {
     const where: any = {
-      stage: 'QUALITY_CONTROL',
+      stage: 'QC_GOOD',
     };
 
     if (filters.startDate || filters.endDate) {
@@ -181,12 +186,12 @@ export class ReportService {
         },
       },
       orderBy: { createdAt: 'desc' },
-    });
+    }) as any;
 
     // Group by user
     const byUser: Record<string, any> = {};
-    records.forEach((record) => {
-      const userId = record.userId;
+    records.forEach((record: any) => {
+      const userId = record.createdBy;
       if (!byUser[userId]) {
         byUser[userId] = {
           user: record.user,
@@ -200,7 +205,7 @@ export class ReportService {
 
     // Group by product
     const byProduct: Record<string, any> = {};
-    records.forEach((record) => {
+    records.forEach((record: any) => {
       const productCode = record.polDetail.productCode;
       if (!byProduct[productCode]) {
         byProduct[productCode] = {
@@ -216,7 +221,7 @@ export class ReportService {
 
     return {
       totalRecords: records.length,
-      totalQuantity: records.reduce((sum, r) => sum + r.quantity, 0),
+      totalQuantity: records.reduce((sum: number, r: any) => sum + r.quantity, 0),
       byUser: Object.values(byUser),
       byProduct: Object.values(byProduct),
       records,
@@ -230,12 +235,12 @@ export class ReportService {
     const where: any = {};
 
     if (filters.startDate || filters.endDate) {
-      where.orderDate = {};
+      where.poDate = {};
       if (filters.startDate) {
-        where.orderDate.gte = filters.startDate;
+        where.poDate.gte = filters.startDate;
       }
       if (filters.endDate) {
-        where.orderDate.lte = filters.endDate;
+        where.poDate.lte = filters.endDate;
       }
     }
 
@@ -246,24 +251,24 @@ export class ReportService {
     const pols = await prisma.pOL.findMany({
       where,
       include: {
-        details: {
+        polDetails: {
           include: {
             productionRecords: true,
           },
         },
       },
-      orderBy: { orderDate: 'desc' },
-    });
+      orderBy: { poDate: 'desc' },
+    }) as any;
 
-    const stages = ['FORMING', 'FIRING', 'GLAZING', 'QUALITY_CONTROL', 'PACKAGING'];
+    const stages = ['THROWING', 'TRIMMING', 'DECORATION', 'DRYING', 'LOAD_BISQUE', 'OUT_BISQUE', 'LOAD_HIGH_FIRING', 'OUT_HIGH_FIRING', 'LOAD_RAKU_FIRING', 'OUT_RAKU_FIRING', 'LOAD_LUSTER_FIRING', 'OUT_LUSTER_FIRING', 'SANDING', 'WAXING', 'DIPPING', 'SPRAYING', 'COLOR_DECORATION', 'QC_GOOD', 'QC_REJECT', 'QC_RE_FIRING', 'QC_SECOND'];
 
-    const progress = pols.map((pol) => {
-      const detailProgress = pol.details.map((detail) => {
+    const progress = pols.map((pol: any) => {
+      const detailProgress = pol.polDetails.map((detail: any) => {
         const stageProgress: Record<string, any> = {};
         stages.forEach((stage) => {
-          const records = detail.productionRecords.filter((r) => r.stage === stage);
+          const records = detail.productionRecords.filter((r: any) => r.stage === stage);
           stageProgress[stage] = {
-            quantity: records.reduce((sum, r) => sum + r.quantity, 0),
+            quantity: records.reduce((sum: number, r: any) => sum + r.quantity, 0),
             records: records.length,
           };
         });
@@ -277,9 +282,9 @@ export class ReportService {
       });
 
       return {
-        polNumber: pol.polNumber,
-        customerName: pol.customerName,
-        orderDate: pol.orderDate,
+        poNumber: pol.poNumber,
+        clientName: pol.clientName,
+        poDate: pol.poDate,
         deliveryDate: pol.deliveryDate,
         status: pol.status,
         details: detailProgress,

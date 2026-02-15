@@ -51,11 +51,7 @@ export class AlertService {
           { createdAt: 'desc' },
         ],
         include: {
-          pol: {
-            include: {
-              details: true,
-            },
-          },
+          pol: true,
           polDetail: true,
           reportedByUser: {
             select: {
@@ -101,11 +97,7 @@ export class AlertService {
     const alert = await prisma.discrepancyAlert.findUnique({
       where: { id },
       include: {
-        pol: {
-          include: {
-            details: true,
-          },
-        },
+        pol: true,
         polDetail: true,
         reportedByUser: {
           select: {
@@ -205,9 +197,9 @@ export class AlertService {
         prisma.discrepancyAlert.count({ where: { status: 'OPEN' } }),
         prisma.discrepancyAlert.count({ where: { status: 'ACKNOWLEDGED' } }),
         prisma.discrepancyAlert.count({ where: { status: 'RESOLVED' } }),
-        prisma.discrepancyAlert.count({ where: { priority: 'HIGH' } }),
-        prisma.discrepancyAlert.count({ where: { priority: 'MEDIUM' } }),
-        prisma.discrepancyAlert.count({ where: { priority: 'LOW' } }),
+        prisma.discrepancyAlert.count({ where: { priority: 'CRITICAL' } }),
+        prisma.discrepancyAlert.count({ where: { priority: 'WARNING' } }),
+        prisma.discrepancyAlert.count({ where: { priority: 'INFORMATIONAL' } }),
       ]);
 
     return {

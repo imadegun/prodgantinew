@@ -31,8 +31,8 @@ export class DecorationService {
     return {
       tasks,
       total: tasks.length,
-      completed: tasks.filter((t) => t.completed).length,
-      pending: tasks.filter((t) => !t.completed).length,
+      completed: tasks.filter((t) => t.completedAt).length,
+      pending: tasks.filter((t) => !t.completedAt).length,
     };
   }
 
@@ -69,13 +69,14 @@ export class DecorationService {
       data: {
         polDetailId: data.polDetailId,
         taskName: data.taskName,
-        description: data.description,
+        taskDescription: data.description,
         quantityRequired: data.quantityRequired,
         quantityCompleted: 0,
         quantityRejected: 0,
-        completed: false,
-        userId: data.userId,
-      },
+        status: 'PENDING',
+        completedAt: null,
+        createdBy: data.userId,
+      } as any,
     });
 
     return task;
@@ -97,13 +98,12 @@ export class DecorationService {
       where: { id },
       data: {
         taskName: data.taskName,
-        description: data.description,
+        taskDescription: data.description,
         quantityCompleted: data.quantityCompleted,
         quantityRejected: data.quantityRejected,
-        completed: data.completed,
         completedAt: data.completed ? new Date() : null,
         notes: data.notes,
-      },
+      } as any,
     });
 
     return updatedTask;
@@ -134,7 +134,6 @@ export class DecorationService {
 
     // Check if task is complete
     if (data.quantityCompleted !== undefined && data.quantityCompleted >= task.quantityRequired) {
-      updateData.completed = true;
       updateData.completedAt = new Date();
     }
 
@@ -159,7 +158,7 @@ export class DecorationService {
     }
 
     // Check if task is completed
-    if (task.completed) {
+    if (task.completedAt) {
       throw new AppError('Cannot delete completed decoration task', 400, 'TASK_COMPLETED');
     }
 
@@ -179,14 +178,14 @@ export class DecorationService {
     const [total, completed, pending, totalQuantity, completedQuantity, rejectedQuantity] =
       await Promise.all([
         prisma.decorationTask.count({ where }),
-        prisma.decorationTask.count({ where: { ...where, completed: true } }),
-        prisma.decorationTask.count({ where: { ...where, completed: false } }),
+        prisma.decorationTask.count({ where: { ...where, completedAt: { not: null } } }),
+        prisma.decorationTask.count({ where: { ...where, completedAt: null } }),
         prisma.decorationTask.aggregate({
           where,
           _sum: { quantityRequired: true },
         }),
         prisma.decorationTask.aggregate({
-          where: { ...where, completed: true },
+          where: { completedAt: { not: null } },
           _sum: { quantityCompleted: true },
         }),
         prisma.decorationTask.aggregate({

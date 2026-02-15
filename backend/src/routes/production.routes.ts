@@ -31,6 +31,7 @@ router.get('/:polDetailId/stages', authenticate, async (req, res) => {
 router.post('/track', authenticate, async (req, res) => {
   try {
     const { polDetailId, stage, quantity, rejectQuantity, remakeCycle, notes } = req.body;
+    const authReq = req as any;
     
     const result = await productionService.trackProduction({
       polDetailId,
@@ -38,6 +39,7 @@ router.post('/track', authenticate, async (req, res) => {
       quantity,
       rejectQuantity: rejectQuantity || 0,
       remakeCycle: remakeCycle || 0,
+      userId: authReq.user.userId,
       notes,
     });
     
@@ -60,7 +62,8 @@ router.post('/track', authenticate, async (req, res) => {
 // Get active production tasks
 router.get('/active', authenticate, async (req, res) => {
   try {
-    const result = await productionService.getActiveTasks();
+    const authReq = req as any;
+    const result = await productionService.getActiveTasks(authReq.user.userId);
     
     res.json({
       success: true,
