@@ -8,6 +8,7 @@ interface CreatePOLData {
   poDate: Date;
   deliveryDate: Date;
   notes?: string;
+  description?: string;
 }
 
 interface UpdatePOLData {
@@ -141,6 +142,7 @@ export class POLService {
         poDate: data.poDate,
         deliveryDate: data.deliveryDate,
         notes: data.notes,
+        description: data.description,
         status: 'DRAFT',
       },
     });

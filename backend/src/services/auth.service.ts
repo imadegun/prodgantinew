@@ -45,6 +45,9 @@ export class AuthService {
     }
 
     // Verify password
+    if (!user.passwordHash) {
+      throw new AppError('Invalid username or password', 401, 'INVALID_CREDENTIALS');
+    }
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
     if (!isPasswordValid) {
       throw new AppError('Invalid username or password', 401, 'INVALID_CREDENTIALS');

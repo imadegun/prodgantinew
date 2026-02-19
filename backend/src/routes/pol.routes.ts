@@ -67,14 +67,15 @@ router.get('/:id', authenticate, async (req, res) => {
 // Create POL
 router.post('/', authenticate, authorize('MANAGER'), async (req, res) => {
   try {
-    const { poNumber, clientName, poDate, deliveryDate, products } = req.body;
+    const { poNumber, clientName, poDate, deliveryDate, description, products } = req.body;
     
     const result = await polService.createPOL({
       poNumber,
       clientName,
       poDate: poDate ? new Date(poDate) : new Date(),
       deliveryDate: new Date(deliveryDate),
-      notes: ''
+      notes: '',
+      description
     });
     
     // Add products to POL

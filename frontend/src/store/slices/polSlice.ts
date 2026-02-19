@@ -5,6 +5,8 @@ interface POL {
   polId: string;
   poNumber: string;
   clientName: string;
+  clientCode?: string;
+  description?: string;
   totalOrder: number;
   poDate: string;
   deliveryDate: string;
@@ -131,11 +133,20 @@ export const createPOL = createAsyncThunk(
   'pol/createPOL',
   async (data: {
     clientName: string;
+    clientCode?: string;
+    poNumber?: string;
+    poDate?: string;
     deliveryDate: string;
+    description?: string;
+    notes?: string;
     products: Array<{
       productCode: string;
+      productName: string;
+      color?: string;
+      material?: string;
+      size?: string;
       orderQuantity: number;
-      extraBuffer?: number;
+      notes?: string;
     }>;
   }, { rejectWithValue }) => {
     try {

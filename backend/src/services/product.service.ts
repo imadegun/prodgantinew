@@ -31,6 +31,8 @@ interface ProductSearchResult {
   material: string;
   size: string;
   finalSize: string;
+  designCode?: string;
+  clientCode?: string;
 }
 
 interface ProductDetail {
@@ -77,9 +79,9 @@ interface ToolRequirements {
 
 export class ProductService {
   /**
-   * Search products from gayafusionall
+   * Get all clients from tblcollect_design
    */
-  async searchProducts(query: string, limit: number = 50) {
+  async getClients() {
     const pool = getMySQLPool();
     
     if (!pool) {
@@ -88,17 +90,60 @@ export class ProductService {
     
     try {
       const [rows] = await pool.execute(
-        `SELECT 
+        `SELECT DesignCode, DesignName FROM tblcollect_design ORDER BY DesignName ASC`
+      );
+      
+      const clients: { designCode: string; designName: string }[] = (rows as any[]).map((row: any) => ({
+        designCode: row.DesignCode,
+        designName: row.DesignName,
+      }));
+      
+      return {
+        clients,
+        total: clients.length,
+      };
+    } catch (error: any) {
+      console.error('Error getting clients from gayafusionall:', error);
+      throw new AppError('Failed to get clients', 500, 'CLIENTS_GET_ERROR');
+    }
+  }
+
+  /**
+   * Search products from gayafusionall
+   */
+  async searchProducts(query: string, limit: number = 50, clientCode?: string) {
+    const pool = getMySQLPool();
+    
+    if (!pool) {
+      throw new AppError('MySQL connection not initialized', 500, 'MYSQL_NOT_INITIALIZED');
+    }
+    
+    try {
+      let sql = `
+        SELECT 
           id, product_code, product_name, color, texture, material, 
           size, final_size, clay_type, clay_quantity, glaze, engobe,
           luster, stains_oxides, casting_tools, extruders, textures,
-          general_tools, build_notes
+          general_tools, build_notes, design_code, client_code
          FROM tblcollect_master 
-         WHERE product_code LIKE ? OR product_name LIKE ? 
-         ORDER BY product_name ASC 
-         LIMIT ?`,
-        [`%${query}%`, `%${query}%`, limit]
-      );
+        WHERE 1=1
+      `;
+      const params: any[] = [];
+      
+      if (clientCode) {
+        sql += ` AND design_code = ?`;
+        params.push(clientCode);
+      }
+      
+      if (query) {
+        sql += ` AND (product_code LIKE ? OR product_name LIKE ? OR client_code LIKE ?)`;
+        params.push(`%${query}%`, `%${query}%`, `%${query}%`);
+      }
+      
+      sql += ` ORDER BY product_name ASC LIMIT ?`;
+      params.push(limit);
+      
+      const [rows] = await pool.execute(sql, params);
       
       const products: ProductSearchResult[] = (rows as any[]).map((row: any) => ({
         productCode: row.product_code,
@@ -108,6 +153,8 @@ export class ProductService {
         material: row.material || '',
         size: row.size || '',
         finalSize: row.final_size || '',
+        designCode: row.design_code || '',
+        clientCode: row.client_code || '',
       }));
       
       return {

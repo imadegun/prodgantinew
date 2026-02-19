@@ -1,5 +1,10 @@
 import { apiClient } from './api';
 
+interface Client {
+  designCode: string;
+  designName: string;
+}
+
 interface POL {
   polId: string;
   poNumber: string;
@@ -51,6 +56,7 @@ interface POLDetail {
 interface CreatePOLRequest {
   clientName: string;
   deliveryDate: string;
+  description?: string;
   products: Array<{
     productCode: string;
     orderQuantity: number;
@@ -87,6 +93,11 @@ interface POLDetailResponse {
 }
 
 export const polService = {
+  async getClients(): Promise<{ clients: Client[]; total: number }> {
+    const response = await apiClient.get('/products/clients');
+    return response.data;
+  },
+
   async getPOLs(params?: {
     page?: number;
     limit?: number;
@@ -121,10 +132,11 @@ export const polService = {
     await apiClient.delete(`/pols/${polId}`);
   },
 
-  async searchProducts(query: string, limit: number = 50): Promise<any> {
+  async searchProducts(query: string, limit: number = 50, clientCode?: string): Promise<any> {
     const response = await apiClient.get('/products/search', {
       q: query,
       limit,
+      clientCode,
     });
     return response;
   },

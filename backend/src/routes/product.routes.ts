@@ -4,14 +4,36 @@ import { productService } from '../services/product.service';
 
 const router = Router();
 
+// Get all clients from tblcollect_design
+router.get('/clients', authenticate, async (req, res) => {
+  try {
+    const clients = await productService.getClients();
+    
+    res.json({
+      success: true,
+      data: clients,
+    });
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
+      success: false,
+      error: {
+        code: error.code || 'GET_CLIENTS_FAILED',
+        message: error.message || 'Failed to get clients',
+      },
+    });
+  }
+});
+
 // Search products from gayafusionall
 router.get('/search', authenticate, async (req, res) => {
   try {
-    const { q, limit = 50 } = req.query;
+    const { q, limit = 50, clientCode } = req.query;
     
     const result = await productService.searchProducts(
       q as string || '',
-      Number(limit)
+      Number(limit),
+      clientCode as string || undefined
     );
     
     res.json({
