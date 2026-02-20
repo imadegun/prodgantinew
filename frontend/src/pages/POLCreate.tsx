@@ -59,15 +59,17 @@ interface ProductItem {
 }
 
 interface SearchProduct {
+  id: number;
   productCode: string;
   productName: string;
-  color?: string;
-  texture?: string;
-  material?: string;
-  size?: string;
-  finalSize?: string;
+  categoryName: string;
+  colorName: string;
+  materialName: string;
+  sizeName: string;
+  textureName: string;
   designCode?: string;
   clientCode?: string;
+  photo1?: string;
 }
 
 const POLCreate = (): JSX.Element => {
@@ -118,11 +120,15 @@ const POLCreate = (): JSX.Element => {
 
   const loadClients = async () => {
     setClientsLoading(true);
+    setError(null);
     try {
       const result = await polService.getClients();
-      setClients(result.clients || []);
-    } catch (err) {
+      console.log('Clients loaded:', result);
+      setClients(result?.clients || []);
+    } catch (err: any) {
       console.error('Failed to load clients:', err);
+      const errorMsg = err.response?.data?.error?.message || err.message || 'Failed to load clients';
+      setError('Cannot load clients: ' + errorMsg);
     } finally {
       setClientsLoading(false);
     }
@@ -130,13 +136,14 @@ const POLCreate = (): JSX.Element => {
 
   // Search products when client is selected and search query changes
   const handleSearch = useCallback(async () => {
-    if (!selectedClient || !searchQuery) return;
+    if (!selectedClient) return;
     
     setSearchLoading(true);
     try {
-      const clientCode = selectedClient?.designCode;
-      const result = await polService.searchProducts(searchQuery, 50, clientCode);
-      setSearchResults(result.data?.products || []);
+      const designCode = selectedClient?.designCode;
+      // Load all products for the client if no search query
+      const result = await polService.searchProducts(searchQuery || '', 100, designCode);
+      setSearchResults(result?.products || []);
     } catch (err) {
       console.error('Failed to search products:', err);
     } finally {
@@ -144,15 +151,15 @@ const POLCreate = (): JSX.Element => {
     }
   }, [selectedClient, searchQuery]);
 
-  // Debounced search
+  // Debounced search - also triggers when dialog opens
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchDialogOpen && searchQuery) {
+      if (searchDialogOpen && selectedClient) {
         handleSearch();
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchQuery, handleSearch, searchDialogOpen]);
+  }, [searchQuery, handleSearch, searchDialogOpen, selectedClient]);
 
   const handleClientChange = (event: any, newValue: Client | null) => {
     setSelectedClient(newValue);
@@ -192,11 +199,11 @@ const POLCreate = (): JSX.Element => {
     const newItem: ProductItem = {
       id: `temp-${Date.now()}`,
       productCode: product.clientCode || product.productCode,
-      productName: product.productName,
+      productName: product.categoryName || product.productName,
       clientCode: product.clientCode,
-      color: product.color,
-      material: product.material,
-      size: product.size,
+      color: product.colorName,
+      material: product.materialName,
+      size: product.sizeName,
       quantity: 1,
     };
     setProducts([...products, newItem]);
@@ -615,8 +622,9 @@ const POLCreate = (): JSX.Element => {
             <Table size="small" sx={{ mt: 2 }}>
               <TableHead>
                 <TableRow>
+                  <TableCell>Image</TableCell>
                   <TableCell>Product Code</TableCell>
-                  <TableCell>Product Name</TableCell>
+                  <TableCell>Category/Name</TableCell>
                   <TableCell>Color</TableCell>
                   <TableCell>Material</TableCell>
                   <TableCell>Size</TableCell>
@@ -626,11 +634,26 @@ const POLCreate = (): JSX.Element => {
               <TableBody>
                 {searchResults.map((product, index) => (
                   <TableRow key={index}>
+                    <TableCell>
+                      {product.photo1 ? (
+                        <Box
+                          component="img"
+                          src={`/uploads/products/${product.photo1}`}
+                          alt="Product"
+                          sx={{ width: 50, height: 50, objectFit: 'cover', borderRadius: 1 }}
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        '-'
+                      )}
+                    </TableCell>
                     <TableCell>{product.clientCode || product.productCode}</TableCell>
-                    <TableCell>{product.productName}</TableCell>
-                    <TableCell>{product.color || '-'}</TableCell>
-                    <TableCell>{product.material || '-'}</TableCell>
-                    <TableCell>{product.size || '-'}</TableCell>
+                    <TableCell>{product.categoryName || product.productName}</TableCell>
+                    <TableCell>{product.colorName || '-'}</TableCell>
+                    <TableCell>{product.materialName || '-'}</TableCell>
+                    <TableCell>{product.sizeName || '-'}</TableCell>
                     <TableCell>
                       <Button 
                         size="small" 
@@ -644,9 +667,9 @@ const POLCreate = (): JSX.Element => {
                 ))}
               </TableBody>
             </Table>
-          ) : searchQuery && !searchLoading ? (
+          ) : !searchLoading && searchDialogOpen ? (
             <Typography color="text.secondary" sx={{ mt: 2, textAlign: 'center' }}>
-              No products found. Try a different search term.
+              {searchQuery ? 'No products found. Try a different search term.' : 'No products available for this client.'}
             </Typography>
           ) : null}
         </DialogContent>

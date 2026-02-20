@@ -94,8 +94,8 @@ interface POLDetailResponse {
 
 export const polService = {
   async getClients(): Promise<{ clients: Client[]; total: number }> {
-    const response = await apiClient.get('/products/clients');
-    return response.data;
+    const response = await apiClient.get<{ clients: Client[]; total: number }>('/products/clients');
+    return response;
   },
 
   async getPOLs(params?: {
@@ -132,11 +132,11 @@ export const polService = {
     await apiClient.delete(`/pols/${polId}`);
   },
 
-  async searchProducts(query: string, limit: number = 50, clientCode?: string): Promise<any> {
+  async searchProducts(query: string, limit: number = 50, designCode?: string): Promise<any> {
     const response = await apiClient.get('/products/search', {
-      q: query,
+      query,
       limit,
-      clientCode,
+      designCode,
     });
     return response;
   },

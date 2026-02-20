@@ -29,10 +29,10 @@ async function main() {
     data: {
       username: 'manager',
       email: 'manager@prodganti.com',
-      password_hash: hashedPassword,
-      full_name: 'John Manager',
+      passwordHash: hashedPassword,
+      fullName: 'John Manager',
       role: 'MANAGER',
-      is_active: true,
+      isActive: true,
     },
   });
 
@@ -40,10 +40,10 @@ async function main() {
     data: {
       username: 'admin',
       email: 'admin@prodganti.com',
-      password_hash: hashedPassword,
-      full_name: 'Jane Admin',
+      passwordHash: hashedPassword,
+      fullName: 'Jane Admin',
       role: 'ADMIN',
-      is_active: true,
+      isActive: true,
     },
   });
 

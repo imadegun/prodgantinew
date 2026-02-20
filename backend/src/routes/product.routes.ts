@@ -28,12 +28,12 @@ router.get('/clients', authenticate, async (req, res) => {
 // Search products from gayafusionall
 router.get('/search', authenticate, async (req, res) => {
   try {
-    const { q, limit = 50, clientCode } = req.query;
+    const { query, limit = 50, designCode } = req.query;
     
     const result = await productService.searchProducts(
-      q as string || '',
+      query as string || '',
       Number(limit),
-      clientCode as string || undefined
+      designCode as string || undefined
     );
     
     res.json({

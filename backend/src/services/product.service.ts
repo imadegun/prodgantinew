@@ -24,15 +24,17 @@ interface GayafusionProduct {
 }
 
 interface ProductSearchResult {
+  id: number;
   productCode: string;
   productName: string;
-  color: string;
-  texture: string;
-  material: string;
-  size: string;
-  finalSize: string;
-  designCode?: string;
-  clientCode?: string;
+  categoryName: string;
+  colorName: string;
+  materialName: string;
+  sizeName: string;
+  textureName: string;
+  designCode: string;
+  clientCode: string;
+  photo1?: string;
 }
 
 interface ProductDetail {
@@ -109,9 +111,10 @@ export class ProductService {
   }
 
   /**
-   * Search products from gayafusionall
+   * Search products from gayafusionall tblcollect_master
+   * Filters by DesignCode (client) and includes related data from reference tables
    */
-  async searchProducts(query: string, limit: number = 50, clientCode?: string) {
+  async searchProducts(query: string, limit: number = 50, designCode?: string) {
     const pool = getMySQLPool();
     
     if (!pool) {
@@ -121,40 +124,54 @@ export class ProductService {
     try {
       let sql = `
         SELECT 
-          id, product_code, product_name, color, texture, material, 
-          size, final_size, clay_type, clay_quantity, glaze, engobe,
-          luster, stains_oxides, casting_tools, extruders, textures,
-          general_tools, build_notes, design_code, client_code
-         FROM tblcollect_master 
+          m.ID as id,
+          m.CollectCode as productCode,
+          m.ClientDescription as productName,
+          COALESCE(n.NameDesc, c.CategoryName) as categoryName,
+          COALESCE(cl.ColorName, '') as colorName,
+          COALESCE(mt.MaterialName, '') as materialName,
+          COALESCE(s.SizeName, '') as sizeName,
+          COALESCE(t.TextureName, '') as textureName,
+          m.DesignCode as designCode,
+          m.ClientCode as clientCode,
+          m.Photo1 as photo1
+        FROM tblcollect_master m
+        LEFT JOIN tblcollect_name n ON m.NameCode = n.NameCode
+        LEFT JOIN tblcollect_category c ON m.CategoryCode = c.CategoryCode
+        LEFT JOIN tblcollect_color cl ON m.ColorCode = cl.ColorCode
+        LEFT JOIN tblcollect_material mt ON m.MaterialCode = mt.MaterialCode
+        LEFT JOIN tblcollect_size s ON m.SizeCode = s.SizeCode
+        LEFT JOIN tblcollect_texture t ON m.TextureCode = t.TextureCode
         WHERE 1=1
       `;
       const params: any[] = [];
       
-      if (clientCode) {
-        sql += ` AND design_code = ?`;
-        params.push(clientCode);
+      if (designCode) {
+        sql += ` AND m.DesignCode = ?`;
+        params.push(designCode);
       }
       
       if (query) {
-        sql += ` AND (product_code LIKE ? OR product_name LIKE ? OR client_code LIKE ?)`;
+        sql += ` AND (m.CollectCode LIKE ? OR m.ClientDescription LIKE ? OR m.ClientCode LIKE ?)`;
         params.push(`%${query}%`, `%${query}%`, `%${query}%`);
       }
       
-      sql += ` ORDER BY product_name ASC LIMIT ?`;
-      params.push(limit);
+      sql += ` ORDER BY m.ClientDescription ASC LIMIT ${parseInt(String(limit), 10)}`;
       
-      const [rows] = await pool.execute(sql, params);
+      const [rows] = await pool.query(sql, params);
       
       const products: ProductSearchResult[] = (rows as any[]).map((row: any) => ({
-        productCode: row.product_code,
-        productName: row.product_name,
-        color: row.color || '',
-        texture: row.texture || '',
-        material: row.material || '',
-        size: row.size || '',
-        finalSize: row.final_size || '',
-        designCode: row.design_code || '',
-        clientCode: row.client_code || '',
+        id: row.id,
+        productCode: row.productCode || '',
+        productName: row.productName || '',
+        categoryName: row.categoryName || '',
+        colorName: row.colorName || '',
+        materialName: row.materialName || '',
+        sizeName: row.sizeName || '',
+        textureName: row.textureName || '',
+        designCode: row.designCode || '',
+        clientCode: row.clientCode || '',
+        photo1: row.photo1 || '',
       }));
       
       return {

@@ -1,0 +1,22 @@
+-- Insert sample clients/designs into tblcollect_design
+INSERT INTO tblcollect_design (DesignCode, DesignName) VALUES 
+('A1', 'Amber Collection'),
+('B1', 'Bella Vista'),
+('C1', 'Crystal Dream'),
+('D1', 'Dawn Pottery'),
+('E1', 'Emerald Art'),
+('F1', 'Fusion Studio'),
+('G1', 'Golden Glaze'),
+('H1', 'Heritage Crafts'),
+('I1', 'Ivory Works'),
+('J1', 'Jade Garden'),
+('K1', 'Karma Ceramics'),
+('L1', 'Luna Pottery'),
+('M1', 'Majestic Clay'),
+('N1', 'Nature Touch'),
+('O1', 'Ocean Waves'),
+('P1', 'Pearl Pottery'),
+('Q1', 'Quartz Design'),
+('R1', 'Royal Clay'),
+('S1', 'Sunset Studio'),
+('T1', 'Terra Form');
