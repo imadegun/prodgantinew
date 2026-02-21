@@ -36,7 +36,7 @@ import {
   Search as SearchIcon,
 } from '@mui/icons-material';
 import { RootState } from '../store';
-import { createPOL } from '../store/slices/polSlice';
+import { createPOL, fetchPOLs } from '../store/slices/polSlice';
 import { polService } from '../services/pol.service';
 
 const steps = ['POL Details', 'Add Products', 'Review & Confirm'];
@@ -262,7 +262,12 @@ const POLCreate = (): JSX.Element => {
         })),
       };
       
-      await dispatch(createPOL(polData));
+      const result = await dispatch(createPOL(polData));
+      if (createPOL.rejected.match(result)) {
+        throw new Error(result.payload as string || 'Failed to create POL');
+      }
+      // Refresh the POL list after successful creation
+      dispatch(fetchPOLs({ page: 1, limit: 10 }));
       navigate('/pols');
     } catch (err: any) {
       setError(err.message || 'Failed to create POL');

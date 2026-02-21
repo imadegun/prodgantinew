@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, authorize } from '../middleware/auth.middleware';
+import { authenticate, authorize, AuthenticatedRequest } from '../middleware/auth.middleware';
 import { polService } from '../services/pol.service';
 
 const router = Router();
@@ -65,9 +65,18 @@ router.get('/:id', authenticate, async (req, res) => {
 });
 
 // Create POL
-router.post('/', authenticate, authorize('MANAGER'), async (req, res) => {
+router.post('/', authenticate, authorize('MANAGER'), async (req: AuthenticatedRequest, res) => {
   try {
-    const { poNumber, clientName, poDate, deliveryDate, description, products } = req.body;
+    const { poNumber, clientName, poDate, deliveryDate, products } = req.body;
+    const userId = req.user?.userId;
+    
+    if (!userId) {
+      res.status(401).json({
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'User not authenticated' }
+      });
+      return;
+    }
     
     const result = await polService.createPOL({
       poNumber,
@@ -75,13 +84,23 @@ router.post('/', authenticate, authorize('MANAGER'), async (req, res) => {
       poDate: poDate ? new Date(poDate) : new Date(),
       deliveryDate: new Date(deliveryDate),
       notes: '',
-      description
+      createdBy: userId,
     });
     
-    // Add products to POL
-    for (const product of products) {
-      await polService.addProductToPOL(result.id, product);
-    }
+    // Products will be added separately via the add-product endpoint
+    // for (const product of products || []) {
+    //   await polService.addProductToPOL(result.id, {
+    //     productCode: product.productCode,
+    //     productName: product.productName,
+    //     quantity: product.orderQuantity || product.quantity || 1,
+    //     color: product.color,
+    //     texture: product.texture,
+    //     material: product.material,
+    //     size: product.size,
+    //     finalSize: product.finalSize,
+    //     notes: product.notes,
+    //   });
+    // }
     
     res.status(201).json({
       success: true,

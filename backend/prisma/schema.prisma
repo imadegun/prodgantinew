@@ -142,15 +142,13 @@ model POL {
   id            String     @id @default(uuid())
   poNumber      String     @unique @map("polNumber")
   clientName    String     @map("customerName")
-  description   String?    @map("description")
-  totalOrder    Int        @default(0) @map("total_order")
   poDate        DateTime   @default(now()) @map("orderDate")
   deliveryDate  DateTime   @map("deliveryDate")
   status        POLStatus  @default(DRAFT)
   notes         String?    @map("notes")
   createdBy     String     @map("createdBy")
   createdAt      DateTime   @default(now()) @map("createdAt")
-  updatedAt      DateTime?  @map("updatedAt")
+  updatedAt      DateTime   @updatedAt @map("updatedAt")
   
   // Relationships
   creator               User?              @relation("POLCreatedBy", fields: [createdBy], references: [id])

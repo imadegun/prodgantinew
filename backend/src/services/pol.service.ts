@@ -8,7 +8,7 @@ interface CreatePOLData {
   poDate: Date;
   deliveryDate: Date;
   notes?: string;
-  description?: string;
+  createdBy?: string;
 }
 
 interface UpdatePOLData {
@@ -19,7 +19,7 @@ interface UpdatePOLData {
 }
 
 interface POLFilters {
-  status?: POLStatus;
+  status?: POLStatus | string;
   clientName?: string;
   startDate?: Date;
   endDate?: Date;
@@ -34,8 +34,9 @@ export class POLService {
 
     const where: any = {};
 
-    if (filters.status) {
-      where.status = filters.status;
+    const statusFilter = filters.status as string;
+    if (statusFilter && statusFilter !== 'All') {
+      where.status = statusFilter as POLStatus;
     }
 
     if (filters.clientName) {
@@ -61,16 +62,6 @@ export class POLService {
         skip,
         take: limit,
         orderBy: { poDate: 'desc' },
-        include: {
-          polDetails: {
-            include: {
-              productionRecords: {
-                orderBy: { createdAt: 'desc' },
-                take: 1,
-              },
-            },
-          },
-        },
       }),
       prisma.pOL.count({ where }),
     ]);
@@ -142,8 +133,9 @@ export class POLService {
         poDate: data.poDate,
         deliveryDate: data.deliveryDate,
         notes: data.notes,
-        description: data.description,
-        status: 'DRAFT',
+        createdBy: data.createdBy,
+        updatedAt: new Date(),
+        status: POLStatus.DRAFT,
       },
     });
 
