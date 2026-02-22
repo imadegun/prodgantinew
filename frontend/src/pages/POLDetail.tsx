@@ -6,7 +6,6 @@ import { ArrowBack as ArrowBackIcon, Edit as EditIcon, CheckCircle as CheckCircl
 import { RootState } from '../store';
 import { fetchPOLById } from '../store/slices/polSlice';
 import { polService } from '../services/pol.service';
-import { POL, POLDetail as POLDetailType } from '../types';
 
 const POLDetail = (): JSX.Element => {
   const { id } = useParams<{ id: string }>();
@@ -81,7 +80,7 @@ const POLDetail = (): JSX.Element => {
     );
   }
 
-  const details = currentPOLDetails.length > 0 ? currentPOLDetails : (currentPOL.details || []);
+  const details = currentPOLDetails.length > 0 ? currentPOLDetails : [];
 
   return (
     <Box>
@@ -90,7 +89,7 @@ const POLDetail = (): JSX.Element => {
           Back to POLs
         </Button>
         <Typography variant="h4" sx={{ fontWeight: 600, flex: 1 }}>
-          {currentPOL.po_number || `POL-${currentPOL.id}`} - Detail View
+          {currentPOL.poNumber || `POL-${currentPOL.id}`} - Detail View
         </Typography>
         <Button variant="contained" startIcon={<EditIcon />}>
           Edit POL
@@ -112,25 +111,25 @@ const POLDetail = (): JSX.Element => {
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Typography color="text.secondary">PO Number</Typography>
-                  <Typography sx={{ fontWeight: 500 }}>{currentPOL.po_number || `PO-${currentPOL.id}`}</Typography>
+                  <Typography sx={{ fontWeight: 500 }}>{currentPOL.poNumber || `PO-${currentPOL.id}`}</Typography>
                 </Box>
                 <Divider />
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Typography color="text.secondary">Client</Typography>
-                  <Typography sx={{ fontWeight: 500 }}>{currentPOL.client_name || currentPOL.customerName || '-'}</Typography>
+                  <Typography sx={{ fontWeight: 500 }}>{currentPOL.clientName || '-'}</Typography>
                 </Box>
                 <Divider />
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Typography color="text.secondary">PO Date</Typography>
                   <Typography sx={{ fontWeight: 500 }}>
-                    {currentPOL.createdAt || currentPOL.created_at ? new Date(currentPOL.createdAt || currentPOL.created_at || '').toLocaleDateString() : 'N/A'}
+                    {currentPOL.poDate ? new Date(currentPOL.poDate).toLocaleDateString() : 'N/A'}
                   </Typography>
                 </Box>
                 <Divider />
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Typography color="text.secondary">Delivery Date</Typography>
                   <Typography sx={{ fontWeight: 500 }}>
-                    {currentPOL.delivery_date || currentPOL.deliveryDate ? new Date(currentPOL.delivery_date || currentPOL.deliveryDate || '').toLocaleDateString() : 'N/A'}
+                    {currentPOL.deliveryDate ? new Date(currentPOL.deliveryDate).toLocaleDateString() : 'N/A'}
                   </Typography>
                 </Box>
                 <Divider />
@@ -145,7 +144,7 @@ const POLDetail = (): JSX.Element => {
                 <Divider />
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Typography color="text.secondary">Total Order</Typography>
-                  <Typography sx={{ fontWeight: 500 }}>{currentPOL.total_order || details.reduce((sum: number, d) => sum + (d.quantity || 0), 0)}</Typography>
+                  <Typography sx={{ fontWeight: 500 }}>{currentPOL.totalOrder || details.reduce((sum: number, d) => sum + (d.orderQuantity || 0), 0)}</Typography>
                 </Box>
               </Box>
             </CardContent>
@@ -217,17 +216,17 @@ const POLDetail = (): JSX.Element => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {details.map((detail: POLDetailType) => (
+                    {details.map((detail: any) => (
                       <TableRow key={detail.id}>
                         <TableCell>{detail.productCode || '-'}</TableCell>
                         <TableCell>{detail.productName || '-'}</TableCell>
                         <TableCell>{detail.color || '-'}</TableCell>
                         <TableCell>{detail.material || '-'}</TableCell>
                         <TableCell>{detail.size || '-'}</TableCell>
-                        <TableCell>{detail.quantity || 0}</TableCell>
+                        <TableCell>{detail.orderQuantity || 0}</TableCell>
                         <TableCell>
                           <Chip
-                            label={detail.notes?.split(' ')[0] || 'Forming'}
+                            label={detail.currentStage || 'Forming'}
                             size="small"
                             color="success"
                           />

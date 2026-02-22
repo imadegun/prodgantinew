@@ -2,7 +2,7 @@ import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { apiClient } from '../../services/api';
 
 interface POL {
-  polId: string;
+  id: string;
   poNumber: string;
   clientName: string;
   clientCode?: string;
@@ -20,7 +20,7 @@ interface POL {
 }
 
 interface POLDetail {
-  polDetailId: string;
+  id: string;
   polId: string;
   productCode: string;
   productName: string;
@@ -116,12 +116,12 @@ export const fetchPOLs = createAsyncThunk(
 
 export const fetchPOLById = createAsyncThunk(
   'pol/fetchPOLById',
-  async (polId: string, { rejectWithValue }) => {
+  async (id: string, { rejectWithValue }) => {
     try {
       const response = await apiClient.get<{
         pol: POL;
         details: POLDetail[];
-      }>(`/pols/${polId}`);
+      }>(`/pols/${id}`);
       return response;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.error?.message || 'Failed to fetch POL');
@@ -160,9 +160,9 @@ export const createPOL = createAsyncThunk(
 
 export const updatePOL = createAsyncThunk(
   'pol/updatePOL',
-  async ({ polId, data }: { polId: string; data: Partial<POL> }, { rejectWithValue }) => {
+  async ({ id, data }: { id: string; data: Partial<POL> }, { rejectWithValue }) => {
     try {
-      const response = await apiClient.put<POL>(`/pols/${polId}`, data);
+      const response = await apiClient.put<POL>(`/pols/${id}`, data);
       return response;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.error?.message || 'Failed to update POL');
@@ -172,10 +172,10 @@ export const updatePOL = createAsyncThunk(
 
 export const deletePOL = createAsyncThunk(
   'pol/deletePOL',
-  async (polId: string, { rejectWithValue }) => {
+  async (id: string, { rejectWithValue }) => {
     try {
-      await apiClient.delete(`/pols/${polId}`);
-      return polId;
+      await apiClient.delete(`/pols/${id}`);
+      return id;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.error?.message || 'Failed to delete POL');
     }
@@ -246,11 +246,11 @@ const polSlice = createSlice({
       })
       .addCase(updatePOL.fulfilled, (state, action) => {
         state.isLoading = false;
-        const index = state.pols.findIndex((pol) => pol.polId === action.payload.polId);
+        const index = state.pols.findIndex((pol) => pol.id === action.payload.id);
         if (index !== -1) {
           state.pols[index] = action.payload;
         }
-        if (state.currentPOL?.polId === action.payload.polId) {
+        if (state.currentPOL?.id === action.payload.id) {
           state.currentPOL = action.payload;
         }
       })
@@ -264,8 +264,8 @@ const polSlice = createSlice({
       })
       .addCase(deletePOL.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.pols = state.pols.filter((pol) => pol.polId !== action.payload);
-        if (state.currentPOL?.polId === action.payload) {
+        state.pols = state.pols.filter((pol) => pol.id !== action.payload);
+        if (state.currentPOL?.id === action.payload) {
           state.currentPOL = null;
           state.currentPOLDetails = [];
         }

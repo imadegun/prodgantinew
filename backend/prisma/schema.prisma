@@ -22,6 +22,7 @@ enum POLStatus {
   IN_PROGRESS
   COMPLETED
   CANCELLED
+  PENDING
 }
 
 enum ProductType {
@@ -60,12 +61,22 @@ enum ProductionStage {
   QC_REJECT
   QC_RE_FIRING
   QC_SECOND
+  
+  // Additional stages from database
+  FORMING
+  FIRING
+  GLAZING
+  QUALITY_CONTROL
+  PACKAGING
 }
 
 enum AlertPriority {
   CRITICAL
   WARNING
   INFORMATIONAL
+  LOW
+  MEDIUM
+  HIGH
 }
 
 enum AlertStatus {
@@ -93,6 +104,8 @@ enum LogStatus {
   OPEN
   IN_PROGRESS
   RESOLVED
+  NORMAL
+  ISSUES
 }
 
 enum RevisionStatus {
@@ -101,6 +114,7 @@ enum RevisionStatus {
   APPROVED
   REJECTED
   IMPLEMENTED
+  PENDING_APPROVAL
 }
 
 enum RevisionType {
@@ -108,6 +122,9 @@ enum RevisionType {
   MATERIAL_CHANGE
   PROCESS_CHANGE
   OTHER
+  DESIGN
+  PRODUCTION
+  MATERIAL
 }
 
 // User table
@@ -121,7 +138,7 @@ model User {
   createdAt      DateTime   @default(now()) @map("createdAt")
   updatedAt      DateTime?   @map("updatedAt")
   lastLogin      DateTime?  @map("lastLogin")
-  isActive       Boolean    @default(true) @map("is_active")
+  isActive       Boolean    @default(true) @map("isActive")
   
   // Relationships
   pols                  POL[]              @relation("POLCreatedBy")
@@ -148,7 +165,7 @@ model POL {
   notes         String?    @map("notes")
   createdBy     String     @map("createdBy")
   createdAt      DateTime   @default(now()) @map("createdAt")
-  updatedAt      DateTime   @updatedAt @map("updatedAt")
+  updatedAt      DateTime?   @default(now()) @updatedAt @map("updatedAt")
   
   // Relationships
   creator               User?              @relation("POLCreatedBy", fields: [createdBy], references: [id])
@@ -163,20 +180,20 @@ model POL {
 // POL Detail table (products within a POL)
 model POLDetail {
   id             String      @id @default(uuid())
-  polId          String      @map("pol_id")
-  productCode     String      @map("product_code")
-  productName     String      @map("product_name")
+  polId          String      @map("polId")
+  productCode     String      @map("productCode")
+  productName     String      @map("productName")
   quantity       Int
-  extraBuffer     Int         @default(15) @map("extra_buffer") // Percentage
-  productType     ProductType @default(PLAIN) @map("product_type")
+  extraBuffer     Int         @default(15) @map("extraBuffer") // Percentage
+  productType     ProductType @default(PLAIN) @map("productType")
   color          String?
   texture        String?
   material       String?
   size           String?
-  finalSize      String?     @map("final_size")
+  finalSize      String?     @map("finalSize")
   notes          String?
-  createdAt       DateTime    @default(now()) @map("created_at")
-  updatedAt       DateTime    @updatedAt @map("updated_at")
+  createdAt       DateTime    @default(now()) @map("createdAt")
+  updatedAt       DateTime    @updatedAt @map("updatedAt")
   
   // Relationships
   pol                   POL                 @relation(fields: [polId], references: [id], onDelete: Cascade)
@@ -199,8 +216,8 @@ model ProductionRecord {
   remakeCycle     Int             @default(0) @map("remake_cycle")
   notes           String?
   createdBy        String          @map("created_by")
-  createdAt        DateTime        @default(now()) @map("created_at")
-  updatedAt        DateTime        @updatedAt @map("updated_at")
+  createdAt        DateTime        @default(now()) @map("createdAt")
+  updatedAt        DateTime        @updatedAt @map("updatedAt")
   
   // Relationships
   polDetail    POLDetail  @relation(fields: [polDetailId], references: [id], onDelete: Cascade)
@@ -222,8 +239,8 @@ model DecorationTask {
   notes             String?
   createdBy          String?  @map("created_by")
   completedAt        DateTime? @map("completed_at")
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
+  createdAt          DateTime @default(now()) @map("createdAt")
+  updatedAt          DateTime @updatedAt @map("updatedAt")
   
   // Relationships
   polDetail POLDetail @relation(fields: [polDetailId], references: [id], onDelete: Cascade)
@@ -250,8 +267,8 @@ model DiscrepancyAlert {
   resolvedBy        String?       @map("resolved_by")
   resolvedAt        DateTime?     @map("resolved_at")
   resolutionNotes   String?       @map("resolution_notes")
-  createdAt         DateTime      @default(now()) @map("created_at")
-  updatedAt         DateTime      @updatedAt @map("updated_at")
+  createdAt         DateTime      @default(now()) @map("createdAt")
+  updatedAt         DateTime      @updatedAt @map("updatedAt")
   
   // Relationships
   pol               POL         @relation(fields: [polId], references: [id], onDelete: Cascade)
@@ -275,8 +292,8 @@ model LogbookEntry {
   resolution     String?
   status         LogStatus   @default(OPEN)
   createdBy       String      @map("created_by")
-  createdAt       DateTime    @default(now()) @map("created_at")
-  updatedAt       DateTime    @updatedAt @map("updated_at")
+  createdAt       DateTime    @default(now()) @map("createdAt")
+  updatedAt       DateTime    @updatedAt @map("updatedAt")
   
   // Relationships
   pol           POL?        @relation(fields: [polId], references: [id])
@@ -304,8 +321,8 @@ model RevisionTicket {
   approvedBy         String?         @map("approved_by")
   approvedAt         DateTime?       @map("approved_at")
   managerNotes       String?         @map("manager_notes")
-  createdAt          DateTime        @default(now()) @map("created_at")
-  updatedAt          DateTime        @updatedAt @map("updated_at")
+  createdAt          DateTime        @default(now()) @map("createdAt")
+  updatedAt          DateTime        @updatedAt @map("updatedAt")
   
   // Relationships
   pol               POL         @relation(fields: [polId], references: [id])
@@ -322,11 +339,11 @@ model ActivityLog {
   userId       String   @map("user_id")
   action      String
   entityType  String   @map("entity_type")
-  entityId    String?   @map("entity_id")
+  entityId    String?  @map("entity_id")
   details     String?
-  ipAddress   String?   @map("ip_address")
-  userAgent   String?   @map("user_agent")
-  createdAt    DateTime @default(now()) @map("created_at")
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  createdAt    DateTime @default(now()) @map("createdAt")
   
   // Relationships
   user User @relation(fields: [userId], references: [id])

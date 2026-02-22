@@ -39,7 +39,6 @@ import {
 import { RootState } from '../store';
 import { fetchPOLs, setFilters, deletePOL } from '../store/slices/polSlice';
 import { polService } from '../services/pol.service';
-import { POL } from '../types';
 
 const POLList = (): JSX.Element => {
   const navigate = useNavigate();
@@ -48,7 +47,7 @@ const POLList = (): JSX.Element => {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [selectedPOL, setSelectedPOL] = useState<POL | null>(null);
+  const [selectedPOL, setSelectedPOL] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
@@ -64,7 +63,7 @@ const POLList = (): JSX.Element => {
     setPage(0);
   };
 
-  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, pol: POL) => {
+  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, pol: any) => {
     setAnchorEl(event.currentTarget);
     setSelectedPOL(pol);
   };
@@ -92,8 +91,8 @@ const POLList = (): JSX.Element => {
   };
 
   const filteredPOLs = pols.filter((pol) =>
-    (pol.po_number || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (pol.client_name || '').toLowerCase().includes(searchTerm.toLowerCase())
+    (pol.poNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (pol.clientName || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -172,14 +171,14 @@ const POLList = (): JSX.Element => {
                   <TableRow key={pol.id} hover>
                     <TableCell>
                       <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        {pol.po_number || `PO-${pol.id}`}
+                        {pol.poNumber || `PO-${pol.id}`}
                       </Typography>
                     </TableCell>
-                    <TableCell>{pol.client_name || pol.customerName || '-'}</TableCell>
-                    <TableCell align="center">{pol.total_order || 0}</TableCell>
+                    <TableCell>{pol.clientName || '-'}</TableCell>
+                    <TableCell align="center">{pol.totalOrder || 0}</TableCell>
                     <TableCell>
-                      {pol.delivery_date || pol.deliveryDate
-                        ? new Date(pol.delivery_date || pol.deliveryDate || '').toLocaleDateString()
+                      {pol.deliveryDate
+                        ? new Date(pol.deliveryDate).toLocaleDateString()
                         : '-'}
                     </TableCell>
                     <TableCell>
@@ -242,7 +241,7 @@ const POLList = (): JSX.Element => {
           <ListItemIcon><ViewIcon fontSize="small" /></ListItemIcon>
           <ListItemText>View Details</ListItemText>
         </MenuItem>
-        <MenuItem onClick={() => { navigate(`/pols/${selectedPOL?.id}/edit`); handleMenuClose(); }}>
+        <MenuItem onClick={() => { navigate(`/pols/${selectedPOL?.id}`); handleMenuClose(); }}>
           <ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>
           <ListItemText>Edit</ListItemText>
         </MenuItem>
