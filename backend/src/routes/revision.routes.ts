@@ -90,8 +90,9 @@ router.post('/', authenticate, async (req, res) => {
 router.post('/:id/submit', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
+    const revisionId = parseInt(id, 10);
     
-    const result = await revisionService.submitRevision(id);
+    const result = await revisionService.submitRevision(revisionId);
     
     res.json({
       success: true,
@@ -114,6 +115,7 @@ router.post('/:id/submit', authenticate, async (req, res) => {
 router.post('/:id/approve', authenticate, authorize('MANAGER'), async (req, res) => {
   try {
     const { id } = req.params;
+    const revisionId = parseInt(id, 10);
     
     // Get user ID from auth middleware
     const authReq = req as any;
@@ -129,7 +131,7 @@ router.post('/:id/approve', authenticate, authorize('MANAGER'), async (req, res)
       });
     }
     
-    const result = await revisionService.approveRevision(id, userId, true);
+    const result = await revisionService.approveRevision(revisionId, userId, true);
     
     res.json({
       success: true,
@@ -152,6 +154,7 @@ router.post('/:id/approve', authenticate, authorize('MANAGER'), async (req, res)
 router.post('/:id/reject', authenticate, authorize('MANAGER'), async (req, res) => {
   try {
     const { id } = req.params;
+    const revisionId = parseInt(id, 10);
     const { reason } = req.body;
     
     // Get user ID from auth middleware
@@ -168,7 +171,7 @@ router.post('/:id/reject', authenticate, authorize('MANAGER'), async (req, res) 
       });
     }
     
-    const result = await revisionService.approveRevision(id, userId, false, reason);
+    const result = await revisionService.approveRevision(revisionId, userId, false, reason);
     
     res.json({
       success: true,

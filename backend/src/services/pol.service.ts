@@ -8,7 +8,7 @@ interface CreatePOLData {
   poDate: Date;
   deliveryDate: Date;
   notes?: string;
-  createdBy?: string;
+  createdBy?: number;
 }
 
 interface UpdatePOLData {
@@ -80,7 +80,7 @@ export class POLService {
   /**
    * Get POL by ID with full details
    */
-  async getPOLById(id: string) {
+  async getPOLById(id: number) {
     const pol = await prisma.pOL.findUnique({
       where: { id },
       include: {
@@ -145,7 +145,7 @@ export class POLService {
   /**
    * Update POL
    */
-  async updatePOL(id: string, data: UpdatePOLData) {
+  async updatePOL(id: number, data: UpdatePOLData) {
     const pol = await prisma.pOL.findUnique({
       where: { id },
     });
@@ -165,7 +165,7 @@ export class POLService {
   /**
    * Delete POL
    */
-  async deletePOL(id: string) {
+  async deletePOL(id: number) {
     const pol = await prisma.pOL.findUnique({
       where: { id },
     });
@@ -198,7 +198,7 @@ export class POLService {
   /**
    * Add product to POL
    */
-  async addProductToPOL(polId: string, productData: any) {
+  async addProductToPOL(polId: number, productData: any) {
     const pol = await prisma.pOL.findUnique({
       where: { id: polId },
     });
@@ -229,7 +229,7 @@ export class POLService {
   /**
    * Update POL detail
    */
-  async updatePOLDetail(detailId: string, data: any) {
+  async updatePOLDetail(detailId: number, data: any) {
     const detail = await prisma.pOLDetail.findUnique({
       where: { id: detailId },
     });
@@ -249,7 +249,7 @@ export class POLService {
   /**
    * Delete POL detail
    */
-  async deletePOLDetail(detailId: string) {
+  async deletePOLDetail(detailId: number) {
     const detail = await prisma.pOLDetail.findUnique({
       where: { id: detailId },
     });

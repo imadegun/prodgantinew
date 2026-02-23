@@ -8,7 +8,7 @@ interface LoginRequest {
 
 interface BackendLoginResponse {
   user: {
-    id: string;
+    id: number;
     username: string;
     fullName: string;
     role: 'MANAGER' | 'ADMIN' | 'WORKER';
@@ -19,7 +19,7 @@ interface BackendLoginResponse {
 
 interface LoginResponse {
   user: {
-    userId: string;
+    userId: number;
     username: string;
     email: string;
     fullName: string;
@@ -87,7 +87,7 @@ export const authService = {
   },
 
   async getCurrentUser(): Promise<LoginResponse['user']> {
-    const response = await apiClient.get<{ id: string; username: string; fullName: string; role: 'MANAGER' | 'ADMIN' | 'WORKER' }>('/auth/me');
+    const response = await apiClient.get<{ id: number; username: string; fullName: string; role: 'MANAGER' | 'ADMIN' | 'WORKER' }>('/auth/me');
     return {
       userId: response.id,
       username: response.username,

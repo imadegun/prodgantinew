@@ -2,13 +2,13 @@ import { apiClient } from './api';
 import { RevisionTicket } from '../types';
 
 interface CreateRevisionTicketRequest {
-  polId?: string;
+  polId?: number;
   type: 'DESIGN' | 'PRODUCTION' | 'MATERIAL' | 'OTHER';
   issueType?: string;
   severity: 'LOW' | 'MEDIUM' | 'HIGH';
   description: string;
   proposedSolution?: string;
-  createdBy?: string;
+  createdBy?: number;
 }
 
 export const revisionService = {
@@ -20,7 +20,7 @@ export const revisionService = {
     return response.tickets || [];
   },
 
-  async getById(ticketId: string): Promise<RevisionTicket> {
+  async getById(ticketId: number): Promise<RevisionTicket> {
     const response = await apiClient.get<RevisionTicket>(`/revisions/${ticketId}`);
     return response;
   },
@@ -45,12 +45,12 @@ export const revisionService = {
     return response;
   },
 
-  async update(ticketId: string, data: Partial<CreateRevisionTicketRequest>): Promise<RevisionTicket> {
+  async update(ticketId: number, data: Partial<CreateRevisionTicketRequest>): Promise<RevisionTicket> {
     const response = await apiClient.put<RevisionTicket>(`/revisions/${ticketId}`, data);
     return response;
   },
 
-  async delete(ticketId: string): Promise<void> {
+  async delete(ticketId: number): Promise<void> {
     await apiClient.delete(`/revisions/${ticketId}`);
   },
 };

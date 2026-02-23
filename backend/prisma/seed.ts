@@ -211,7 +211,7 @@ async function main() {
   console.log('🏭 Creating Production Records...');
   
   // Forming stage for Teapot Main Body
-  await prisma.productionRecord.create({
+  const productionRecord1 = await prisma.productionRecord.create({
     data: {
       polDetailId: detail1.id,
       stage: 'THROWING',
@@ -611,7 +611,7 @@ async function main() {
       userId: admin.id,
       action: 'TRACK_PRODUCTION',
       entityType: 'PRODUCTION_RECORD',
-      entityId: 'production_record_id_placeholder',
+      entityId: productionRecord1.id,
       details: 'Tracked THROWING stage for Teapot (Main Body)',
     },
   });

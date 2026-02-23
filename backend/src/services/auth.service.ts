@@ -23,7 +23,7 @@ interface RegisterData {
 }
 
 interface TokenPayload {
-  userId: string;
+  userId: number;
   username: string;
   role: string;
 }
@@ -174,7 +174,7 @@ export class AuthService {
   /**
    * Get current user by ID
    */
-  async getCurrentUser(userId: string) {
+  async getCurrentUser(userId: number) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {

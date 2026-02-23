@@ -3,12 +3,12 @@ import { AppError } from '../middleware/error.middleware';
 import { ProductionStage } from '@prisma/client';
 
 interface TrackProductionData {
-  polDetailId: string;
+  polDetailId: number;
   stage: ProductionStage;
   quantity: number;
   rejectQuantity?: number;
   remakeCycle?: number;
-  userId: string;
+  userId: number;
   notes?: string;
 }
 
@@ -23,7 +23,7 @@ export class ProductionService {
   /**
    * Get production stages for a POL detail
    */
-  async getProductionStages(polDetailId: string) {
+  async getProductionStages(polDetailId: number) {
     const detail = await prisma.pOLDetail.findUnique({
       where: { id: polDetailId },
       include: {
@@ -206,7 +206,7 @@ export class ProductionService {
    * Check for quantity discrepancies
    */
   private async checkForDiscrepancy(
-    polDetailId: string,
+    polDetailId: number,
     stage: ProductionStage,
     quantity: number
   ): Promise<DiscrepancyData | null> {
@@ -254,13 +254,13 @@ export class ProductionService {
    * Create discrepancy alert
    */
   private async createDiscrepancyAlert(data: {
-    polId: string;
-    polDetailId: string;
+    polId: number;
+    polDetailId: number;
     stage: ProductionStage;
     expected: number;
     actual: number;
     difference: number;
-    userId: string;
+    userId: number;
   }) {
     const priority = Math.abs(data.difference) > data.expected * 0.2 ? 'CRITICAL' : 'WARNING';
 
@@ -302,7 +302,7 @@ export class ProductionService {
   /**
    * Update POL status based on production progress
    */
-  private async updatePOLStatus(polId: string) {
+  private async updatePOLStatus(polId: number) {
     const details = await prisma.pOLDetail.findMany({
       where: { polId },
       include: {

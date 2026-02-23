@@ -3,9 +3,9 @@ import { AppError } from '../middleware/error.middleware';
 import { LogStatus } from '@prisma/client';
 
 interface CreateLogEntryData {
-  polId?: string;
-  polDetailId?: string;
-  userId: string;
+  polId?: number;
+  polDetailId?: number;
+  userId: number;
   stage?: string;
   issueType?: any;
   description: string;
@@ -15,8 +15,8 @@ interface CreateLogEntryData {
 }
 
 interface UpdateLogEntryData {
-  polId?: string;
-  polDetailId?: string;
+  polId?: number;
+  polDetailId?: number;
   stage?: string;
   issueType?: string;
   description?: string;
@@ -27,8 +27,8 @@ interface UpdateLogEntryData {
 }
 
 interface LogFilters {
-  polId?: string;
-  userId?: string;
+  polId?: number;
+  userId?: number;
   status?: LogStatus;
   startDate?: Date;
   endDate?: Date;
@@ -99,7 +99,7 @@ export class LogbookService {
   /**
    * Get log entry by ID
    */
-  async getLogEntryById(id: string) {
+  async getLogEntryById(id: number) {
     const entry = await prisma.logbookEntry.findUnique({
       where: { id },
       include: {
@@ -166,7 +166,7 @@ export class LogbookService {
   /**
    * Update log entry
    */
-  async updateLogEntry(id: string, data: UpdateLogEntryData) {
+  async updateLogEntry(id: number, data: UpdateLogEntryData) {
     const entry = await prisma.logbookEntry.findUnique({
       where: { id },
     });
@@ -207,7 +207,7 @@ export class LogbookService {
   /**
    * Delete log entry
    */
-  async deleteLogEntry(id: string) {
+  async deleteLogEntry(id: number) {
     const entry = await prisma.logbookEntry.findUnique({
       where: { id },
     });
@@ -270,9 +270,16 @@ export class LogbookService {
         },
       },
     });
-
+ 
     return entries;
   }
-}
 
+  /**
+   * Get all log entries (alias for listLogEntries)
+   */
+  async getAll(params?: LogFilters) {
+    return this.listLogEntries(1, 20, params);
+  }
+}
+ 
 export const logbookService = new LogbookService();

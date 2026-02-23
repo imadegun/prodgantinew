@@ -2,7 +2,8 @@ import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { apiClient } from '../../services/api';
 
 interface POL {
-  id: string;
+  id: number;
+  polId: number;
   poNumber: string;
   clientName: string;
   clientCode?: string;
@@ -14,14 +15,14 @@ interface POL {
   createdAt: string;
   updatedAt: string;
   createdBy: {
-    userId: string;
+    userId: number;
     fullName: string;
   };
 }
 
 interface POLDetail {
-  id: string;
-  polId: string;
+  id: number;
+  polId: number;
   productCode: string;
   productName: string;
   color: string | null;
@@ -116,7 +117,7 @@ export const fetchPOLs = createAsyncThunk(
 
 export const fetchPOLById = createAsyncThunk(
   'pol/fetchPOLById',
-  async (id: string, { rejectWithValue }) => {
+  async (id: number, { rejectWithValue }) => {
     try {
       const response = await apiClient.get<{
         pol: POL;
@@ -160,7 +161,7 @@ export const createPOL = createAsyncThunk(
 
 export const updatePOL = createAsyncThunk(
   'pol/updatePOL',
-  async ({ id, data }: { id: string; data: Partial<POL> }, { rejectWithValue }) => {
+  async ({ id, data }: { id: number; data: Partial<POL> }, { rejectWithValue }) => {
     try {
       const response = await apiClient.put<POL>(`/pols/${id}`, data);
       return response;
@@ -172,7 +173,7 @@ export const updatePOL = createAsyncThunk(
 
 export const deletePOL = createAsyncThunk(
   'pol/deletePOL',
-  async (id: string, { rejectWithValue }) => {
+  async (id: number, { rejectWithValue }) => {
     try {
       await apiClient.delete(`/pols/${id}`);
       return id;

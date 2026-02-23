@@ -27,6 +27,11 @@ import {
   Select,
   Grid,
   LinearProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Alert,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -37,7 +42,7 @@ import {
   Delete as DeleteIcon,
 } from '@mui/icons-material';
 import { RootState } from '../store';
-import { fetchPOLs, setFilters, deletePOL } from '../store/slices/polSlice';
+import { fetchPOLs, setFilters, deletePOL, updatePOL } from '../store/slices/polSlice';
 import { polService } from '../services/pol.service';
 
 const POLList = (): JSX.Element => {
@@ -49,6 +54,17 @@ const POLList = (): JSX.Element => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedPOL, setSelectedPOL] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [openEditDialog, setOpenEditDialog] = useState(false);
+  const [editFormData, setEditFormData] = useState<{
+    clientName: string;
+    deliveryDate: string;
+    status: 'DRAFT' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  }>({
+    clientName: '',
+    deliveryDate: '',
+    status: 'DRAFT',
+  });
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     dispatch(fetchPOLs({ page: page + 1, limit: rowsPerPage, ...filters }));
@@ -75,8 +91,54 @@ const POLList = (): JSX.Element => {
 
   const handleDelete = () => {
     if (selectedPOL) {
-      dispatch(deletePOL(selectedPOL.id));
+      const polId = selectedPOL.polId || selectedPOL.id;
+      dispatch(deletePOL(polId));
       handleMenuClose();
+    }
+  };
+
+  const handleOpenEditDialog = (pol: any) => {
+    setSelectedPOL(pol);
+    setEditFormData({
+      clientName: pol.clientName,
+      deliveryDate: pol.deliveryDate ? pol.deliveryDate.split('T')[0] : '',
+      status: pol.status,
+    });
+    setOpenEditDialog(true);
+    handleMenuClose();
+  };
+
+  const handleCloseEditDialog = () => {
+    setOpenEditDialog(false);
+    setSelectedPOL(null);
+    setError(null);
+  };
+
+  const handleUpdatePOL = async () => {
+    try {
+      if (!selectedPOL) {
+        setError('No POL selected');
+        return;
+      }
+      if (!editFormData.clientName || !editFormData.deliveryDate) {
+        setError('Please fill in all required fields');
+        return;
+      }
+
+      const polId = selectedPOL.polId || selectedPOL.id;
+      await dispatch(updatePOL({
+        id: polId,
+        data: {
+          clientName: editFormData.clientName,
+          deliveryDate: editFormData.deliveryDate,
+          status: editFormData.status,
+        },
+      }));
+
+      handleCloseEditDialog();
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || 'Failed to update POL. Please try again.');
     }
   };
 
@@ -165,10 +227,10 @@ const POLList = (): JSX.Element => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredPOLs
+              {                filteredPOLs
                 .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                 .map((pol) => (
-                  <TableRow key={pol.id} hover>
+                  <TableRow key={pol.polId || pol.id} hover>
                     <TableCell>
                       <Typography variant="body2" sx={{ fontWeight: 500 }}>
                         {pol.poNumber || `PO-${pol.id}`}
@@ -237,11 +299,11 @@ const POLList = (): JSX.Element => {
         open={Boolean(anchorEl)}
         onClose={handleMenuClose}
       >
-        <MenuItem onClick={() => { navigate(`/pols/${selectedPOL?.id}`); handleMenuClose(); }}>
+        <MenuItem onClick={() => { navigate(`/pols/${selectedPOL?.polId || selectedPOL?.id}`); handleMenuClose(); }}>
           <ListItemIcon><ViewIcon fontSize="small" /></ListItemIcon>
           <ListItemText>View Details</ListItemText>
         </MenuItem>
-        <MenuItem onClick={() => { navigate(`/pols/${selectedPOL?.id}`); handleMenuClose(); }}>
+        <MenuItem onClick={() => handleOpenEditDialog(selectedPOL)}>
           <ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>
           <ListItemText>Edit</ListItemText>
         </MenuItem>
@@ -250,6 +312,63 @@ const POLList = (): JSX.Element => {
           <ListItemText>Delete</ListItemText>
         </MenuItem>
       </Menu>
+
+      {/* Edit POL Dialog */}
+      <Dialog open={openEditDialog} onClose={handleCloseEditDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>Edit POL</DialogTitle>
+        <DialogContent>
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
+          <Box sx={{ mt: 2 }}>
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Client Name"
+                  value={editFormData.clientName}
+                  onChange={(e) => setEditFormData({ ...editFormData, clientName: e.target.value })}
+                  required
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Delivery Date"
+                  type="date"
+                  value={editFormData.deliveryDate}
+                  onChange={(e) => setEditFormData({ ...editFormData, deliveryDate: e.target.value })}
+                  InputLabelProps={{ shrink: true }}
+                  required
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <FormControl fullWidth>
+                  <InputLabel>Status</InputLabel>
+                  <Select
+                    value={editFormData.status}
+                    label="Status"
+                    onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value })}
+                  >
+                    <MenuItem value="DRAFT">Draft</MenuItem>
+                    <MenuItem value="IN_PROGRESS">In Progress</MenuItem>
+                    <MenuItem value="COMPLETED">Completed</MenuItem>
+                    <MenuItem value="CANCELLED">Cancelled</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+            </Grid>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseEditDialog}>Cancel</Button>
+          <Button onClick={handleUpdatePOL} variant="contained">
+            Update
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

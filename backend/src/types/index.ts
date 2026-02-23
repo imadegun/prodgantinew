@@ -6,7 +6,7 @@ import { Request } from 'express';
 
 // User types
 export interface User {
-  id: string;
+  id: number;
   username: string;
   fullName: string;
   role: 'MANAGER' | 'ADMIN' | 'WORKER';
@@ -16,7 +16,7 @@ export interface User {
 
 // POL types
 export interface POL {
-  id: string;
+  id: number;
   polNumber: string;
   customerName: string;
   orderDate: Date;
@@ -28,8 +28,8 @@ export interface POL {
 }
 
 export interface POLDetail {
-  id: string;
-  polId: string;
+  id: number;
+  polId: number;
   productCode: string;
   productName: string;
   quantity: number;
@@ -46,23 +46,23 @@ export interface POLDetail {
 
 // Production types
 export interface ProductionRecord {
-  id: string;
-  polDetailId: string;
+  id: number;
+  polDetailId: number;
   stage: 'FORMING' | 'FIRING' | 'GLAZING' | 'QUALITY_CONTROL' | 'PACKAGING';
   quantity: number;
-  userId: string;
+  userId: number;
   notes?: string;
   createdAt: Date;
 }
 
 export interface DecorationTask {
-  id: string;
-  polDetailId: string;
+  id: number;
+  polDetailId: number;
   taskName: string;
   description?: string;
   quantity: number;
   completed: boolean;
-  userId?: string;
+  userId?: number;
   completedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -70,19 +70,19 @@ export interface DecorationTask {
 
 // Alert types
 export interface DiscrepancyAlert {
-  id: string;
-  polId: string;
-  polDetailId: string;
+  id: number;
+  polId: number;
+  polDetailId: number;
   stage: 'FORMING' | 'FIRING' | 'GLAZING' | 'QUALITY_CONTROL' | 'PACKAGING';
   expectedQuantity: number;
   actualQuantity: number;
   difference: number;
   priority: 'LOW' | 'MEDIUM' | 'HIGH';
   status: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED';
-  reportedBy: string;
-  acknowledgedBy?: string;
+  reportedBy: number;
+  acknowledgedBy?: number;
   acknowledgedAt?: Date;
-  resolvedBy?: string;
+  resolvedBy?: number;
   resolvedAt?: Date;
   resolutionNotes?: string;
   createdAt: Date;
@@ -91,9 +91,9 @@ export interface DiscrepancyAlert {
 
 // Logbook types
 export interface LogbookEntry {
-  id: string;
-  polId?: string;
-  userId: string;
+  id: number;
+  polId?: number;
+  userId: number;
   entryDate: Date;
   status: 'NORMAL' | 'ISSUES' | 'RESOLVED';
   notes: string;
@@ -105,10 +105,10 @@ export interface LogbookEntry {
 
 // Revision types
 export interface RevisionTicket {
-  id: string;
-  polId: string;
-  polDetailId?: string;
-  createdBy: string;
+  id: number;
+  polId: number;
+  polDetailId?: number;
+  createdBy: number;
   type: 'DESIGN' | 'PRODUCTION' | 'MATERIAL' | 'OTHER';
   issueType: string;
   severity: 'LOW' | 'MEDIUM' | 'HIGH';
@@ -116,7 +116,7 @@ export interface RevisionTicket {
   proposedSolution?: string;
   status: 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
   submittedAt?: Date;
-  approvedBy?: string;
+  approvedBy?: number;
   approvedAt?: Date;
   managerNotes?: string;
   createdAt: Date;
@@ -125,11 +125,11 @@ export interface RevisionTicket {
 
 // Activity Log types
 export interface ActivityLog {
-  id: string;
-  userId: string;
+  id: number;
+  userId: number;
   action: string;
   entityType: string;
-  entityId: string;
+  entityId?: number;
   details?: string;
   ipAddress?: string;
   userAgent?: string;
@@ -139,7 +139,7 @@ export interface ActivityLog {
 // Request types
 export interface AuthenticatedRequest extends Request {
   user?: {
-    userId: string;
+    userId: number;
     username: string;
     role: string;
   };
@@ -207,12 +207,12 @@ export interface DashboardStats {
 }
 
 export interface RecentActivity {
-  id: string;
+  id: number;
   type: 'POL' | 'PRODUCTION' | 'ALERT' | 'LOGBOOK' | 'REVISION';
   title: string;
   description: string;
   timestamp: Date;
-  userId: string;
+  userId: number;
   userName: string;
 }
 
@@ -257,14 +257,14 @@ export interface POLFilters {
 export interface AlertFilters {
   status?: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED';
   priority?: 'LOW' | 'MEDIUM' | 'HIGH';
-  polId?: string;
+  polId?: number;
   startDate?: Date;
   endDate?: Date;
 }
 
 export interface LogFilters {
-  polId?: string;
-  userId?: string;
+  polId?: number;
+  userId?: number;
   status?: 'NORMAL' | 'ISSUES' | 'RESOLVED';
   startDate?: Date;
   endDate?: Date;
@@ -274,7 +274,7 @@ export interface RevisionFilters {
   status?: 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
   type?: 'DESIGN' | 'PRODUCTION' | 'MATERIAL' | 'OTHER';
   severity?: 'LOW' | 'MEDIUM' | 'HIGH';
-  polId?: string;
+  polId?: number;
   startDate?: Date;
   endDate?: Date;
 }
@@ -282,6 +282,6 @@ export interface RevisionFilters {
 export interface ReportFilters {
   startDate?: Date;
   endDate?: Date;
-  polId?: string;
+  polId?: number;
   productCode?: string;
 }

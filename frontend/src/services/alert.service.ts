@@ -1,8 +1,8 @@
 import { apiClient } from './api';
 
 interface Alert {
-  alertId: string;
-  polDetailId: string;
+  alertId: number;
+  polDetailId: number;
   polNumber: string;
   productCode: string;
   productName: string;
@@ -11,9 +11,9 @@ interface Alert {
   priority: 'CRITICAL' | 'WARNING' | 'INFORMATIONAL';
   status: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED';
   createdAt: string;
-  acknowledgedBy?: string;
+  acknowledgedBy?: number;
   acknowledgedAt?: string;
-  resolvedBy?: string;
+  resolvedBy?: number;
   resolvedAt?: string;
   resolutionNotes?: string;
 }
@@ -23,7 +23,7 @@ interface AlertListQuery {
   limit?: number;
   status?: string;
   priority?: string;
-  polDetailId?: string;
+  polDetailId?: number;
 }
 
 interface AlertListResponse {
@@ -47,12 +47,12 @@ export const alertService = {
     return response;
   },
 
-  async acknowledgeAlert(alertId: string): Promise<Alert> {
+  async acknowledgeAlert(alertId: number): Promise<Alert> {
     const response = await apiClient.put<Alert>(`/alerts/${alertId}/acknowledge`, {});
     return response;
   },
 
-  async resolveAlert(alertId: string, data: ResolveAlertRequest): Promise<Alert> {
+  async resolveAlert(alertId: number, data: ResolveAlertRequest): Promise<Alert> {
     const response = await apiClient.put<Alert>(`/alerts/${alertId}/resolve`, data);
     return response;
   },

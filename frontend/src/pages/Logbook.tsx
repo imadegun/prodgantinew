@@ -95,7 +95,7 @@ const Logbook = (): JSX.Element => {
     try {
       await logbookService.create({
         ...formData,
-        polId: formData.polId || undefined,
+        polId: formData.polId ? parseInt(formData.polId, 10) : undefined,
         userId: user?.id,
       });
       setCreateDialogOpen(false);

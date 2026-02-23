@@ -1,5 +1,5 @@
 export interface User {
-  id: string;
+  id: number;
   username: string;
   fullName: string;
   role: 'MANAGER' | 'ADMIN' | 'WORKER';
@@ -9,8 +9,8 @@ export interface User {
 
 // API Response types (snake_case from backend)
 export interface POL {
-  id: string;
-  polId?: string;
+  id: number;
+  polId?: number;
   po_number?: string;
   poNumber?: string;
   client_name?: string;
@@ -20,7 +20,7 @@ export interface POL {
   deliveryDate?: string;
   status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
   notes?: string;
-  createdBy?: string;
+  createdBy?: number;
   created_at?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -29,8 +29,8 @@ export interface POL {
 }
 
 export interface POLDetail {
-  id: string;
-  polId?: string;
+  id: number;
+  polId?: number;
   productCode?: string;
   productName?: string;
   quantity?: number;
@@ -46,44 +46,44 @@ export interface POLDetail {
 }
 
 export interface ProductionRecord {
-  id: string;
-  polDetailId?: string;
+  id: number;
+  polDetailId?: number;
   stage: 'FORMING' | 'FIRING' | 'GLAZING' | 'QUALITY_CONTROL' | 'PACKAGING';
   quantity?: number;
   rejects?: number;
-  userId?: string;
+  userId?: number;
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
 }
 
 export interface DecorationTask {
-  id: string;
-  polDetailId?: string;
+  id: number;
+  polDetailId?: number;
   taskName?: string;
   description?: string;
   quantity?: number;
   completed?: boolean;
-  userId?: string;
+  userId?: number;
   completedAt?: string;
   createdAt?: string;
   updatedAt?: string;
 }
 
 export interface Alert {
-  id: string;
-  pol_id?: string;
-  polDetailId?: string;
+  id: number;
+  pol_id?: number;
+  polDetailId?: number;
   stage?: 'FORMING' | 'FIRING' | 'GLAZING' | 'QUALITY_CONTROL' | 'PACKAGING';
   expected_quantity?: number;
   actual_quantity?: number;
   difference?: number;
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   status: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED';
-  reported_by?: string;
-  acknowledged_by?: string;
+  reported_by?: number;
+  acknowledged_by?: number;
   acknowledged_at?: string;
-  resolved_by?: string;
+  resolved_by?: number;
   resolved_at?: string;
   resolution_notes?: string;
   alert_message?: string;
@@ -92,10 +92,10 @@ export interface Alert {
 }
 
 export interface LogbookEntry {
-  id: string;
-  pol_id?: string;
-  polDetailId?: string;
-  user_id?: string;
+  id: number;
+  pol_id?: number;
+  polDetailId?: number;
+  user_id?: number;
   entry_date?: string;
   status: 'NORMAL' | 'ISSUES' | 'RESOLVED';
   notes?: string;

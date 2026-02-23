@@ -11,7 +11,7 @@ router.get('/', authenticate, async (req, res) => {
     
     const filters: any = {};
     if (status) filters.status = status;
-    if (polId) filters.polId = polId;
+    if (polId) filters.polId = Number(polId);
     if (fromDate) filters.startDate = new Date(fromDate as string);
     if (toDate) filters.endDate = new Date(toDate as string);
     
@@ -95,6 +95,7 @@ router.post('/', authenticate, async (req, res) => {
 router.put('/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
+    const entryId = parseInt(id, 10);
     const { stage, issueType, description, severity, resolution, status } = req.body;
     
     // Combine notes, issues, and actions
@@ -102,7 +103,7 @@ router.put('/:id', authenticate, async (req, res) => {
     const issues = issueType ? `${issueType}${severity ? ` (${severity})` : ''}` : undefined;
     const actions = resolution;
     
-    const result = await logbookService.updateLogEntry(id, {
+    const result = await logbookService.updateLogEntry(entryId, {
       stage,
       issueType,
       description,

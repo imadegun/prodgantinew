@@ -3,9 +3,9 @@ import { AppError } from '../middleware/error.middleware';
 import { RevisionStatus, RevisionType, Severity } from '@prisma/client';
 
 interface CreateRevisionData {
-  polId: string;
-  polDetailId?: string;
-  userId: string;
+  polId: number;
+  polDetailId?: number;
+  userId: number;
   type: RevisionType;
   issueType: string;
   severity: Severity;
@@ -23,7 +23,7 @@ interface RevisionFilters {
   status?: RevisionStatus;
   type?: RevisionType;
   severity?: Severity;
-  polId?: string;
+  polId?: number;
   startDate?: Date;
   endDate?: Date;
 }
@@ -112,7 +112,7 @@ export class RevisionService {
   /**
    * Get revision ticket by ID
    */
-  async getRevisionById(id: string) {
+  async getRevisionById(id: number) {
     const revision = await prisma.revisionTicket.findUnique({
       where: { id },
         include: {
@@ -200,7 +200,7 @@ export class RevisionService {
   /**
    * Update revision ticket
    */
-  async updateRevision(id: string, data: UpdateRevisionData) {
+  async updateRevision(id: number, data: UpdateRevisionData) {
     const revision = await prisma.revisionTicket.findUnique({
       where: { id },
     });
@@ -235,7 +235,7 @@ export class RevisionService {
   /**
    * Submit revision for approval
    */
-  async submitRevision(id: string) {
+  async submitRevision(id: number) {
     const revision = await prisma.revisionTicket.findUnique({
       where: { id },
     });
@@ -262,7 +262,7 @@ export class RevisionService {
   /**
    * Approve or reject revision
    */
-  async approveRevision(id: string, userId: string, approved: boolean, managerNotes?: string) {
+  async approveRevision(id: number, userId: number, approved: boolean, managerNotes?: string) {
     const revision = await prisma.revisionTicket.findUnique({
       where: { id },
     });
@@ -291,7 +291,7 @@ export class RevisionService {
   /**
    * Delete revision ticket
    */
-  async deleteRevision(id: string) {
+  async deleteRevision(id: number) {
     const revision = await prisma.revisionTicket.findUnique({
       where: { id },
     });

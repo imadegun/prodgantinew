@@ -1,14 +1,14 @@
 import { apiClient } from './api';
 
 interface LogbookEntry {
-  id: string;
-  polId?: string;
+  id: number;
+  polId?: number;
   entryDate: string;
   status: 'NORMAL' | 'ISSUES' | 'RESOLVED';
   issues?: string;
   actions?: string;
   notes?: string;
-  userId: string;
+  userId: number;
   createdAt?: string;
 }
 
@@ -17,7 +17,7 @@ interface LogbookListQuery {
   limit?: number;
   status?: string;
   severity?: string;
-  polId?: string;
+  polId?: number;
 }
 
 interface LogbookListResponse {
@@ -31,13 +31,13 @@ interface LogbookListResponse {
 }
 
 interface CreateLogbookEntryRequest {
-  polId?: string;
+  polId?: number;
   entryDate: string;
   status: 'NORMAL' | 'ISSUES' | 'RESOLVED';
   issues?: string;
   actions?: string;
   notes?: string;
-  userId?: string;
+  userId?: number;
 }
 
 export const logbookService = {
@@ -51,17 +51,17 @@ export const logbookService = {
     return response;
   },
 
-  async getById(id: string): Promise<LogbookEntry> {
+  async getById(id: number): Promise<LogbookEntry> {
     const response = await apiClient.get<LogbookEntry>(`/logbook/${id}`);
     return response;
   },
 
-  async update(id: string, data: Partial<CreateLogbookEntryRequest>): Promise<LogbookEntry> {
+  async update(id: number, data: Partial<CreateLogbookEntryRequest>): Promise<LogbookEntry> {
     const response = await apiClient.put<LogbookEntry>(`/logbook/${id}`, data);
     return response;
   },
 
-  async delete(id: string): Promise<void> {
+  async delete(id: number): Promise<void> {
     await apiClient.delete(`/logbook/${id}`);
   },
 };

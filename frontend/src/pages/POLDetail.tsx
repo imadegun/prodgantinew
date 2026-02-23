@@ -20,7 +20,8 @@ const POLDetail = (): JSX.Element => {
       if (id) {
         setLocalLoading(true);
         try {
-          await dispatch(fetchPOLById(id));
+          const polId = parseInt(id, 10);
+          await dispatch(fetchPOLById(polId));
         } catch (err) {
           console.error('Failed to fetch POL details:', err);
         } finally {

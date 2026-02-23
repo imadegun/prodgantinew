@@ -36,7 +36,7 @@ router.get('/', authenticate, async (req, res) => {
       {
         status: status as any,
         priority: priority as any,
-        polId: polId as string,
+        polId: polId ? Number(polId) : undefined,
         startDate: startDate ? new Date(startDate as string) : undefined,
         endDate: endDate ? new Date(endDate as string) : undefined,
       }
@@ -62,9 +62,10 @@ router.get('/', authenticate, async (req, res) => {
 router.put('/:id/acknowledge', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = (req as any).user.id;
+    const alertId = parseInt(id, 10);
+    const userId = (req as any).user.userId;
     
-    const result = await alertService.acknowledgeAlert(id, userId);
+    const result = await alertService.acknowledgeAlert(alertId, userId);
     
     res.json({
       success: true,
@@ -86,10 +87,11 @@ router.put('/:id/acknowledge', authenticate, async (req, res) => {
 router.put('/:id/resolve', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
+    const alertId = parseInt(id, 10);
     const { resolutionNotes } = req.body;
-    const userId = (req as any).user.id;
+    const userId = (req as any).user.userId;
     
-    const result = await alertService.resolveAlert(id, userId, resolutionNotes);
+    const result = await alertService.resolveAlert(alertId, userId, resolutionNotes);
     
     res.json({
       success: true,

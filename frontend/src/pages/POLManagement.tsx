@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Grid,
@@ -32,6 +33,7 @@ import {
   FilterList as FilterIcon,
   MoreVert as MoreVertIcon,
   Refresh as RefreshIcon,
+  Visibility as VisibilityIcon,
 } from '@mui/icons-material';
 import { useAppSelector, useAppDispatch } from '../hooks/useAppSelector';
 import { fetchPOLs, createPOL, updatePOL, deletePOL } from '../store/slices/polSlice';
@@ -45,6 +47,7 @@ const statusColors: Record<string, 'default' | 'primary' | 'secondary' | 'error'
 };
 
 const POLManagement = () => {
+  const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const { pols, isLoading } = useAppSelector((state) => state.pol);
 
@@ -59,7 +62,12 @@ const POLManagement = () => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   // Form state
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    clientName: string;
+    poDate: string;
+    deliveryDate: string;
+    status: 'DRAFT' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  }>({
     clientName: '',
     poDate: new Date().toISOString().split('T')[0],
     deliveryDate: '',
@@ -163,16 +171,23 @@ const POLManagement = () => {
 
   const handleUpdatePOL = async () => {
     try {
+      if (!selectedPOL) {
+        alert('No POL selected');
+        return;
+      }
       if (!formData.clientName || !formData.deliveryDate) {
         alert('Please fill in all required fields');
         return;
       }
 
+      const polId = selectedPOL.polId || selectedPOL.id;
       await dispatch(updatePOL({
-        polId: selectedPOL.polId,
-        clientName: formData.clientName,
-        deliveryDate: formData.deliveryDate,
-        status: formData.status,
+        id: polId,
+        data: {
+          clientName: formData.clientName,
+          deliveryDate: formData.deliveryDate,
+          status: formData.status,
+        },
       }));
 
       handleCloseEditDialog();
@@ -185,13 +200,23 @@ const POLManagement = () => {
 
   const handleDeletePOL = async () => {
     try {
-      await dispatch(deletePOL(selectedPOL.polId));
+      if (!selectedPOL) {
+        alert('No POL selected');
+        return;
+      }
+      const polId = selectedPOL.polId || selectedPOL.id;
+      await dispatch(deletePOL(polId));
       handleCloseDeleteDialog();
       handleRefresh();
     } catch (error) {
       console.error('Error deleting POL:', error);
       alert('Failed to delete POL. Please try again.');
     }
+  };
+
+  const handleViewDetail = (pol: any) => {
+    handleMenuClose();
+    navigate(`/pols/${pol.polId || pol.id}`);
   };
 
   return (
@@ -292,7 +317,7 @@ const POLManagement = () => {
                 </TableRow>
               ) : (
                 pols.map((pol) => (
-                  <TableRow key={pol.polId} hover>
+                  <TableRow key={pol.id} hover>
                     <TableCell>{pol.poNumber}</TableCell>
                     <TableCell>{pol.clientName}</TableCell>
                     <TableCell align="right">{pol.totalOrder || 0}</TableCell>
@@ -320,6 +345,10 @@ const POLManagement = () => {
                         open={Boolean(anchorEl) && selectedPOL?.polId === pol.polId}
                         onClose={handleMenuClose}
                       >
+                        <MenuItem onClick={() => handleViewDetail(pol)}>
+                          <VisibilityIcon fontSize="small" sx={{ mr: 1 }} />
+                          View Details
+                        </MenuItem>
                         <MenuItem onClick={() => handleOpenEditDialog(pol)}>
                           <EditIcon fontSize="small" sx={{ mr: 1 }} />
                           Edit
@@ -474,7 +503,7 @@ const POLManagement = () => {
         <DialogTitle>Confirm Delete</DialogTitle>
         <DialogContent>
           <Typography>
-            Are you sure you want to delete POL <strong>{selectedPOL?.poNumber}</strong>?
+            Are you sure you want to delete POL <strong>{selectedPOL?.poNumber || selectedPOL?.polId}</strong>?
             This action cannot be undone.
           </Typography>
         </DialogContent>

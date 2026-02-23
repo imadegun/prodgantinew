@@ -2,11 +2,11 @@ import { prisma } from '../config/database';
 import { AppError } from '../middleware/error.middleware';
 
 interface CreateDecorationTaskData {
-  polDetailId: string;
+  polDetailId: number;
   taskName: string;
   description?: string;
   quantityRequired: number;
-  userId?: string;
+  userId?: number;
 }
 
 interface UpdateDecorationTaskData {
@@ -22,7 +22,7 @@ export class DecorationService {
   /**
    * Get decoration tasks for a POL detail
    */
-  async getDecorationTasks(polDetailId: string) {
+  async getDecorationTasks(polDetailId: number) {
     const tasks = await prisma.decorationTask.findMany({
       where: { polDetailId },
       orderBy: { createdAt: 'desc' },
@@ -39,7 +39,7 @@ export class DecorationService {
   /**
    * Get decoration task by ID
    */
-  async getDecorationTaskById(id: string) {
+  async getDecorationTaskById(id: number) {
     const task = await prisma.decorationTask.findUnique({
       where: { id },
     });
@@ -85,7 +85,7 @@ export class DecorationService {
   /**
    * Update decoration task
    */
-  async updateDecorationTask(id: string, data: UpdateDecorationTaskData) {
+  async updateDecorationTask(id: number, data: UpdateDecorationTaskData) {
     const task = await prisma.decorationTask.findUnique({
       where: { id },
     });
@@ -112,7 +112,7 @@ export class DecorationService {
   /**
    * Track decoration task progress
    */
-  async trackDecorationTask(id: string, userId: string, data: {
+  async trackDecorationTask(id: number, userId: number, data: {
     quantityCompleted?: number;
     quantityRejected?: number;
     notes?: string;
@@ -148,7 +148,7 @@ export class DecorationService {
   /**
    * Delete decoration task
    */
-  async deleteDecorationTask(id: string) {
+  async deleteDecorationTask(id: number) {
     const task = await prisma.decorationTask.findUnique({
       where: { id },
     });
@@ -172,7 +172,7 @@ export class DecorationService {
   /**
    * Get decoration task statistics
    */
-  async getDecorationStatistics(polDetailId?: string) {
+  async getDecorationStatistics(polDetailId?: number) {
     const where: any = polDetailId ? { polDetailId } : {};
 
     const [total, completed, pending, totalQuantity, completedQuantity, rejectedQuantity] =

@@ -4,7 +4,7 @@ import { AppError } from '../middleware/error.middleware';
 interface ReportFilters {
   startDate?: Date;
   endDate?: Date;
-  polId?: string;
+  polId?: number;
   productCode?: string;
   fromDate?: string;
   toDate?: string;

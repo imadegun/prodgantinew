@@ -5,7 +5,7 @@ import { AlertPriority, AlertStatus } from '@prisma/client';
 interface AlertFilters {
   status?: AlertStatus;
   priority?: AlertPriority;
-  polId?: string;
+  polId?: number;
   startDate?: Date;
   endDate?: Date;
 }
@@ -93,7 +93,7 @@ export class AlertService {
   /**
    * Get alert by ID
    */
-  async getAlertById(id: string) {
+  async getAlertById(id: number) {
     const alert = await prisma.discrepancyAlert.findUnique({
       where: { id },
       include: {
@@ -133,7 +133,7 @@ export class AlertService {
   /**
    * Acknowledge alert
    */
-  async acknowledgeAlert(id: string, userId: string) {
+  async acknowledgeAlert(id: number, userId: number) {
     const alert = await prisma.discrepancyAlert.findUnique({
       where: { id },
     });
@@ -161,7 +161,7 @@ export class AlertService {
   /**
    * Resolve alert
    */
-  async resolveAlert(id: string, userId: string, resolutionNotes?: string) {
+  async resolveAlert(id: number, userId: number, resolutionNotes?: string) {
     const alert = await prisma.discrepancyAlert.findUnique({
       where: { id },
     });

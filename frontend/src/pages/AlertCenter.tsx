@@ -39,7 +39,7 @@ const AlertCenter = (): JSX.Element => {
 
   const handleAcknowledge = async (alertId: string) => {
     try {
-      await alertService.acknowledgeAlert(alertId);
+      await alertService.acknowledgeAlert(Number(alertId));
       dispatch(acknowledgeAlert(alertId));
       fetchAlertsData();
     } catch (err) {

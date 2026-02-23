@@ -9,7 +9,7 @@ interface ProductionStage {
   remakeCycle: number;
   completedAt: string;
   completedBy: {
-    userId: string;
+    userId: number;
     fullName: string;
   };
   notes: string;
@@ -18,7 +18,7 @@ interface ProductionStage {
 }
 
 interface ProductionStagesResponse {
-  polDetailId: string;
+  polDetailId: number;
   productCode: string;
   productName: string;
   orderQuantity: number;
@@ -27,7 +27,7 @@ interface ProductionStagesResponse {
 }
 
 interface TrackProductionRequest {
-  polDetailId: string;
+  polDetailId: number;
   stage: string;
   quantity: number;
   rejectQuantity?: number;
@@ -36,7 +36,7 @@ interface TrackProductionRequest {
 }
 
 interface TrackProductionResponse {
-  recordId: string;
+  recordId: number;
   stage: string;
   quantity: number;
   rejectQuantity: number;
@@ -45,7 +45,7 @@ interface TrackProductionResponse {
   createdAt: string;
   discrepancyDetected: boolean;
   alerts?: Array<{
-    alertId: string;
+    alertId: number;
     alertType: string;
     alertMessage: string;
     priority: string;
@@ -53,7 +53,7 @@ interface TrackProductionResponse {
 }
 
 interface ActiveProductionTask {
-  polDetailId: string;
+  polDetailId: number;
   polNumber: string;
   productCode: string;
   productName: string;
@@ -74,7 +74,7 @@ interface ProductionState {
   isLoading: boolean;
   isTracking: boolean;
   error: string | null;
-  currentPolDetailId: string | null;
+  currentPolDetailId: number | null;
 }
 
 const initialState: ProductionState = {
@@ -88,7 +88,7 @@ const initialState: ProductionState = {
 
 export const fetchProductionStages = createAsyncThunk(
   'production/fetchStages',
-  async (polDetailId: string, { rejectWithValue }) => {
+  async (polDetailId: number, { rejectWithValue }) => {
     try {
       const response = await apiClient.get<ProductionStagesResponse>(
         `/production/${polDetailId}/stages`
@@ -142,7 +142,7 @@ const productionSlice = createSlice({
     clearError: (state) => {
       state.error = null;
     },
-    setCurrentPolDetailId: (state, action: PayloadAction<string>) => {
+    setCurrentPolDetailId: (state, action: PayloadAction<number>) => {
       state.currentPolDetailId = action.payload;
     },
     clearProductionStages: (state) => {

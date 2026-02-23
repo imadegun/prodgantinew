@@ -8,8 +8,9 @@ const router = Router();
 router.get('/:polDetailId/stages', authenticate, async (req, res) => {
   try {
     const { polDetailId } = req.params;
+    const detailId = parseInt(polDetailId, 10);
     
-    const result = await productionService.getProductionStages(polDetailId);
+    const result = await productionService.getProductionStages(detailId);
     
     res.json({
       success: true,

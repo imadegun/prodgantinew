@@ -12,7 +12,7 @@ router.get('/pol-summary', authenticate, async (req, res) => {
     const result = await reportService.getPOLSummary({
       startDate: fromDate ? new Date(fromDate as string) : undefined,
       endDate: toDate ? new Date(toDate as string) : undefined,
-      polId: polId as string,
+      polId: polId ? parseInt(polId as string, 10) : undefined,
       status: status as string,
       format: format as string,
     });
@@ -41,7 +41,7 @@ router.get('/forming-analysis', authenticate, async (req, res) => {
     const result = await reportService.getFormingAnalysis({
       startDate: fromDate ? new Date(fromDate as string) : undefined,
       endDate: toDate ? new Date(toDate as string) : undefined,
-      polId: polId as string,
+      polId: polId ? parseInt(polId as string, 10) : undefined,
       format: format as string,
     });
     
@@ -94,7 +94,7 @@ router.get('/production-progress', authenticate, async (req, res) => {
     const { polId, includeAlerts } = req.query;
     
     const result = await reportService.getProductionProgress({
-      polId: polId as string,
+      polId: polId ? parseInt(polId as string, 10) : undefined,
       includeAlerts: includeAlerts === 'true',
     });
     

@@ -2,14 +2,14 @@ import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { apiClient } from '../../services/api';
 
 interface Report {
-  reportId: string;
+  reportId: number;
   reportType: 'POL_SUMMARY' | 'FORMING_ANALYSIS' | 'QC_ANALYSIS' | 'PRODUCTION_PROGRESS';
   generatedAt: string;
   generatedBy: string;
   filters: {
     fromDate?: string;
     toDate?: string;
-    polId?: string;
+    polId?: number;
     status?: string;
   };
   data?: any;

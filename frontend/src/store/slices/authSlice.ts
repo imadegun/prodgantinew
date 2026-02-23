@@ -2,7 +2,7 @@ import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { apiClient } from '../../services/api';
 
 interface User {
-  userId: string;
+  userId: number;
   username: string;
   email: string;
   fullName: string;
@@ -16,7 +16,7 @@ interface LoginRequest {
 
 interface BackendLoginResponse {
   user: {
-    id: string;
+    id: number;
     username: string;
     fullName: string;
     role: 'MANAGER' | 'ADMIN' | 'WORKER';

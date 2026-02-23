@@ -8,7 +8,7 @@ interface ProductionStage {
   remakeCycle: number;
   completedAt: string;
   completedBy: {
-    userId: string;
+    userId: number;
     fullName: string;
   };
   notes: string;
@@ -17,7 +17,7 @@ interface ProductionStage {
 }
 
 interface ProductionStagesResponse {
-  polDetailId: string;
+  polDetailId: number;
   productCode: string;
   productName: string;
   orderQuantity: number;
@@ -26,7 +26,7 @@ interface ProductionStagesResponse {
 }
 
 interface TrackProductionRequest {
-  polDetailId: string;
+  polDetailId: number;
   stage: string;
   quantity: number;
   rejectQuantity?: number;
@@ -35,7 +35,7 @@ interface TrackProductionRequest {
 }
 
 interface TrackProductionResponse {
-  recordId: string;
+  recordId: number;
   stage: string;
   quantity: number;
   rejectQuantity: number;
@@ -44,7 +44,7 @@ interface TrackProductionResponse {
   createdAt: string;
   discrepancyDetected: boolean;
   alerts?: Array<{
-    alertId: string;
+    alertId: number;
     alertType: string;
     alertMessage: string;
     priority: string;
@@ -52,7 +52,7 @@ interface TrackProductionResponse {
 }
 
 interface ActiveProductionTask {
-  polDetailId: string;
+  polDetailId: number;
   polNumber: string;
   productCode: string;
   productName: string;
@@ -68,7 +68,7 @@ interface ActiveProductionResponse {
 }
 
 interface DecorationTask {
-  taskId: string;
+  taskId: number;
   taskName: string;
   taskDescription: string;
   quantityRequired: number;
@@ -81,19 +81,19 @@ interface DecorationTask {
 }
 
 interface DecorationTasksResponse {
-  polDetailId: string;
+  polDetailId: number;
   tasks: DecorationTask[];
 }
 
 interface TrackDecorationTaskRequest {
-  taskId: string;
+  taskId: number;
   quantityCompleted?: number;
   quantityRejected?: number;
   notes?: string;
 }
 
 export const productionService = {
-  async getProductionStages(polDetailId: string): Promise<ProductionStagesResponse> {
+  async getProductionStages(polDetailId: number): Promise<ProductionStagesResponse> {
     const response = await apiClient.get<ProductionStagesResponse>(
       `/production/${polDetailId}/stages`
     );
@@ -113,7 +113,7 @@ export const productionService = {
     return response;
   },
 
-  async getDecorationTasks(polDetailId: string): Promise<DecorationTasksResponse> {
+  async getDecorationTasks(polDetailId: number): Promise<DecorationTasksResponse> {
     const response = await apiClient.get<DecorationTasksResponse>(
       `/decorations/${polDetailId}`
     );
@@ -121,7 +121,7 @@ export const productionService = {
   },
 
   async createDecorationTask(data: {
-    polDetailId: string;
+    polDetailId: number;
     taskName: string;
     taskDescription?: string;
     quantityRequired: number;
@@ -131,12 +131,12 @@ export const productionService = {
     return response;
   },
 
-  async updateDecorationTask(taskId: string, data: TrackDecorationTaskRequest): Promise<DecorationTask> {
+  async updateDecorationTask(taskId: number, data: TrackDecorationTaskRequest): Promise<DecorationTask> {
     const response = await apiClient.put<DecorationTask>(`/decorations/${taskId}`, data);
     return response;
   },
 
-  async deleteDecorationTask(taskId: string): Promise<void> {
+  async deleteDecorationTask(taskId: number): Promise<void> {
     await apiClient.delete(`/decorations/${taskId}`);
   },
 };

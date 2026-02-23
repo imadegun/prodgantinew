@@ -2,8 +2,8 @@ import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { apiClient } from '../../services/api';
 
 interface Alert {
-  alertId: string;
-  polDetailId: string;
+  alertId: number;
+  polDetailId: number;
   polNumber: string;
   productCode: string;
   productName: string;
@@ -12,9 +12,9 @@ interface Alert {
   priority: 'CRITICAL' | 'WARNING' | 'INFORMATIONAL';
   status: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED';
   createdAt: string;
-  acknowledgedBy?: string;
+  acknowledgedBy?: number;
   acknowledgedAt?: string;
-  resolvedBy?: string;
+  resolvedBy?: number;
   resolvedAt?: string;
   resolutionNotes?: string;
 }
@@ -24,7 +24,7 @@ interface AlertListQuery {
   limit?: number;
   status?: string;
   priority?: string;
-  polDetailId?: string;
+  polDetailId?: number;
 }
 
 interface AlertListResponse {
@@ -117,7 +117,7 @@ const alertSlice = createSlice({
     clearError: (state) => {
       state.error = null;
     },
-    markAlertAsRead: (state, action: PayloadAction<string>) => {
+    markAlertAsRead: (state, action: PayloadAction<number>) => {
       const alert = state.alerts.find((a) => a.alertId === action.payload);
       if (alert && alert.status === 'OPEN') {
         alert.status = 'ACKNOWLEDGED';

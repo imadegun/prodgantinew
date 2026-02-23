@@ -6,7 +6,7 @@ interface Client {
 }
 
 interface POL {
-  polId: string;
+  polId: number;
   poNumber: string;
   clientName: string;
   totalOrder: number;
@@ -16,14 +16,14 @@ interface POL {
   createdAt: string;
   updatedAt: string;
   createdBy: {
-    userId: string;
+    userId: number;
     fullName: string;
   };
 }
 
 interface POLDetail {
-  polDetailId: string;
-  polId: string;
+  polDetailId: number;
+  polId: number;
   productCode: string;
   productName: string;
   color: string | null;
@@ -84,7 +84,7 @@ interface POLDetailResponse {
   pol: POL;
   details: POLDetail[];
   activeAlerts: Array<{
-    alertId: string;
+    alertId: number;
     alertType: string;
     alertMessage: string;
     priority: string;
@@ -113,7 +113,7 @@ export const polService = {
     return response;
   },
 
-  async getPOLById(polId: string): Promise<POLDetailResponse> {
+  async getPOLById(polId: number): Promise<POLDetailResponse> {
     const response = await apiClient.get<POLDetailResponse>(`/pols/${polId}`);
     return response;
   },
@@ -123,12 +123,12 @@ export const polService = {
     return response;
   },
 
-  async updatePOL(polId: string, data: UpdatePOLRequest): Promise<POL> {
+  async updatePOL(polId: number, data: UpdatePOLRequest): Promise<POL> {
     const response = await apiClient.put<POL>(`/pols/${polId}`, data);
     return response;
   },
 
-  async deletePOL(polId: string): Promise<void> {
+  async deletePOL(polId: number): Promise<void> {
     await apiClient.delete(`/pols/${polId}`);
   },
 

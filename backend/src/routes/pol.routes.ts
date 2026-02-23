@@ -45,8 +45,9 @@ router.get('/', authenticate, async (req, res) => {
 router.get('/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
+    const polId = parseInt(id, 10);
     
-    const result = await polService.getPOLById(id);
+    const result = await polService.getPOLById(polId);
     
     res.json({
       success: true,
@@ -123,6 +124,7 @@ router.post('/', authenticate, authorize('MANAGER'), async (req: AuthenticatedRe
 router.put('/:id', authenticate, authorize('MANAGER'), async (req, res) => {
   try {
     const { id } = req.params;
+    const polId = parseInt(id, 10);
     const { clientName, deliveryDate, status } = req.body;
     
     const updateData: any = {};
@@ -136,7 +138,7 @@ router.put('/:id', authenticate, authorize('MANAGER'), async (req, res) => {
       updateData.status = status;
     }
     
-    const result = await polService.updatePOL(id, updateData);
+    const result = await polService.updatePOL(polId, updateData);
     
     res.json({
       success: true,
@@ -159,8 +161,9 @@ router.put('/:id', authenticate, authorize('MANAGER'), async (req, res) => {
 router.delete('/:id', authenticate, authorize('MANAGER'), async (req, res) => {
   try {
     const { id } = req.params;
+    const polId = parseInt(id, 10);
     
-    await polService.deletePOL(id);
+    await polService.deletePOL(polId);
     
     res.json({
       success: true,
