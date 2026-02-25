@@ -1,19 +1,76 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
-import { Box, Typography, Card, CardContent, Grid, Chip, LinearProgress, Button, Divider, Table, TableBody, TableCell, TableHead, TableRow, Alert, Skeleton, Tabs, Tab } from '@mui/material';
-import { ArrowBack as ArrowBackIcon, Edit as EditIcon, CheckCircle as CheckCircleIcon, Warning as WarningIcon } from '@mui/icons-material';
+import { useSelector } from 'react-redux';
+import {
+  Box,
+  Typography,
+  Card,
+  CardContent,
+  Grid,
+  Chip,
+  LinearProgress,
+  Button,
+  Divider,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  Alert,
+  Skeleton,
+  Tabs,
+  Tab,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  IconButton,
+  Snackbar,
+} from '@mui/material';
+import {
+  ArrowBack as ArrowBackIcon,
+  Edit as EditIcon,
+  CheckCircle as CheckCircleIcon,
+  Warning as WarningIcon,
+  CheckCircle as SuccessIcon,
+  Delete as DeleteIcon,
+  Add as AddIcon,
+} from '@mui/icons-material';
 import { RootState } from '../store';
 import { fetchPOLById } from '../store/slices/polSlice';
+import { useAppDispatch } from '../hooks/useAppSelector';
 import { polService } from '../services/pol.service';
 
 const POLDetail = (): JSX.Element => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const dispatch = useDispatch();
+  const dispatch = useAppDispatch();
   const { currentPOL, currentPOLDetails, isLoading, error } = useSelector((state: RootState) => state.pol);
   const [activeTab, setActiveTab] = useState(0);
   const [localLoading, setLocalLoading] = useState(true);
+  const [openEditDialog, setOpenEditDialog] = useState(false);
+  const [selectedDetail, setSelectedDetail] = useState<any>(null);
+  const [editFormData, setEditFormData] = useState({
+    productCode: '',
+    productName: '',
+    color: '',
+    material: '',
+    size: '',
+    orderQuantity: 0,
+  });
+  const [editError, setEditError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [openAddDialog, setOpenAddDialog] = useState(false);
+  const [addFormData, setAddFormData] = useState({
+    productCode: '',
+    productName: '',
+    color: '',
+    material: '',
+    size: '',
+    orderQuantity: 1,
+  });
+  const [addError, setAddError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -31,6 +88,125 @@ const POLDetail = (): JSX.Element => {
     };
     fetchData();
   }, [id, dispatch]);
+
+  const handleOpenEditDialog = (detail: any) => {
+    setSelectedDetail(detail);
+    setEditFormData({
+      productCode: detail.productCode || '',
+      productName: detail.productName || '',
+      color: detail.color || '',
+      material: detail.material || '',
+      size: detail.size || '',
+      orderQuantity: detail.orderQuantity || 0,
+    });
+    setOpenEditDialog(true);
+  };
+
+  const handleCloseEditDialog = () => {
+    setOpenEditDialog(false);
+    setSelectedDetail(null);
+    setEditError(null);
+  };
+
+  const handleUpdateDetail = async () => {
+    try {
+      if (!selectedDetail) {
+        setEditError('No product selected');
+        return;
+      }
+      if (!editFormData.productCode || !editFormData.productName || editFormData.orderQuantity <= 0) {
+        setEditError('Please fill in all required fields');
+        return;
+      }
+
+      // Call API to update POL detail
+      await polService.updatePOLDetail(selectedDetail.id, {
+        productCode: editFormData.productCode,
+        productName: editFormData.productName,
+        color: editFormData.color,
+        material: editFormData.material,
+        size: editFormData.size,
+        quantity: editFormData.orderQuantity,
+      });
+
+      // Refresh POL data
+      if (id) {
+        await dispatch(fetchPOLById(parseInt(id, 10)));
+      }
+      
+      handleCloseEditDialog();
+      setSuccessMessage('Product updated successfully');
+    } catch (err: any) {
+      setEditError(err.message || 'Failed to update product. Please try again.');
+    }
+  };
+
+  const handleDeleteDetail = async (detailId: number) => {
+    if (!window.confirm('Are you sure you want to delete this product?')) {
+      return;
+    }
+    
+    try {
+      await polService.deletePOLDetail(detailId);
+      
+      // Refresh POL data
+      if (id) {
+        await dispatch(fetchPOLById(parseInt(id, 10)));
+      }
+      
+      setSuccessMessage('Product deleted successfully');
+    } catch (err: any) {
+      setEditError(err.message || 'Failed to delete product. Please try again.');
+    }
+  };
+
+  const handleOpenAddDialog = () => {
+    setAddFormData({
+      productCode: '',
+      productName: '',
+      color: '',
+      material: '',
+      size: '',
+      orderQuantity: 1,
+    });
+    setOpenAddDialog(true);
+  };
+
+  const handleCloseAddDialog = () => {
+    setOpenAddDialog(false);
+    setAddError(null);
+  };
+
+  const handleAddProduct = async () => {
+    try {
+      if (!addFormData.productCode || !addFormData.productName || addFormData.orderQuantity <= 0) {
+        setAddError('Please fill in all required fields');
+        return;
+      }
+
+      if (!id) {
+        setAddError('POL ID not found');
+        return;
+      }
+
+      await polService.addProductToPOL(parseInt(id, 10), {
+        productCode: addFormData.productCode,
+        productName: addFormData.productName,
+        color: addFormData.color,
+        material: addFormData.material,
+        size: addFormData.size,
+        quantity: addFormData.orderQuantity,
+      });
+
+      // Refresh POL data
+      await dispatch(fetchPOLById(parseInt(id, 10)));
+      
+      handleCloseAddDialog();
+      setSuccessMessage('Product added successfully');
+    } catch (err: any) {
+      setAddError(err.message || 'Failed to add product. Please try again.');
+    }
+  };
 
   const getStatusColor = (status: string): 'success' | 'info' | 'error' | 'default' => {
     switch (status) {
@@ -54,7 +230,6 @@ const POLDetail = (): JSX.Element => {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
           <Skeleton variant="rectangular" width={100} height={40} />
           <Skeleton variant="text" width={300} height={40} />
-          <Skeleton variant="rectangular" width={120} height={40} sx={{ ml: 'auto' }} />
         </Box>
         <Grid container spacing={3}>
           <Grid item xs={12} md={4}>
@@ -82,6 +257,7 @@ const POLDetail = (): JSX.Element => {
   }
 
   const details = currentPOLDetails.length > 0 ? currentPOLDetails : [];
+  const totalOrderQty = details.reduce((sum: number, d: any) => sum + (d.orderQuantity || 0), 0);
 
   return (
     <Box>
@@ -92,9 +268,6 @@ const POLDetail = (): JSX.Element => {
         <Typography variant="h4" sx={{ fontWeight: 600, flex: 1 }}>
           {currentPOL.poNumber || `POL-${currentPOL.id}`} - Detail View
         </Typography>
-        <Button variant="contained" startIcon={<EditIcon />}>
-          Edit POL
-        </Button>
       </Box>
 
       {error && (
@@ -144,8 +317,13 @@ const POLDetail = (): JSX.Element => {
                 </Box>
                 <Divider />
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography color="text.secondary">Total Order</Typography>
-                  <Typography sx={{ fontWeight: 500 }}>{currentPOL.totalOrder || details.reduce((sum: number, d) => sum + (d.orderQuantity || 0), 0)}</Typography>
+                  <Typography color="text.secondary">Total Products</Typography>
+                  <Typography sx={{ fontWeight: 500 }}>{details.length}</Typography>
+                </Box>
+                <Divider />
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography color="text.secondary">Total Order Qty</Typography>
+                  <Typography sx={{ fontWeight: 500 }}>{totalOrderQty}</Typography>
                 </Box>
               </Box>
             </CardContent>
@@ -197,7 +375,17 @@ const POLDetail = (): JSX.Element => {
         <Grid item xs={12}>
           <Card>
             <CardContent>
-              <Typography variant="h6" sx={{ mb: 2 }}>Products</Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6">Products</Typography>
+                <Button
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  onClick={handleOpenAddDialog}
+                  size="small"
+                >
+                  Add Product
+                </Button>
+              </Box>
               {details.length === 0 ? (
                 <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
                   No products added yet
@@ -214,6 +402,7 @@ const POLDetail = (): JSX.Element => {
                       <TableCell>Order Qty</TableCell>
                       <TableCell>Current Stage</TableCell>
                       <TableCell>Status</TableCell>
+                      <TableCell align="right">Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -241,6 +430,14 @@ const POLDetail = (): JSX.Element => {
                             variant="outlined"
                           />
                         </TableCell>
+                        <TableCell align="right">
+                          <IconButton size="small" onClick={() => handleOpenEditDialog(detail)}>
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton size="small" color="error" onClick={() => handleDeleteDetail(detail.id)}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -265,6 +462,175 @@ const POLDetail = (): JSX.Element => {
           </Card>
         </Grid>
       </Grid>
+
+      {/* Edit Product Dialog */}
+      <Dialog open={openEditDialog} onClose={handleCloseEditDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>Edit Product</DialogTitle>
+        <DialogContent>
+          {editError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {editError}
+            </Alert>
+          )}
+          <Box sx={{ mt: 2 }}>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Product Code"
+                  value={editFormData.productCode}
+                  onChange={(e) => setEditFormData({ ...editFormData, productCode: e.target.value })}
+                  required
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Product Name"
+                  value={editFormData.productName}
+                  onChange={(e) => setEditFormData({ ...editFormData, productName: e.target.value })}
+                  required
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Color"
+                  value={editFormData.color}
+                  onChange={(e) => setEditFormData({ ...editFormData, color: e.target.value })}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Material"
+                  value={editFormData.material}
+                  onChange={(e) => setEditFormData({ ...editFormData, material: e.target.value })}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Size"
+                  value={editFormData.size}
+                  onChange={(e) => setEditFormData({ ...editFormData, size: e.target.value })}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Order Quantity"
+                  type="number"
+                  value={editFormData.orderQuantity}
+                  onChange={(e) => setEditFormData({ ...editFormData, orderQuantity: parseInt(e.target.value, 10) || 0 })}
+                  required
+                />
+              </Grid>
+            </Grid>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseEditDialog}>Cancel</Button>
+          <Button onClick={handleUpdateDetail} variant="contained">
+            Update
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Add Product Dialog */}
+      <Dialog open={openAddDialog} onClose={handleCloseAddDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>Add Product</DialogTitle>
+        <DialogContent>
+          {addError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {addError}
+            </Alert>
+          )}
+          <Box sx={{ mt: 2 }}>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Product Code"
+                  value={addFormData.productCode}
+                  onChange={(e) => setAddFormData({ ...addFormData, productCode: e.target.value })}
+                  required
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Product Name"
+                  value={addFormData.productName}
+                  onChange={(e) => setAddFormData({ ...addFormData, productName: e.target.value })}
+                  required
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Color"
+                  value={addFormData.color}
+                  onChange={(e) => setAddFormData({ ...addFormData, color: e.target.value })}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Material"
+                  value={addFormData.material}
+                  onChange={(e) => setAddFormData({ ...addFormData, material: e.target.value })}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Size"
+                  value={addFormData.size}
+                  onChange={(e) => setAddFormData({ ...addFormData, size: e.target.value })}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Order Quantity"
+                  type="number"
+                  value={addFormData.orderQuantity}
+                  onChange={(e) => setAddFormData({ ...addFormData, orderQuantity: parseInt(e.target.value, 10) || 0 })}
+                  required
+                />
+              </Grid>
+            </Grid>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseAddDialog}>Cancel</Button>
+          <Button onClick={handleAddProduct} variant="contained">
+            Add Product
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Success/Error Snackbar */}
+      <Snackbar
+        open={!!successMessage || !!editError}
+        autoHideDuration={6000}
+        onClose={() => {
+          setSuccessMessage(null);
+          setEditError(null);
+        }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        {successMessage ? (
+          <Alert severity="success" icon={<SuccessIcon fontSize="inherit" />}>
+            {successMessage}
+          </Alert>
+        ) : (
+          <Alert severity="error">
+            {editError}
+          </Alert>
+        )}
+      </Snackbar>
     </Box>
   );
 };

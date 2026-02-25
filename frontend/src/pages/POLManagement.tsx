@@ -25,6 +25,11 @@ import {
   CircularProgress,
   Fab,
   Tooltip,
+  Snackbar,
+  Alert,
+  FormControl,
+  InputLabel,
+  Select,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -34,6 +39,7 @@ import {
   MoreVert as MoreVertIcon,
   Refresh as RefreshIcon,
   Visibility as VisibilityIcon,
+  CheckCircle as SuccessIcon,
 } from '@mui/icons-material';
 import { useAppSelector, useAppDispatch } from '../hooks/useAppSelector';
 import { fetchPOLs, createPOL, updatePOL, deletePOL } from '../store/slices/polSlice';
@@ -60,6 +66,27 @@ const POLManagement = () => {
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [selectedPOL, setSelectedPOL] = useState<any>(null);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [clients, setClients] = useState<Array<{ designCode: string; designName: string }>>([]);
+  const [clientsLoading, setClientsLoading] = useState(false);
+
+  // Load clients on mount
+  useEffect(() => {
+    loadClients();
+  }, []);
+
+  const loadClients = async () => {
+    setClientsLoading(true);
+    try {
+      const result = await polService.getClients();
+      setClients(result?.clients || []);
+    } catch (err: any) {
+      console.error('Failed to load clients:', err);
+    } finally {
+      setClientsLoading(false);
+    }
+  };
 
   // Form state
   const [formData, setFormData] = useState<{
@@ -121,6 +148,7 @@ const POLManagement = () => {
       status: pol.status,
     });
     setOpenEditDialog(true);
+    setAnchorEl(null);
   };
 
   const handleCloseEditDialog = () => {
@@ -131,6 +159,7 @@ const POLManagement = () => {
   const handleOpenDeleteDialog = (pol: any) => {
     setSelectedPOL(pol);
     setOpenDeleteDialog(true);
+    setAnchorEl(null);
   };
 
   const handleCloseDeleteDialog = () => {
@@ -150,7 +179,7 @@ const POLManagement = () => {
   const handleCreatePOL = async () => {
     try {
       if (!formData.clientName || !formData.deliveryDate) {
-        alert('Please fill in all required fields');
+        setErrorMessage('Please fill in all required fields');
         return;
       }
 
@@ -163,20 +192,21 @@ const POLManagement = () => {
 
       handleCloseCreateDialog();
       handleRefresh();
-    } catch (error) {
+      setSuccessMessage('POL created successfully');
+    } catch (error: any) {
       console.error('Error creating POL:', error);
-      alert('Failed to create POL. Please try again.');
+      setErrorMessage(error.message || 'Failed to create POL. Please try again.');
     }
   };
 
   const handleUpdatePOL = async () => {
     try {
       if (!selectedPOL) {
-        alert('No POL selected');
+        setErrorMessage('No POL selected');
         return;
       }
       if (!formData.clientName || !formData.deliveryDate) {
-        alert('Please fill in all required fields');
+        setErrorMessage('Please fill in all required fields');
         return;
       }
 
@@ -192,25 +222,27 @@ const POLManagement = () => {
 
       handleCloseEditDialog();
       handleRefresh();
-    } catch (error) {
+      setSuccessMessage('POL updated successfully');
+    } catch (error: any) {
       console.error('Error updating POL:', error);
-      alert('Failed to update POL. Please try again.');
+      setErrorMessage(error.message || 'Failed to update POL. Please try again.');
     }
   };
 
   const handleDeletePOL = async () => {
     try {
       if (!selectedPOL) {
-        alert('No POL selected');
+        setErrorMessage('No POL selected');
         return;
       }
       const polId = selectedPOL.polId || selectedPOL.id;
       await dispatch(deletePOL(polId));
       handleCloseDeleteDialog();
       handleRefresh();
-    } catch (error) {
+      setSuccessMessage('POL deleted successfully');
+    } catch (error: any) {
       console.error('Error deleting POL:', error);
-      alert('Failed to delete POL. Please try again.');
+      setErrorMessage(error.message || 'Failed to delete POL. Please try again.');
     }
   };
 
@@ -381,13 +413,20 @@ const POLManagement = () => {
           <Box sx={{ mt: 2 }}>
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Client Name"
-                  value={formData.clientName}
-                  onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
-                  required
-                />
+                <FormControl fullWidth required>
+                  <InputLabel>Client Name</InputLabel>
+                  <Select
+                    value={formData.clientName}
+                    label="Client Name"
+                    onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
+                  >
+                    {clients.map((client) => (
+                      <MenuItem key={client.designCode} value={client.designName}>
+                        {client.designName} ({client.designCode})
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
               </Grid>
               <Grid item xs={12} sm={6}>
                 <TextField
@@ -417,7 +456,7 @@ const POLManagement = () => {
                   select
                   label="Status"
                   value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value as 'DRAFT' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' })}
                 >
                   <MenuItem value="DRAFT">Draft</MenuItem>
                   <MenuItem value="IN_PROGRESS">In Progress</MenuItem>
@@ -443,13 +482,20 @@ const POLManagement = () => {
           <Box sx={{ mt: 2 }}>
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Client Name"
-                  value={formData.clientName}
-                  onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
-                  required
-                />
+                <FormControl fullWidth required>
+                  <InputLabel>Client Name</InputLabel>
+                  <Select
+                    value={formData.clientName}
+                    label="Client Name"
+                    onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
+                  >
+                    {clients.map((client) => (
+                      <MenuItem key={client.designCode} value={client.designName}>
+                        {client.designName} ({client.designCode})
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
               </Grid>
               <Grid item xs={12} sm={6}>
                 <TextField
@@ -479,7 +525,7 @@ const POLManagement = () => {
                   select
                   label="Status"
                   value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value as 'DRAFT' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' })}
                 >
                   <MenuItem value="DRAFT">Draft</MenuItem>
                   <MenuItem value="IN_PROGRESS">In Progress</MenuItem>
@@ -514,6 +560,27 @@ const POLManagement = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Success/Error Snackbar */}
+      <Snackbar
+        open={!!successMessage || !!errorMessage}
+        autoHideDuration={6000}
+        onClose={() => {
+          setSuccessMessage(null);
+          setErrorMessage(null);
+        }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        {successMessage ? (
+          <Alert severity="success" icon={<SuccessIcon fontSize="inherit" />}>
+            {successMessage}
+          </Alert>
+        ) : (
+          <Alert severity="error">
+            {errorMessage}
+          </Alert>
+        )}
+      </Snackbar>
     </Box>
   );
 };

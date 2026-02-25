@@ -62,12 +62,24 @@ export class POLService {
         skip,
         take: limit,
         orderBy: { poDate: 'desc' },
+        include: {
+          _count: {
+            select: { polDetails: true },
+          },
+        },
       }),
       prisma.pOL.count({ where }),
     ]);
 
+    // Transform the result to include totalOrder count and polId alias
+    const polsWithTotalOrder = pols.map((pol: any) => ({
+      ...pol,
+      polId: pol.id, // Add polId as alias for id
+      totalOrder: pol._count?.polDetails || 0,
+    }));
+
     return {
-      pols,
+      pols: polsWithTotalOrder,
       pagination: {
         page,
         limit,

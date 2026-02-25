@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
+import { useSelector } from 'react-redux';
 import {
   Box,
   Card,
@@ -32,6 +32,7 @@ import {
   DialogContent,
   DialogActions,
   Alert,
+  Snackbar,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -40,14 +41,16 @@ import {
   Visibility as ViewIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
+  CheckCircle as SuccessIcon,
 } from '@mui/icons-material';
 import { RootState } from '../store';
 import { fetchPOLs, setFilters, deletePOL, updatePOL } from '../store/slices/polSlice';
 import { polService } from '../services/pol.service';
+import { useAppDispatch } from '../hooks/useAppSelector';
 
 const POLList = (): JSX.Element => {
   const navigate = useNavigate();
-  const dispatch = useDispatch();
+  const dispatch = useAppDispatch();
   const { pols, loading, filters } = useSelector((state: RootState) => state.pol);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -55,6 +58,7 @@ const POLList = (): JSX.Element => {
   const [selectedPOL, setSelectedPOL] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [openEditDialog, setOpenEditDialog] = useState(false);
+  const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [editFormData, setEditFormData] = useState<{
     clientName: string;
     deliveryDate: string;
@@ -65,6 +69,26 @@ const POLList = (): JSX.Element => {
     status: 'DRAFT',
   });
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [clients, setClients] = useState<Array<{ designCode: string; designName: string }>>([]);
+  const [clientsLoading, setClientsLoading] = useState(false);
+
+  // Load clients on mount
+  useEffect(() => {
+    loadClients();
+  }, []);
+
+  const loadClients = async () => {
+    setClientsLoading(true);
+    try {
+      const result = await polService.getClients();
+      setClients(result?.clients || []);
+    } catch (err: any) {
+      console.error('Failed to load clients:', err);
+    } finally {
+      setClientsLoading(false);
+    }
+  };
 
   useEffect(() => {
     dispatch(fetchPOLs({ page: page + 1, limit: rowsPerPage, ...filters }));
@@ -86,15 +110,30 @@ const POLList = (): JSX.Element => {
 
   const handleMenuClose = () => {
     setAnchorEl(null);
-    setSelectedPOL(null);
   };
 
   const handleDelete = () => {
+    setOpenDeleteDialog(true);
+    setAnchorEl(null);
+  };
+
+  const handleConfirmDelete = async () => {
     if (selectedPOL) {
-      const polId = selectedPOL.polId || selectedPOL.id;
-      dispatch(deletePOL(polId));
-      handleMenuClose();
+      try {
+        const polId = selectedPOL.polId || selectedPOL.id;
+        await dispatch(deletePOL(polId));
+        setSuccessMessage('POL deleted successfully');
+        setOpenDeleteDialog(false);
+        setSelectedPOL(null);
+      } catch (err: any) {
+        setError(err.message || 'Failed to delete POL. Please try again.');
+      }
     }
+  };
+
+  const handleCloseDeleteDialog = () => {
+    setOpenDeleteDialog(false);
+    setSelectedPOL(null);
   };
 
   const handleOpenEditDialog = (pol: any) => {
@@ -105,7 +144,7 @@ const POLList = (): JSX.Element => {
       status: pol.status,
     });
     setOpenEditDialog(true);
-    handleMenuClose();
+    setAnchorEl(null);
   };
 
   const handleCloseEditDialog = () => {
@@ -137,6 +176,7 @@ const POLList = (): JSX.Element => {
 
       handleCloseEditDialog();
       setError(null);
+      setSuccessMessage('POL updated successfully');
     } catch (err: any) {
       setError(err.message || 'Failed to update POL. Please try again.');
     }
@@ -299,7 +339,11 @@ const POLList = (): JSX.Element => {
         open={Boolean(anchorEl)}
         onClose={handleMenuClose}
       >
-        <MenuItem onClick={() => { navigate(`/pols/${selectedPOL?.polId || selectedPOL?.id}`); handleMenuClose(); }}>
+        <MenuItem onClick={() => {
+          const polId = selectedPOL?.polId || selectedPOL?.id;
+          handleMenuClose();
+          navigate(`/pols/${polId}`);
+        }}>
           <ListItemIcon><ViewIcon fontSize="small" /></ListItemIcon>
           <ListItemText>View Details</ListItemText>
         </MenuItem>
@@ -325,13 +369,20 @@ const POLList = (): JSX.Element => {
           <Box sx={{ mt: 2 }}>
             <Grid container spacing={2}>
               <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Client Name"
-                  value={editFormData.clientName}
-                  onChange={(e) => setEditFormData({ ...editFormData, clientName: e.target.value })}
-                  required
-                />
+                <FormControl fullWidth required>
+                  <InputLabel>Client Name</InputLabel>
+                  <Select
+                    value={editFormData.clientName}
+                    label="Client Name"
+                    onChange={(e) => setEditFormData({ ...editFormData, clientName: e.target.value })}
+                  >
+                    {clients.map((client) => (
+                      <MenuItem key={client.designCode} value={client.designName}>
+                        {client.designName} ({client.designCode})
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
               </Grid>
               <Grid item xs={12}>
                 <TextField
@@ -350,7 +401,7 @@ const POLList = (): JSX.Element => {
                   <Select
                     value={editFormData.status}
                     label="Status"
-                    onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value })}
+                    onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value as 'DRAFT' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' })}
                   >
                     <MenuItem value="DRAFT">Draft</MenuItem>
                     <MenuItem value="IN_PROGRESS">In Progress</MenuItem>
@@ -369,6 +420,44 @@ const POLList = (): JSX.Element => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={openDeleteDialog} onClose={handleCloseDeleteDialog}>
+        <DialogTitle>Confirm Delete</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete POL <strong>{selectedPOL?.poNumber || `PO-${selectedPOL?.id}`}</strong>?
+            This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDeleteDialog}>Cancel</Button>
+          <Button onClick={handleConfirmDelete} color="error" variant="contained">
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Success/Error Snackbar */}
+      <Snackbar
+        open={!!successMessage || !!error}
+        autoHideDuration={6000}
+        onClose={() => {
+          setSuccessMessage(null);
+          setError(null);
+        }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        {successMessage ? (
+          <Alert severity="success" icon={<SuccessIcon fontSize="inherit" />}>
+            {successMessage}
+          </Alert>
+        ) : (
+          <Alert severity="error">
+            {error}
+          </Alert>
+        )}
+      </Snackbar>
     </Box>
   );
 };

@@ -160,4 +160,32 @@ export const polService = {
     const response = await apiClient.get(`/products/${productCode}/notes`);
     return response;
   },
+
+  async updatePOLDetail(detailId: number, data: {
+    productCode?: string;
+    productName?: string;
+    color?: string;
+    material?: string;
+    size?: string;
+    quantity?: number;
+  }): Promise<any> {
+    const response = await apiClient.put(`/pols/details/${detailId}`, data);
+    return response;
+  },
+
+  async deletePOLDetail(detailId: number): Promise<void> {
+    await apiClient.delete(`/pols/details/${detailId}`);
+  },
+
+  async addProductToPOL(polId: number, data: {
+    productCode: string;
+    productName: string;
+    color?: string;
+    material?: string;
+    size?: string;
+    quantity: number;
+  }): Promise<any> {
+    const response = await apiClient.post(`/pols/${polId}/products`, data);
+    return response;
+  },
 };
