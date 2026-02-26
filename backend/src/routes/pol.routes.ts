@@ -126,20 +126,20 @@ router.post('/', authenticate, authorize('MANAGER'), async (req: AuthenticatedRe
       createdBy: userId,
     });
     
-    // Products will be added separately via the add-product endpoint
-    // for (const product of products || []) {
-    //   await polService.addProductToPOL(result.id, {
-    //     productCode: product.productCode,
-    //     productName: product.productName,
-    //     quantity: product.orderQuantity || product.quantity || 1,
-    //     color: product.color,
-    //     texture: product.texture,
-    //     material: product.material,
-    //     size: product.size,
-    //     finalSize: product.finalSize,
-    //     notes: product.notes,
-    //   });
-    // }
+    // Save products to the POL
+    for (const product of products || []) {
+      await polService.addProductToPOL(result.id, {
+        productCode: product.productCode,
+        productName: product.productName,
+        quantity: product.orderQuantity || product.quantity || 1,
+        color: product.color,
+        texture: product.texture,
+        material: product.material,
+        size: product.size,
+        finalSize: product.finalSize,
+        notes: product.notes,
+      });
+    }
     
     res.status(201).json({
       success: true,

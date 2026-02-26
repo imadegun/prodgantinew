@@ -126,8 +126,8 @@ export class ProductService {
         SELECT 
           m.ID as id,
           m.CollectCode as productCode,
-          m.ClientDescription as productName,
-          COALESCE(n.NameDesc, c.CategoryName) as categoryName,
+          c.CategoryName as productName,
+          c.CategoryName as categoryName,
           COALESCE(cl.ColorName, '') as colorName,
           COALESCE(mt.MaterialName, '') as materialName,
           COALESCE(s.SizeName, '') as sizeName,
@@ -136,7 +136,6 @@ export class ProductService {
           m.ClientCode as clientCode,
           m.Photo1 as photo1
         FROM tblcollect_master m
-        LEFT JOIN tblcollect_name n ON m.NameCode = n.NameCode
         LEFT JOIN tblcollect_category c ON m.CategoryCode = c.CategoryCode
         LEFT JOIN tblcollect_color cl ON m.ColorCode = cl.ColorCode
         LEFT JOIN tblcollect_material mt ON m.MaterialCode = mt.MaterialCode
