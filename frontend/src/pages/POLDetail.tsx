@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import {
@@ -27,6 +27,9 @@ import {
   TextField,
   IconButton,
   Snackbar,
+  Autocomplete,
+  CircularProgress,
+  InputAdornment,
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -36,11 +39,31 @@ import {
   CheckCircle as SuccessIcon,
   Delete as DeleteIcon,
   Add as AddIcon,
+  Search as SearchIcon,
 } from '@mui/icons-material';
 import { RootState } from '../store';
 import { fetchPOLById } from '../store/slices/polSlice';
 import { useAppDispatch } from '../hooks/useAppSelector';
 import { polService } from '../services/pol.service';
+
+interface SearchProduct {
+  id: number;
+  productCode: string;
+  productName: string;
+  categoryName: string;
+  colorName: string;
+  materialName: string;
+  sizeName: string;
+  textureName: string;
+  designCode?: string;
+  clientCode?: string;
+  photo1?: string;
+}
+
+interface Client {
+  designCode: string;
+  designName: string;
+}
 
 const POLDetail = (): JSX.Element => {
   const { id } = useParams<{ id: string }>();
@@ -62,16 +85,20 @@ const POLDetail = (): JSX.Element => {
   const [editError, setEditError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [openAddDialog, setOpenAddDialog] = useState(false);
-  const [addFormData, setAddFormData] = useState({
-    productCode: '',
-    productName: '',
-    color: '',
-    material: '',
-    size: '',
-    orderQuantity: 1,
-  });
   const [addError, setAddError] = useState<string | null>(null);
+  
+  // Product search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchProduct[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<SearchProduct | null>(null);
+  const [quantity, setQuantity] = useState(1);
+  
+  // Clients state for getting designCode
+  const [clients, setClients] = useState<Client[]>([]);
+  const [polDesignCode, setPolDesignCode] = useState<string>('');
 
+  // Load POL data and clients
   useEffect(() => {
     const fetchData = async () => {
       if (id) {
@@ -88,6 +115,34 @@ const POLDetail = (): JSX.Element => {
     };
     fetchData();
   }, [id, dispatch]);
+  
+  // Load clients to find designCode for the POL's client
+  useEffect(() => {
+    const loadClients = async () => {
+      try {
+        const result = await polService.getClients();
+        const clientsList = result?.clients || [];
+        setClients(clientsList);
+        
+        // Find matching client for current POL
+        if (currentPOL?.clientName) {
+          const matchingClient = clientsList.find(
+            (c: Client) => c.designName === currentPOL.clientName
+          );
+          if (matchingClient) {
+            setPolDesignCode(matchingClient.designCode);
+            console.log('Found designCode for POL client:', matchingClient.designCode);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load clients:', err);
+      }
+    };
+    
+    if (currentPOL) {
+      loadClients();
+    }
+  }, [currentPOL]);
 
   const handleOpenEditDialog = (detail: any) => {
     setSelectedDetail(detail);
@@ -114,18 +169,13 @@ const POLDetail = (): JSX.Element => {
         setEditError('No product selected');
         return;
       }
-      if (!editFormData.productCode || !editFormData.productName || editFormData.orderQuantity <= 0) {
-        setEditError('Please fill in all required fields');
+      if (editFormData.orderQuantity <= 0) {
+        setEditError('Order quantity must be greater than 0');
         return;
       }
 
-      // Call API to update POL detail
+      // Call API to update POL detail - only quantity is editable
       await polService.updatePOLDetail(selectedDetail.id, {
-        productCode: editFormData.productCode,
-        productName: editFormData.productName,
-        color: editFormData.color,
-        material: editFormData.material,
-        size: editFormData.size,
         quantity: editFormData.orderQuantity,
       });
 
@@ -161,26 +211,87 @@ const POLDetail = (): JSX.Element => {
   };
 
   const handleOpenAddDialog = () => {
-    setAddFormData({
-      productCode: '',
-      productName: '',
-      color: '',
-      material: '',
-      size: '',
-      orderQuantity: 1,
-    });
+    setSearchQuery('');
+    setSearchResults([]);
+    setSelectedProduct(null);
+    setQuantity(1);
     setOpenAddDialog(true);
   };
 
   const handleCloseAddDialog = () => {
     setOpenAddDialog(false);
     setAddError(null);
+    setSearchQuery('');
+    setSearchResults([]);
+    setSelectedProduct(null);
+    setQuantity(1);
+  };
+
+  // Search products when dialog opens or search query changes
+  const handleSearch = useCallback(async () => {
+    if (!polDesignCode) {
+      console.warn('No designCode available for POL client');
+      return;
+    }
+    
+    setSearchLoading(true);
+    try {
+      console.log('Searching products with designCode:', polDesignCode);
+      const result = await polService.searchProducts(searchQuery || '', 100, polDesignCode);
+      setSearchResults(result?.products || []);
+    } catch (err) {
+      console.error('Failed to search products:', err);
+      setSearchResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
+  }, [polDesignCode, searchQuery]);
+
+  // Trigger search when dialog opens or query changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (openAddDialog) {
+        handleSearch();
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery, handleSearch, openAddDialog]);
+
+  // Check if product already exists in current POL
+  const isProductAlreadyAdded = (product: SearchProduct): boolean => {
+    const productCode = product.clientCode || product.productCode;
+    return currentPOLDetails.some(
+      (detail: any) => detail.productCode === productCode
+    );
+  };
+
+  const handleSelectProduct = (product: SearchProduct) => {
+    // Check if product is already in the list
+    if (isProductAlreadyAdded(product)) {
+      setAddError(`Product "${product.clientCode || product.productCode}" is already in the order list. Please select a different product.`);
+      setSelectedProduct(null);
+      return;
+    }
+    
+    setAddError(null);
+    setSelectedProduct(product);
   };
 
   const handleAddProduct = async () => {
     try {
-      if (!addFormData.productCode || !addFormData.productName || addFormData.orderQuantity <= 0) {
-        setAddError('Please fill in all required fields');
+      if (!selectedProduct) {
+        setAddError('Please select a product');
+        return;
+      }
+
+      // Double-check if product already exists
+      if (isProductAlreadyAdded(selectedProduct)) {
+        setAddError(`Product "${selectedProduct.clientCode || selectedProduct.productCode}" is already in the order list.`);
+        return;
+      }
+
+      if (quantity <= 0) {
+        setAddError('Quantity must be greater than 0');
         return;
       }
 
@@ -190,12 +301,12 @@ const POLDetail = (): JSX.Element => {
       }
 
       await polService.addProductToPOL(parseInt(id, 10), {
-        productCode: addFormData.productCode,
-        productName: addFormData.productName,
-        color: addFormData.color,
-        material: addFormData.material,
-        size: addFormData.size,
-        quantity: addFormData.orderQuantity,
+        productCode: selectedProduct.clientCode || selectedProduct.productCode,
+        productName: selectedProduct.categoryName || selectedProduct.productName,
+        color: selectedProduct.colorName,
+        material: selectedProduct.materialName,
+        size: selectedProduct.sizeName,
+        quantity: quantity,
       });
 
       // Refresh POL data
@@ -394,6 +505,7 @@ const POLDetail = (): JSX.Element => {
                 <Table>
                   <TableHead>
                     <TableRow>
+                      <TableCell>Photo</TableCell>
                       <TableCell>Product Code</TableCell>
                       <TableCell>Product Name</TableCell>
                       <TableCell>Color</TableCell>
@@ -408,6 +520,44 @@ const POLDetail = (): JSX.Element => {
                   <TableBody>
                     {details.map((detail: any) => (
                       <TableRow key={detail.id}>
+                        <TableCell>
+                          {detail.photo1 ? (
+                            <Box
+                              component="img"
+                              src={`/uploads/products/${detail.photo1}`}
+                              alt={detail.productName || 'Product'}
+                              sx={{
+                                width: 50,
+                                height: 50,
+                                objectFit: 'cover',
+                                borderRadius: 1,
+                                border: '1px solid',
+                                borderColor: 'divider'
+                              }}
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = 'none';
+                              }}
+                            />
+                          ) : (
+                            <Box
+                              sx={{
+                                width: 50,
+                                height: 50,
+                                borderRadius: 1,
+                                border: '1px dashed',
+                                borderColor: 'divider',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                bgcolor: 'action.hover',
+                              }}
+                            >
+                              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '10px' }}>
+                                No Photo
+                              </Typography>
+                            </Box>
+                          )}
+                        </TableCell>
                         <TableCell>{detail.productCode || '-'}</TableCell>
                         <TableCell>{detail.productName || '-'}</TableCell>
                         <TableCell>{detail.color || '-'}</TableCell>
@@ -479,8 +629,7 @@ const POLDetail = (): JSX.Element => {
                   fullWidth
                   label="Product Code"
                   value={editFormData.productCode}
-                  onChange={(e) => setEditFormData({ ...editFormData, productCode: e.target.value })}
-                  required
+                  InputProps={{ readOnly: true }}
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
@@ -488,8 +637,7 @@ const POLDetail = (): JSX.Element => {
                   fullWidth
                   label="Product Name"
                   value={editFormData.productName}
-                  onChange={(e) => setEditFormData({ ...editFormData, productName: e.target.value })}
-                  required
+                  InputProps={{ readOnly: true }}
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
@@ -497,7 +645,7 @@ const POLDetail = (): JSX.Element => {
                   fullWidth
                   label="Color"
                   value={editFormData.color}
-                  onChange={(e) => setEditFormData({ ...editFormData, color: e.target.value })}
+                  InputProps={{ readOnly: true }}
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
@@ -505,7 +653,7 @@ const POLDetail = (): JSX.Element => {
                   fullWidth
                   label="Material"
                   value={editFormData.material}
-                  onChange={(e) => setEditFormData({ ...editFormData, material: e.target.value })}
+                  InputProps={{ readOnly: true }}
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
@@ -513,7 +661,7 @@ const POLDetail = (): JSX.Element => {
                   fullWidth
                   label="Size"
                   value={editFormData.size}
-                  onChange={(e) => setEditFormData({ ...editFormData, size: e.target.value })}
+                  InputProps={{ readOnly: true }}
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
@@ -537,75 +685,166 @@ const POLDetail = (): JSX.Element => {
         </DialogActions>
       </Dialog>
 
-      {/* Add Product Dialog */}
-      <Dialog open={openAddDialog} onClose={handleCloseAddDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>Add Product</DialogTitle>
+      {/* Add Product Dialog - Search Based */}
+      <Dialog open={openAddDialog} onClose={handleCloseAddDialog} maxWidth="md" fullWidth>
+        <DialogTitle>
+          Add Product {currentPOL?.clientName ? `- ${currentPOL.clientName}` : ''}
+        </DialogTitle>
         <DialogContent>
           {addError && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {addError}
             </Alert>
           )}
-          <Box sx={{ mt: 2 }}>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Product Code"
-                  value={addFormData.productCode}
-                  onChange={(e) => setAddFormData({ ...addFormData, productCode: e.target.value })}
-                  required
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Product Name"
-                  value={addFormData.productName}
-                  onChange={(e) => setAddFormData({ ...addFormData, productName: e.target.value })}
-                  required
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Color"
-                  value={addFormData.color}
-                  onChange={(e) => setAddFormData({ ...addFormData, color: e.target.value })}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Material"
-                  value={addFormData.material}
-                  onChange={(e) => setAddFormData({ ...addFormData, material: e.target.value })}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Size"
-                  value={addFormData.size}
-                  onChange={(e) => setAddFormData({ ...addFormData, size: e.target.value })}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Order Quantity"
-                  type="number"
-                  value={addFormData.orderQuantity}
-                  onChange={(e) => setAddFormData({ ...addFormData, orderQuantity: parseInt(e.target.value, 10) || 0 })}
-                  required
-                />
-              </Grid>
-            </Grid>
-          </Box>
+          
+          {!polDesignCode && currentPOL?.clientName && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              Could not find DesignCode for client "{currentPOL.clientName}". Product search may not work correctly.
+            </Alert>
+          )}
+          
+          {/* Search Field */}
+          <TextField
+            fullWidth
+            autoFocus
+            margin="dense"
+            label="Search by Product Code or Name"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            disabled={!polDesignCode}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon />
+                </InputAdornment>
+              ),
+              endAdornment: searchLoading ? (
+                <InputAdornment position="end">
+                  <CircularProgress size={20} />
+                </InputAdornment>
+              ) : null,
+            }}
+          />
+
+          {/* Selected Product Info */}
+          {selectedProduct && (
+            <Box sx={{ mt: 2, p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+              <Typography variant="subtitle2" color="text.secondary">Selected Product:</Typography>
+              <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                {selectedProduct.clientCode || selectedProduct.productCode} - {selectedProduct.categoryName || selectedProduct.productName}
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
+                <Typography variant="body2" color="text.secondary">
+                  Color: {selectedProduct.colorName || '-'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Material: {selectedProduct.materialName || '-'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Size: {selectedProduct.sizeName || '-'}
+                </Typography>
+              </Box>
+              <TextField
+                fullWidth
+                type="number"
+                label="Quantity"
+                value={quantity}
+                onChange={(e) => setQuantity(parseInt(e.target.value, 10) || 1)}
+                sx={{ mt: 2 }}
+                inputProps={{ min: 1 }}
+              />
+            </Box>
+          )}
+          
+          {/* Search Results */}
+          {searchResults.length > 0 ? (
+            <Table size="small" sx={{ mt: 2 }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Image</TableCell>
+                  <TableCell>Product Code</TableCell>
+                  <TableCell>Category/Name</TableCell>
+                  <TableCell>Color</TableCell>
+                  <TableCell>Material</TableCell>
+                  <TableCell>Size</TableCell>
+                  <TableCell>Action</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {searchResults.map((product, index) => {
+                  const alreadyAdded = isProductAlreadyAdded(product);
+                  const isSelected = selectedProduct?.id === product.id;
+                  
+                  return (
+                    <TableRow
+                      key={index}
+                      sx={{
+                        bgcolor: isSelected ? 'action.selected' : alreadyAdded ? 'action.disabledBackground' : 'inherit',
+                        opacity: alreadyAdded ? 0.6 : 1,
+                        '&:hover': alreadyAdded ? {} : { bgcolor: 'action.hover' }
+                      }}
+                    >
+                      <TableCell>
+                        {product.photo1 ? (
+                          <Box
+                            component="img"
+                            src={`/uploads/products/${product.photo1}`}
+                            alt="Product"
+                            sx={{ width: 50, height: 50, objectFit: 'cover', borderRadius: 1 }}
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          '-'
+                        )}
+                      </TableCell>
+                      <TableCell>{product.clientCode || product.productCode}</TableCell>
+                      <TableCell>{product.categoryName || product.productName}</TableCell>
+                      <TableCell>{product.colorName || '-'}</TableCell>
+                      <TableCell>{product.materialName || '-'}</TableCell>
+                      <TableCell>{product.sizeName || '-'}</TableCell>
+                      <TableCell>
+                        {alreadyAdded ? (
+                          <Chip
+                            size="small"
+                            color="default"
+                            label="Already Added"
+                            variant="outlined"
+                          />
+                        ) : (
+                          <Button
+                            size="small"
+                            variant={isSelected ? "outlined" : "contained"}
+                            color={isSelected ? "success" : "primary"}
+                            onClick={() => handleSelectProduct(product)}
+                          >
+                            {isSelected ? 'Selected' : 'Select'}
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          ) : !searchLoading && openAddDialog ? (
+            <Typography color="text.secondary" sx={{ mt: 2, textAlign: 'center' }}>
+              {!polDesignCode
+                ? 'Cannot load products. Client DesignCode not found.'
+                : searchQuery
+                  ? 'No products found. Try a different search term.'
+                  : 'Type to search for products or view all products for this client.'}
+            </Typography>
+          ) : null}
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseAddDialog}>Cancel</Button>
-          <Button onClick={handleAddProduct} variant="contained">
+          <Button
+            onClick={handleAddProduct}
+            variant="contained"
+            disabled={!selectedProduct || quantity <= 0}
+          >
             Add Product
           </Button>
         </DialogActions>
