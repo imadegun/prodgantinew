@@ -66,17 +66,26 @@ export class POLService {
           _count: {
             select: { polDetails: true },
           },
+          polDetails: {
+            select: {
+              quantity: true,
+            },
+          },
         },
       }),
       prisma.pOL.count({ where }),
     ]);
 
-    // Transform the result to include totalOrder count and polId alias
-    const polsWithTotalOrder = pols.map((pol: any) => ({
-      ...pol,
-      polId: pol.id, // Add polId as alias for id
-      totalOrder: pol._count?.polDetails || 0,
-    }));
+    // Transform the result to include totalOrder count, totalQuantity sum, and polId alias
+    const polsWithTotalOrder = pols.map((pol: any) => {
+      const totalQuantity = pol.polDetails?.reduce((sum: number, detail: any) => sum + (detail.quantity || 0), 0) || 0;
+      return {
+        ...pol,
+        polId: pol.id, // Add polId as alias for id
+        totalOrder: pol._count?.polDetails || 0,
+        totalQuantity: totalQuantity,
+      };
+    });
 
     return {
       pols: polsWithTotalOrder,

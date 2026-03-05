@@ -10,6 +10,8 @@ interface POL {
   poNumber: string;
   clientName: string;
   totalOrder: number;
+  totalProducts?: number;
+  totalQuantity?: number;
   poDate: string;
   deliveryDate: string;
   status: 'DRAFT' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';

@@ -259,7 +259,8 @@ const POLList = (): JSX.Element => {
               <TableRow>
                 <TableCell>PO Number</TableCell>
                 <TableCell>Client</TableCell>
-                <TableCell align="center">Items</TableCell>
+                <TableCell align="center">Total Items</TableCell>
+                <TableCell align="center">Total Order</TableCell>
                 <TableCell>Delivery Date</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell>Progress</TableCell>
@@ -267,7 +268,7 @@ const POLList = (): JSX.Element => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {                filteredPOLs
+              {filteredPOLs
                 .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                 .map((pol) => (
                   <TableRow key={pol.polId || pol.id} hover>
@@ -278,6 +279,7 @@ const POLList = (): JSX.Element => {
                     </TableCell>
                     <TableCell>{pol.clientName || '-'}</TableCell>
                     <TableCell align="center">{pol.totalOrder || 0}</TableCell>
+                    <TableCell align="center">{pol.totalQuantity || '-'}</TableCell>
                     <TableCell>
                       {pol.deliveryDate
                         ? new Date(pol.deliveryDate).toLocaleDateString()
@@ -314,7 +316,7 @@ const POLList = (): JSX.Element => {
                 ))}
               {filteredPOLs.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
                     <Typography color="text.secondary">
                       No POLs found
                     </Typography>
