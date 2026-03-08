@@ -22,6 +22,7 @@ interface ProductionStagesResponse {
   productCode: string;
   productName: string;
   orderQuantity: number;
+  qtyToMake: number;
   currentStage: string;
   stages: ProductionStage[];
 }
@@ -32,6 +33,12 @@ interface TrackProductionRequest {
   quantity: number;
   rejectQuantity?: number;
   remakeCycle?: number;
+  category?: string;
+  remakeType?: string;
+  ovenId?: number;
+  operatorId?: number;
+  rejectReasonId?: number;
+  productionDate?: string;
   notes?: string;
 }
 
@@ -75,6 +82,7 @@ interface ProductionState {
   isTracking: boolean;
   error: string | null;
   currentPolDetailId: number | null;
+  qtyToMake: number | 0;
 }
 
 const initialState: ProductionState = {
@@ -160,6 +168,7 @@ const productionSlice = createSlice({
         state.isLoading = false;
         state.productionStages = action.payload.stages;
         state.currentPolDetailId = action.payload.polDetailId;
+        state.qtyToMake = action.payload.qtyToMake || 0;
       })
       .addCase(fetchProductionStages.rejected, (state, action) => {
         state.isLoading = false;

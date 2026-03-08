@@ -228,12 +228,19 @@ export class POLService {
       throw new AppError('POL not found', 404, 'POL_NOT_FOUND');
     }
 
+    // Calculate qtyToMake based on quantity and extra buffer
+    const quantity = productData.quantity || 0;
+    const extraBuffer = productData.extraBuffer || 15; // Default 15%
+    const qtyToMake = Math.round(quantity + (quantity * extraBuffer / 100));
+
     const detail = await prisma.pOLDetail.create({
       data: {
         polId,
         productCode: productData.productCode,
         productName: productData.productName,
-        quantity: productData.quantity,
+        quantity: quantity,
+        extraBuffer: extraBuffer,
+        qtyToMake: qtyToMake,
         productType: productData.productType || 'PLAIN',
         color: productData.color,
         texture: productData.texture,
@@ -259,9 +266,18 @@ export class POLService {
       throw new AppError('POL detail not found', 404, 'DETAIL_NOT_FOUND');
     }
 
+    // Recalculate qtyToMake if quantity or extraBuffer is being updated
+    let updateData = { ...data };
+    
+    if (data.quantity !== undefined || data.extraBuffer !== undefined) {
+      const quantity = data.quantity !== undefined ? data.quantity : detail.quantity;
+      const extraBuffer = data.extraBuffer !== undefined ? data.extraBuffer : detail.extraBuffer;
+      updateData.qtyToMake = Math.round(quantity + (quantity * extraBuffer / 100));
+    }
+
     const updatedDetail = await prisma.pOLDetail.update({
       where: { id: detailId },
-      data,
+      data: updateData,
     });
 
     return updatedDetail;

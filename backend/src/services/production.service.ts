@@ -1,13 +1,19 @@
 import { prisma } from '../config/database';
 import { AppError } from '../middleware/error.middleware';
-import { ProductionStage } from '@prisma/client';
+import { ProductionStage, ProductCategory, RemakeType, ProductType } from '@prisma/client';
 
 interface TrackProductionData {
   polDetailId: number;
   stage: ProductionStage;
+  category?: ProductCategory;
   quantity: number;
   rejectQuantity?: number;
   remakeCycle?: number;
+  remakeType?: RemakeType;
+  ovenId?: number;
+  operatorId?: number;
+  rejectReasonId?: number;
+  productionDate?: Date;
   userId: number;
   notes?: string;
 }
@@ -21,8 +27,8 @@ interface DiscrepancyData {
 
 export class ProductionService {
   /**
-   * Get production stages for a POL detail
-   */
+    * Get production stages for a POL detail
+    */
   async getProductionStages(polDetailId: number) {
     const detail = await prisma.pOLDetail.findUnique({
       where: { id: polDetailId },
@@ -86,6 +92,7 @@ export class ProductionService {
 
     return {
       detail,
+      qtyToMake: detail.qtyToMake,
       stages: stageData,
     };
   }
@@ -94,7 +101,7 @@ export class ProductionService {
    * Track production quantity at a stage
    */
   async trackProduction(data: TrackProductionData) {
-    const { polDetailId, stage, quantity, rejectQuantity, remakeCycle, userId, notes } = data;
+    const { polDetailId, stage, quantity, rejectQuantity, remakeCycle, category, remakeType, ovenId, operatorId, rejectReasonId, productionDate, userId, notes } = data;
 
     // Validate POL detail exists
     const detail = await prisma.pOLDetail.findUnique({
@@ -116,7 +123,10 @@ export class ProductionService {
     // Check for discrepancies
     const discrepancy = await this.checkForDiscrepancy(polDetailId, stage, quantity);
 
-    // Create production record
+    // Auto-determine category if not provided
+    const productionCategory = category || this.getCategoryForStage(stage);
+
+    // Create production record with all fields
     const record = await prisma.productionRecord.create({
       data: {
         polDetailId,
@@ -124,6 +134,12 @@ export class ProductionService {
         quantity,
         rejectQuantity: rejectQuantity || 0,
         remakeCycle: remakeCycle || 0,
+        category: productionCategory,
+        remakeType,
+        ovenId,
+        operatorId,
+        rejectReasonId,
+        productionDate: productionDate || undefined,
         createdBy: userId,
         notes,
       },
@@ -342,6 +358,359 @@ export class ProductionService {
       where: { id: polId },
       data: { status },
     });
+  }
+
+  /**
+   * Get decoration tasks for a POL detail
+   */
+  async getDecorationTasks(polDetailId: number) {
+    const tasks = await prisma.decorationTask.findMany({
+      where: { polDetailId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return {
+      polDetailId,
+      tasks: tasks.map((task) => ({
+        taskId: task.id,
+        taskName: task.taskName,
+        taskDescription: task.taskDescription,
+        quantityRequired: task.quantityRequired,
+        quantityCompleted: task.quantityCompleted,
+        quantityRejected: task.quantityRejected,
+        status: task.status,
+        notes: task.notes,
+        createdAt: task.createdAt,
+        updatedAt: task.updatedAt,
+      })),
+    };
+  }
+
+  /**
+   * Create a new decoration task
+   */
+  async createDecorationTask(data: {
+    polDetailId: number;
+    taskName: string;
+    taskDescription?: string;
+    quantityRequired: number;
+    notes?: string;
+    createdBy?: number;
+  }) {
+    const detail = await prisma.pOLDetail.findUnique({
+      where: { id: data.polDetailId },
+    });
+
+    if (!detail) {
+      throw new AppError('POL detail not found', 404, 'DETAIL_NOT_FOUND');
+    }
+
+    const task = await prisma.decorationTask.create({
+      data: {
+        polDetailId: data.polDetailId,
+        taskName: data.taskName,
+        taskDescription: data.taskDescription,
+        quantityRequired: data.quantityRequired,
+        quantityCompleted: 0,
+        quantityRejected: 0,
+        status: 'PENDING',
+        notes: data.notes,
+        createdBy: data.createdBy,
+      },
+    });
+
+    return {
+      taskId: task.id,
+      taskName: task.taskName,
+      taskDescription: task.taskDescription,
+      quantityRequired: task.quantityRequired,
+      quantityCompleted: task.quantityCompleted,
+      quantityRejected: task.quantityRejected,
+      status: task.status,
+      notes: task.notes,
+      createdAt: task.createdAt,
+      updatedAt: task.updatedAt,
+    };
+  }
+
+  /**
+   * Update a decoration task
+   */
+  async updateDecorationTask(
+    taskId: number,
+    data: {
+      quantityCompleted?: number;
+      quantityRejected?: number;
+      notes?: string;
+      status?: string;
+    }
+  ) {
+    const task = await prisma.decorationTask.findUnique({
+      where: { id: taskId },
+    });
+
+    if (!task) {
+      throw new AppError('Decoration task not found', 404, 'TASK_NOT_FOUND');
+    }
+
+    const updateData: any = {};
+    if (data.quantityCompleted !== undefined) {
+      updateData.quantityCompleted = data.quantityCompleted;
+      // Auto-complete if quantity completed >= required
+      if (data.quantityCompleted >= task.quantityRequired && task.status === 'PENDING') {
+        updateData.status = 'COMPLETED';
+        updateData.completedAt = new Date();
+      } else if (data.quantityCompleted > 0 && task.status === 'PENDING') {
+        updateData.status = 'IN_PROGRESS';
+      }
+    }
+    if (data.quantityRejected !== undefined) {
+      updateData.quantityRejected = data.quantityRejected;
+    }
+    if (data.notes !== undefined) {
+      updateData.notes = data.notes;
+    }
+    if (data.status !== undefined) {
+      updateData.status = data.status;
+      if (data.status === 'COMPLETED') {
+        updateData.completedAt = new Date();
+      }
+    }
+
+    const updatedTask = await prisma.decorationTask.update({
+      where: { id: taskId },
+      data: updateData,
+    });
+
+    return {
+      taskId: updatedTask.id,
+      taskName: updatedTask.taskName,
+      taskDescription: updatedTask.taskDescription,
+      quantityRequired: updatedTask.quantityRequired,
+      quantityCompleted: updatedTask.quantityCompleted,
+      quantityRejected: updatedTask.quantityRejected,
+      status: updatedTask.status,
+      notes: updatedTask.notes,
+      createdAt: updatedTask.createdAt,
+      updatedAt: updatedTask.updatedAt,
+    };
+  }
+
+  /**
+   * Delete a decoration task
+   */
+  async deleteDecorationTask(taskId: number) {
+    const task = await prisma.decorationTask.findUnique({
+      where: { id: taskId },
+    });
+
+    if (!task) {
+      throw new AppError('Decoration task not found', 404, 'TASK_NOT_FOUND');
+    }
+
+    await prisma.decorationTask.delete({
+      where: { id: taskId },
+    });
+
+    return { message: 'Decoration task deleted successfully' };
+  }
+
+  /**
+   * Get all ovens
+   */
+  async getOvens() {
+    const ovens = await prisma.oven.findMany({
+      orderBy: { ovenCode: 'asc' },
+    });
+    return ovens;
+  }
+
+  /**
+   * Get all defect reasons
+   */
+  async getDefectReasons() {
+    const reasons = await prisma.defectReason.findMany({
+      where: { isActive: true },
+      orderBy: { category: 'asc' },
+    });
+    return reasons;
+  }
+
+  /**
+   * Get product parts for a POL detail
+   */
+  async getProductParts(polDetailId: number) {
+    const parts = await prisma.productPart.findMany({
+      where: { polDetailId },
+      orderBy: { throwingOrder: 'asc' },
+    });
+    return parts;
+  }
+
+  /**
+   * Create a product part
+   */
+  async createProductPart(data: {
+    polDetailId: number;
+    partName: string;
+    partType?: 'MAIN' | 'SUB' | 'ASSEMBLY';
+    linkedToPartId?: number;
+    throwingRequired?: boolean;
+    throwingOrder?: number;
+  }) {
+    const part = await prisma.productPart.create({
+      data: {
+        polDetailId: data.polDetailId,
+        partName: data.partName,
+        partType: data.partType || 'MAIN',
+        linkedToPartId: data.linkedToPartId,
+        throwingRequired: data.throwingRequired !== undefined ? data.throwingRequired : true,
+        throwingOrder: data.throwingOrder,
+      },
+    });
+    return part;
+  }
+
+  /**
+   * Get remake cycles for a POL detail
+   */
+  async getRemakeCycles(polDetailId: number) {
+    const cycles = await prisma.remakeCycle.findMany({
+      where: { polDetailId },
+      orderBy: { remakeNumber: 'desc' },
+      include: {
+        rejectReason: true,
+      },
+    });
+    return cycles;
+  }
+
+  /**
+   * Create a remake cycle
+   */
+  async createRemakeCycle(data: {
+    polDetailId: number;
+    originalRecordId?: number;
+    remakeNumber: number;
+    remakeType: RemakeType;
+    rejectStage?: string;
+    rejectCategory?: string;
+    rejectReasonId?: number;
+    rejectQuantity: number;
+    createdBy: number;
+  }) {
+    // Check if remake number exceeds 3 - requires escalation
+    if (data.remakeNumber > 3) {
+      // Create with ESCALATED status
+      const cycle = await prisma.remakeCycle.create({
+        data: {
+          polDetailId: data.polDetailId,
+          originalRecordId: data.originalRecordId,
+          remakeNumber: data.remakeNumber,
+          remakeType: data.remakeType,
+          rejectStage: data.rejectStage,
+          rejectCategory: data.rejectCategory,
+          rejectReasonId: data.rejectReasonId,
+          rejectQuantity: data.rejectQuantity,
+          status: 'ESCALATED',
+          createdBy: data.createdBy,
+        },
+      });
+      return { cycle, isEscalated: true };
+    }
+
+    const cycle = await prisma.remakeCycle.create({
+      data: {
+        polDetailId: data.polDetailId,
+        originalRecordId: data.originalRecordId,
+        remakeNumber: data.remakeNumber,
+        remakeType: data.remakeType,
+        rejectStage: data.rejectStage,
+        rejectCategory: data.rejectCategory,
+        rejectReasonId: data.rejectReasonId,
+        rejectQuantity: data.rejectQuantity,
+        status: 'IN_PROGRESS',
+        createdBy: data.createdBy,
+      },
+    });
+
+    return { cycle, isEscalated: false };
+  }
+
+  /**
+   * Get production stages based on product type
+   * Handbuild and Slab products skip Forming stage
+   */
+  getStagesByProductType(productType: ProductType): string[] {
+    const allStages = [
+      'THROWING',
+      'TRIMMING',
+      'DECORATION',
+      'DRYING',
+      'LOAD_BISQUE',
+      'OUT_BISQUE',
+      'LOAD_HIGH_FIRING',
+      'OUT_HIGH_FIRING',
+      'LOAD_RAKU_FIRING',
+      'OUT_RAKU_FIRING',
+      'LOAD_LUSTER_FIRING',
+      'OUT_LUSTER_FIRING',
+      'SANDING',
+      'WAXING',
+      'DIPPING',
+      'SPRAYING',
+      'COLOR_DECORATION',
+      'QC_GOOD',
+      'QC_REJECT',
+      'QC_RE_FIRING',
+      'QC_SECOND',
+    ];
+
+    // Handbuild and Slab products skip Forming stages
+    if (productType === 'HANDBUILD' || productType === 'SLAB') {
+      // Start from DECORATION instead of THROWING
+      return allStages.filter(stage => stage !== 'THROWING' && stage !== 'TRIMMING');
+    }
+
+    return allStages;
+  }
+
+  /**
+   * Get product category for a stage
+   */
+  getCategoryForStage(stage: ProductionStage): ProductCategory {
+    const formingStages = ['THROWING', 'TRIMMING'];
+    const decorStages = ['DECORATION'];
+    const dryingStages = ['DRYING'];
+    const firingStages = ['LOAD_BISQUE', 'OUT_BISQUE', 'LOAD_HIGH_FIRING', 'OUT_HIGH_FIRING', 'LOAD_RAKU_FIRING', 'OUT_RAKU_FIRING', 'LOAD_LUSTER_FIRING', 'OUT_LUSTER_FIRING'];
+    const glazingStages = ['SANDING', 'WAXING', 'DIPPING', 'SPRAYING', 'COLOR_DECORATION'];
+    const qcStages = ['QC_GOOD', 'QC_REJECT', 'QC_RE_FIRING', 'QC_SECOND'];
+
+    if (formingStages.includes(stage)) return 'FORMING';
+    if (decorStages.includes(stage)) return 'DECOR';
+    if (dryingStages.includes(stage)) return 'DRYING';
+    if (firingStages.includes(stage)) return 'FIRING';
+    if (glazingStages.includes(stage)) return 'GLAZING';
+    if (qcStages.includes(stage)) return 'QC';
+
+    return 'FORMING'; // Default
+  }
+
+  /**
+   * Get all operators (users) for selection
+   */
+  async getOperators() {
+    const users = await prisma.user.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        username: true,
+        fullName: true,
+        role: true,
+      },
+      orderBy: { fullName: 'asc' },
+    });
+    return users;
   }
 }
 

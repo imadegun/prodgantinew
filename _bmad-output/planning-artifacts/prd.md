@@ -20,6 +20,7 @@ author: 'Madegun'
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2026-01-31 | Madegun | Initial PRD creation |
+| 1.1 | 2026-03-08 | Madegun | Added detailed production tracking requirements (Product Types, Parts Breakdown, Remake Tracking, Extra Buffer) |
 
 ---
 
@@ -266,11 +267,145 @@ A modern web application that:
 
 **Priority:** P0 (Critical for MVP)
 
-**Description:** System must track production quantities through all stages of ceramic production with support for main parts and additional parts.
+**Description:** System must track production quantities through all stages of ceramic production with support for main parts, additional parts, product type-based workflow routing, and comprehensive remake tracking.
+
+---
+
+#### FR-002.A: Production Stage Categories
+
+**Production Categories and Stages:**
+
+| Category | Stages |
+|----------|--------|
+| **FORMING** | Throwing, Trimming |
+| **DECOR** | Hand Build, Slabbing, Texture, Carving, Engraving, Engobe, Handle Installation, Spout Installation (dynamic) |
+| **DRYING** | Drying |
+| **FIRING** | Load Bisque, Out Bisque, Load High Firing, Out High Firing, Load Raku, Out Raku, Load Luster, Out Luster |
+| **GLAZING** | Bisquit & Sanding QC, Waxing, Dipping Glaze, Spraying Glaze, Coloring (dynamic) |
+| **QC** | Good, Reject, Refiring (BU), Second |
+
+---
+
+#### FR-002.B: Product Type Workflow Support
+
+**Product Types:**
+- **NORMAL/DECOR/Raku/Luster**: Full flow (Forming → Decor → Drying → Firing → Glazing → QC)
+- **HANDBUILD**: Skip Forming stage, start from Decor
+- **SLAB**: Skip Forming stage, start from Decor
+
+**Workflow Routing:**
+- System shall automatically determine the production path based on product type
+- System shall skip Forming stage for Handbuild and Slab products
+- System shall display appropriate stages based on product type
+
+---
+
+#### FR-002.C: Product Parts Breakdown
+
+**Description:** Products can have multiple components that need to be tracked separately and assembled at specific stages.
+
+**Requirements:**
+- System shall allow defining product parts for each POL Detail:
+  - **Part Name**: Body, Lid, Spout, Handle, Base, etc.
+  - **Part Type**: Main (primary component), Sub (additional component), Assembly (joined part)
+  - **Linked To**: Reference to another part this connects to
+  - **Throwing Required**: Boolean - whether this part needs throwing
+
+**Examples:**
+1. **Teapot**:
+   - Body (Main, Throwing: Yes) → connects to Lid, Spout, Handle
+   - Lid (Sub, Throwing: Yes) → connects to Body
+   - Spout (Sub, Throwing: Yes) → connects to Body
+   - Handle (Sub, Throwing: Yes) → connects to Body
+   - All parts joined during Forming stage
+
+2. **Large Stool**:
+   - Main Part (Main, Throwing: Yes, Part 1)
+   - Base Part (Main, Throwing: Yes, Part 2)
+   - Both thrown separately, then joined during Forming
+
+---
+
+#### FR-002.D: Extra Buffer Quantity System
+
+**Description:** Manufacturing quantity includes an extra buffer percentage to account for defects, breaks, and rework.
+
+**Requirements:**
+- System shall calculate manufacturing quantity as: `Order Qty + Extra Buffer`
+- Default buffer percentage: 15%
+- Buffer percentage shall be editable per product based on:
+  - Item difficulty (easy, medium, hard)
+  - Order quantity (larger orders may have lower buffer %)
+  - Historical defect rate for the product
+- Buffer quantity remains as extra stock after order fulfillment
+
+---
+
+#### FR-002.E: Firing Stage - Oven Tracking
+
+**Description:** Track which kiln/oven is used for firing stages.
+
+**Requirements:**
+- System shall maintain oven registry (K1, K2, K3, K4, K5, K6, K7)
+- System shall allow selection of oven when recording firing stages
+- System shall track firing history per oven
+
+---
+
+#### FR-002.F: Remake Tracking System
+
+**Description:** Track remake cycles for products that fail QC and need to be reprocessed.
 
 **Requirements:**
 
-**FR-002.1: Forming Stage Tracking**
+**FR-002.F.1: Remake Types**
+- **RPR (Remake Pre-Firing)**: Reject occurs before high firing (Forming, Decor, Glaze stages)
+- **RQC (Remake Post-Firing)**: Reject occurs after high firing (QC stage)
+
+**FR-002.F.2: Remake Cycles**
+- Remake 1, 2, 3: Normal remakes
+- Remake 4+: Special alert - production must pause and investigate before continuing
+- System shall track remake number for each product
+- System shall generate CRITICAL alert when remake cycle exceeds 3
+
+**FR-002.F.3: Remake Tracking Data**
+- Original production record reference
+- Remake type (RPR or RQC)
+- Stage where reject occurred
+- Reject category
+- Reject reason/description
+- Reject quantity
+- Operator who recorded the reject
+- Remake status (In Progress, Completed, Escalated)
+
+**FR-002.F.4: Remake Alert Rules**
+- Alert at Remake 4: "ESCALATION REQUIRED - Multiple remakes detected"
+- Require manager approval to proceed with Remake 4+
+- Log all investigation notes before allowing continuation
+
+---
+
+#### FR-002.G: Daily Production Input
+
+**Description:** Simplified input form for daily production data entry.
+
+**Required Fields:**
+- POL Reference
+- Item Code (Product)
+- Stage (dropdown)
+- Category (dropdown)
+- Reject Quantity (number, default 0)
+- Reject Reason (dropdown/text)
+- Operator Name (dropdown or text)
+
+**Optional Fields:**
+- Notes
+- Oven Code (for firing stages)
+- Remake Cycle Number (if applicable)
+
+---
+
+#### FR-002.H: Forming Stage Tracking
 - System shall track quantities through forming sub-stages:
   - Throwing (for plain and decor products)
   - Trimming (for plain and decor products)
@@ -278,58 +413,15 @@ A modern web application that:
   - Drying
   - Load Bisque
 
-**FR-002.2: Product Type Workflow Support**
-- System shall support different workflows based on product type:
-  - Plain products: Throwing → Trimming → Drying → Load Bisque
-  - Decor products: Throwing → Trimming → Decor → Drying → Load Bisque
-  - Hand-built products: Decor → Drying → Load Bisque (no throwing/trimming)
-  - Slab/Tray products: Decor → Drying → Load Bisque (no throwing/trimming)
+---
 
-**FR-002.3: Main Parts and Additional Parts Tracking**
-- System shall allow tracking of main parts and additional parts separately during forming:
-  - Example: Teapot = main body + spout + handle + lid
-  - Each part tracked independently during forming
-  - Parts combine into final product after decoration and drying
-
-**FR-002.4: Firing Stage Tracking**
-- System shall track quantities through firing sub-stages:
-  - Load Bisque (from forming)
-  - Out Bisque
-  - Load High Firing
-  - Out High Firing
-  - Load Raku Firing (optional, based on product)
-  - Out Raku Firing (optional, based on product)
-  - Load Luster Firing (optional, based on product)
-  - Out Luster Firing (optional, based on product)
-
-**FR-002.5: Glazing Stage Tracking**
-- System shall track quantities through glazing sub-stages:
-  - Sanding
-  - Waxing
-  - Dipping
-  - Spraying
-  - Color Decoration
-
-**FR-002.6: QC Stage Tracking**
-- System shall track quantities through QC sub-stages:
-  - Good (accepted products)
-  - Reject (rejected products)
-  - Re-firing (products requiring additional firing)
-  - Second (products requiring additional processing)
-
-**FR-002.7: Remake Tracking**
-- System shall track remake cycles:
-  - Remake 1, Remake 2, Remake 3, etc.
-  - Maximum remake limit (configurable, default 3)
-  - Alert when maximum remake limit reached
-
-**FR-002.8: Stage Transition Validation**
+**FR-002.I: Stage Transition Validation**
 - System shall validate quantities before allowing stage transition:
   - Current stage quantity cannot exceed previous stage quantity
   - Reject quantities must be accounted for
   - Remake quantities must be tracked separately
 
-**FR-002.9: Quantity Entry Interface**
+**FR-002.J: Quantity Entry Interface**
 - System shall provide simple interface for Admin to enter quantities at each stage:
   - Input field for quantity
   - Optional reject quantity field
@@ -338,11 +430,16 @@ A modern web application that:
 
 **Acceptance Criteria:**
 - Admin can enter quantities at each production stage
-- System supports different workflows for different product types
-- System tracks main parts and additional parts separately
+- System supports different workflows for different product types (Normal, Raku, Luster, Handbuild, Slab)
+- System skips Forming stage for Handbuild and Slab products
+- System tracks product parts breakdown (Body, Lid, Spout, Handle, Base, etc.)
+- System calculates extra buffer quantity (default 15%, editable)
 - System validates quantities before stage transitions
-- System tracks remake cycles
-- System alerts when maximum remake limit reached
+- System tracks remake cycles (RPR and RQC types)
+- System alerts when remake limit exceeds 3 cycles
+- System requires escalation/approval for Remake 4+
+- System tracks reject reasons and categories for analysis
+- Daily production input includes: POL, Item Code, Stage, Category, Reject Qty, Reject Reason, Operator
 
 ---
 
@@ -1017,11 +1114,61 @@ A modern web application that:
 - record_id (primary key)
 - pol_detail_id (foreign key)
 - production_stage
+- category (FORMING, DECOR, DRYING, FIRING, GLAZING, QC)
 - quantity
 - reject_quantity
+- reject_reason_id (foreign key, optional)
 - remake_cycle
+- remake_type (RPR, RQC, optional)
+- oven_id (foreign key, optional - for firing stages)
+- operator_id (foreign key to users)
 - notes
 - created_by (foreign key to users)
+- created_at
+- updated_at
+
+**Product Parts Entity:**
+- part_id (primary key)
+- pol_detail_id (foreign key)
+- part_name (Body, Lid, Spout, Handle, Base, etc.)
+- part_type (Main, Sub, Assembly)
+- linked_to_part_id (foreign key, optional - for assembly connections)
+- throwing_required (boolean)
+- throwing_order (number - for multi-part throwing sequence)
+- created_at
+- updated_at
+
+**Ovens Entity:**
+- oven_id (primary key)
+- oven_code (K1, K2, K3, K4, K5, K6, K7)
+- oven_name
+- status (ACTIVE, MAINTENANCE, INACTIVE)
+- capacity
+- created_at
+- updated_at
+
+**Remake Cycles Entity:**
+- remake_id (primary key)
+- pol_detail_id (foreign key)
+- original_record_id (foreign key to production_records)
+- remake_number (1, 2, 3, 4+)
+- remake_type (RPR, RQC)
+- reject_stage
+- reject_category
+- reject_reason_id (foreign key)
+- reject_quantity
+- status (IN_PROGRESS, COMPLETED, ESCALATED)
+- escalated_to (foreign key to users)
+- escalation_notes
+- created_by (foreign key to users)
+- created_at
+- updated_at
+
+**Defect Reasons Entity:**
+- reason_id (primary key)
+- category (Defect, Break, Glaze Color, Crack, Warping, etc.)
+- description
+- is_active (boolean)
 - created_at
 - updated_at
 
@@ -1577,6 +1724,11 @@ A modern web application that:
 - **High Firing:** The second firing of ceramic pieces at higher temperatures
 - **Engobe:** A colored slip applied to ceramic pieces before firing
 - **Gayafusionall:** The existing MySQL database containing 20+ years of product data
+- **RPR (Remake Pre-Firing):** Remake that occurs before high firing (Forming, Decor, Glaze stages)
+- **RQC (Remake Post-Firing):** Remake that occurs after high firing (QC stage)
+- **Extra Buffer:** Additional quantity produced beyond order quantity to account for defects (default 15%)
+- **Product Parts:** Components of a product (Body, Lid, Spout, Handle, Base, etc.)
+- **Oven/Kiln:** Furnace used for firing ceramic pieces (K1-K7)
 
 ---
 
@@ -1593,6 +1745,7 @@ A modern web application that:
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2026-01-31 | Madegun | Initial PRD creation |
+| 1.1 | 2026-03-08 | Madegun | Added detailed production tracking requirements: Product Types (Handbuild/Slab skip Forming), Parts Breakdown (Body/Lid/Spout/Handle), Remake Tracking (RPR/RQC types), Extra Buffer (15%), Daily Production Input fields, Oven tracking |
 
 ---
 

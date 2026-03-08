@@ -26,10 +26,25 @@ enum POLStatus {
 }
 
 enum ProductType {
-  PLAIN
+  NORMAL
   DECOR
+  RAKU
+  LUSTER
+  HANDBUILD
+  SLAB
+  // Legacy values (for backward compatibility)
+  PLAIN
   HAND_BUILT
   SLAB_TRAY
+}
+
+enum ProductCategory {
+  FORMING
+  DECOR
+  DRYING
+  FIRING
+  GLAZING
+  QC
 }
 
 enum ProductionStage {
@@ -127,6 +142,29 @@ enum RevisionType {
   MATERIAL
 }
 
+enum RemakeType {
+  RPR  // Remake Pre-Firing (before high firing)
+  RQC  // Remake Post-Firing (after high firing)
+}
+
+enum RemakeStatus {
+  IN_PROGRESS
+  COMPLETED
+  ESCALATED
+}
+
+enum PartType {
+  MAIN      // Primary component
+  SUB       // Additional component
+  ASSEMBLY  // Joined part
+}
+
+enum OvenStatus {
+  ACTIVE
+  MAINTENANCE
+  INACTIVE
+}
+
 // User table
 model User {
   id            Int       @id @default(autoincrement())
@@ -143,6 +181,7 @@ model User {
   // Relationships
   pols                  POL[]              @relation("POLCreatedBy")
   productionRecords    ProductionRecord[]
+  operatorRecords      ProductionRecord[] @relation("OperatorRecords")
   logbookEntries       LogbookEntry[]
   revisionTickets      RevisionTicket[]     @relation("RevisionCreatedBy")
   approvedRevisions    RevisionTicket[]     @relation("RevisionApprovedBy")
@@ -185,7 +224,8 @@ model POLDetail {
   productName    String      @map("productName")
   quantity       Int
   extraBuffer    Int         @default(15) @map("extraBuffer") // Percentage
-  productType    ProductType @default(PLAIN) @map("productType")
+  qtyToMake      Int         @default(0) @map("qtyToMake") // Calculated quantity to make (order + extra buffer)
+  productType    ProductType @default(NORMAL) @map("productType")
   color          String?
   texture        String?
   material       String?
@@ -202,6 +242,8 @@ model POLDetail {
   discrepancyAlerts   DiscrepancyAlert[]
   logbookEntries       LogbookEntry[]
   revisionTickets      RevisionTicket[]
+  productParts         ProductPart[]
+  remakeCycles        RemakeCycle[]
   
   @@map("pol_details")
 }
@@ -211,17 +253,26 @@ model ProductionRecord {
   id              Int             @id @default(autoincrement())
   polDetailId     Int             @map("pol_detail_id")
   stage           ProductionStage
+  category        ProductCategory @default(FORMING) @map("category")
   quantity        Int
   rejectQuantity  Int             @default(0) @map("reject_quantity")
   remakeCycle     Int             @default(0) @map("remake_cycle")
+  remakeType      RemakeType?     @map("remake_type")
+  ovenId          Int?            @map("oven_id")
+  operatorId      Int?            @map("operator_id")
+  rejectReasonId  Int?            @map("reject_reason_id")
   notes           String?
+  productionDate  DateTime?       @map("production_date")
   createdBy       Int             @map("created_by")
   createdAt       DateTime        @default(now()) @map("createdAt")
   updatedAt       DateTime        @updatedAt @map("updatedAt")
   
   // Relationships
-  polDetail    POLDetail  @relation(fields: [polDetailId], references: [id], onDelete: Cascade)
-  user         User       @relation(fields: [createdBy], references: [id])
+  polDetail       POLDetail       @relation(fields: [polDetailId], references: [id], onDelete: Cascade)
+  oven            Oven?           @relation(fields: [ovenId], references: [id])
+  operator        User?           @relation("OperatorRecords", fields: [operatorId], references: [id])
+  rejectReason    DefectReason?   @relation(fields: [rejectReasonId], references: [id])
+  user            User            @relation(fields: [createdBy], references: [id])
   
   @@map("production_records")
 }
@@ -349,4 +400,81 @@ model ActivityLog {
   user User @relation(fields: [userId], references: [id])
   
   @@map("activity_logs")
+}
+
+// Product Parts table - tracks components of a product
+model ProductPart {
+  id              Int       @id @default(autoincrement())
+  polDetailId     Int       @map("pol_detail_id")
+  partName        String    @map("part_name") // Body, Lid, Spout, Handle, Base, etc.
+  partType        PartType  @default(MAIN) @map("part_type") // MAIN, SUB, ASSEMBLY
+  linkedToPartId  Int?      @map("linked_to_part_id") // For assembly connections
+  throwingRequired Boolean   @default(true) @map("throwing_required")
+  throwingOrder   Int?      @map("throwing_order") // For multi-part throwing sequence
+  createdAt       DateTime  @default(now()) @map("createdAt")
+  updatedAt       DateTime  @updatedAt @map("updatedAt")
+  
+  // Relationships
+  polDetail       POLDetail  @relation(fields: [polDetailId], references: [id], onDelete: Cascade)
+  linkedToPart    ProductPart? @relation("PartConnections", fields: [linkedToPartId], references: [id])
+  connectedParts  ProductPart[] @relation("PartConnections")
+  
+  @@map("product_parts")
+}
+
+// Ovens table - tracks kilns/ovens for firing
+model Oven {
+  id          Int         @id @default(autoincrement())
+  ovenCode    String      @unique @map("oven_code") // K1, K2, K3, K4, K5, K6, K7
+  ovenName    String?     @map("oven_name")
+  status      OvenStatus  @default(ACTIVE)
+  capacity    Int?        // Number of items capacity
+  createdAt   DateTime    @default(now()) @map("createdAt")
+  updatedAt   DateTime    @updatedAt @map("updatedAt")
+  
+  // Relationships
+  productionRecords ProductionRecord[]
+  
+  @@map("ovens")
+}
+
+// Defect Reasons table - tracks reject reasons
+model DefectReason {
+  id          Int       @id @default(autoincrement())
+  category    String    // Defect, Break, Glaze Color, Crack, Warping, etc.
+  description String
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("createdAt")
+  updatedAt   DateTime  @updatedAt @map("updatedAt")
+  
+  // Relationships
+  productionRecords ProductionRecord[]
+  remakeCycles     RemakeCycle[]
+  
+  @@map("defect_reasons")
+}
+
+// Remake Cycles table - tracks remake/rework production
+model RemakeCycle {
+  id                Int            @id @default(autoincrement())
+  polDetailId       Int            @map("pol_detail_id")
+  originalRecordId  Int?           @map("original_record_id")
+  remakeNumber     Int            @map("remake_number") // 1, 2, 3, 4+
+  remakeType       RemakeType     @map("remake_type") // RPR or RQC
+  rejectStage      String?        @map("reject_stage")
+  rejectCategory   String?        @map("reject_category")
+  rejectReasonId   Int?           @map("reject_reason_id")
+  rejectQuantity   Int            @default(0) @map("reject_quantity")
+  status           RemakeStatus   @default(IN_PROGRESS)
+  escalatedTo      Int?           @map("escalated_to")
+  escalationNotes  String?        @map("escalation_notes")
+  createdBy        Int            @map("created_by")
+  createdAt        DateTime       @default(now()) @map("createdAt")
+  updatedAt        DateTime       @updatedAt @map("updatedAt")
+  
+  // Relationships
+  polDetail       POLDetail      @relation(fields: [polDetailId], references: [id], onDelete: Cascade)
+  rejectReason    DefectReason?  @relation(fields: [rejectReasonId], references: [id])
+  
+  @@map("remake_cycles")
 }

@@ -55,6 +55,8 @@ interface ProductItem {
   material?: string;
   size?: string;
   quantity: number;
+  extraBuffer?: number; // Extra buffer percentage (default 15%)
+  qtyToMake?: number; // Calculated quantity to make
   notes?: string;
 }
 
@@ -110,6 +112,7 @@ const POLCreate = (): JSX.Element => {
     material: '',
     size: '',
     quantity: 1,
+    extraBuffer: 15, // Default 15% extra buffer
     notes: '',
   });
 
@@ -205,6 +208,7 @@ const POLCreate = (): JSX.Element => {
       material: product.materialName,
       size: product.sizeName,
       quantity: 1,
+      extraBuffer: 15, // Default 15% extra buffer
     };
     setProducts([...products, newItem]);
     setSearchDialogOpen(false);
@@ -227,6 +231,7 @@ const POLCreate = (): JSX.Element => {
       material: '',
       size: '',
       quantity: 1,
+      extraBuffer: 15, // Default 15% extra buffer
       notes: '',
     });
   };
@@ -237,6 +242,10 @@ const POLCreate = (): JSX.Element => {
 
   const handleUpdateQuantity = (id: string, quantity: number) => {
     setProducts(products.map((p) => (p.id === id ? { ...p, quantity: Math.max(1, quantity) } : p)));
+  };
+
+  const handleUpdateExtraBuffer = (id: string, extraBuffer: number) => {
+    setProducts(products.map((p) => (p.id === id ? { ...p, extraBuffer: Math.max(0, Math.min(100, extraBuffer)) } : p)));
   };
 
   const handleSubmit = async () => {
@@ -257,7 +266,8 @@ const POLCreate = (): JSX.Element => {
           color: p.color,
           material: p.material,
           size: p.size,
-          orderQuantity: p.quantity,
+          quantity: p.quantity,
+          extraBuffer: p.extraBuffer || 15, // Default 15% if not set
           notes: p.notes,
         })),
       };
@@ -436,6 +446,7 @@ const POLCreate = (): JSX.Element => {
                           <TableCell>Material</TableCell>
                           <TableCell>Size</TableCell>
                           <TableCell>Quantity</TableCell>
+                          <TableCell>Extra Buffer (%)</TableCell>
                           <TableCell>Actions</TableCell>
                         </TableRow>
                       </TableHead>
@@ -455,6 +466,16 @@ const POLCreate = (): JSX.Element => {
                                 onChange={(e) => handleUpdateQuantity(product.id, parseInt(e.target.value) || 1)}
                                 sx={{ width: 80 }}
                                 inputProps={{ min: 1 }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                type="number"
+                                size="small"
+                                value={product.extraBuffer || 15}
+                                onChange={(e) => handleUpdateExtraBuffer(product.id, parseInt(e.target.value) || 15)}
+                                sx={{ width: 80 }}
+                                inputProps={{ min: 0, max: 100 }}
                               />
                             </TableCell>
                             <TableCell>
@@ -730,16 +751,27 @@ const POLCreate = (): JSX.Element => {
                 onChange={(e) => setNewProduct({ ...newProduct, size: e.target.value })}
               />
             </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                type="number"
-                label="Quantity"
-                value={newProduct.quantity}
-                onChange={(e) => setNewProduct({ ...newProduct, quantity: parseInt(e.target.value) || 1 })}
-                inputProps={{ min: 1 }}
-              />
-            </Grid>
+             <Grid item xs={12} md={6}>
+               <TextField
+                 fullWidth
+                 type="number"
+                 label="Quantity"
+                 value={newProduct.quantity}
+                 onChange={(e) => setNewProduct({ ...newProduct, quantity: parseInt(e.target.value) || 1 })}
+                 inputProps={{ min: 1 }}
+               />
+             </Grid>
+             <Grid item xs={12} md={6}>
+               <TextField
+                 fullWidth
+                 type="number"
+                 label="Extra Buffer (%)"
+                 value={newProduct.extraBuffer || 15}
+                 onChange={(e) => setNewProduct({ ...newProduct, extraBuffer: parseInt(e.target.value) || 15 })}
+                 inputProps={{ min: 0, max: 100 }}
+                 helperText="Percentage of extra quantity to make (e.g., 15% = 15 extra pieces)"
+               />
+             </Grid>
             <Grid item xs={12}>
               <TextField
                 fullWidth

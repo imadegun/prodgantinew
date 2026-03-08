@@ -32,8 +32,9 @@ interface POLDetail {
   material: string | null;
   size: string | null;
   finalSize: string | null;
-  orderQuantity: number;
+  quantity: number;
   extraBuffer: number;
+  qtyToMake: number;
   currentStage: string;
   productionProgress: number;
   materialRequirements: {
@@ -148,7 +149,8 @@ export const createPOL = createAsyncThunk(
       color?: string;
       material?: string;
       size?: string;
-      orderQuantity: number;
+      quantity: number;
+      extraBuffer?: number;
       notes?: string;
     }>;
   }, { rejectWithValue }) => {

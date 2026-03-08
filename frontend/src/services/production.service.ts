@@ -21,6 +21,7 @@ interface ProductionStagesResponse {
   productCode: string;
   productName: string;
   orderQuantity: number;
+  qtyToMake: number;
   currentStage: string;
   stages: ProductionStage[];
 }
@@ -31,7 +32,13 @@ interface TrackProductionRequest {
   quantity: number;
   rejectQuantity?: number;
   remakeCycle?: number;
+  category?: string;
+  remakeType?: string;
+  ovenId?: number;
+  operatorId?: number;
+  rejectReasonId?: number;
   notes?: string;
+  productionDate?: string;
 }
 
 interface TrackProductionResponse {
@@ -90,6 +97,7 @@ interface TrackDecorationTaskRequest {
   quantityCompleted?: number;
   quantityRejected?: number;
   notes?: string;
+  status?: string;
 }
 
 export const productionService = {
@@ -115,7 +123,7 @@ export const productionService = {
 
   async getDecorationTasks(polDetailId: number): Promise<DecorationTasksResponse> {
     const response = await apiClient.get<DecorationTasksResponse>(
-      `/decorations/${polDetailId}`
+      `/production/decorations/${polDetailId}`
     );
     return response;
   },
@@ -127,16 +135,116 @@ export const productionService = {
     quantityRequired: number;
     notes?: string;
   }): Promise<DecorationTask> {
-    const response = await apiClient.post<DecorationTask>('/decorations', data);
+    const response = await apiClient.post<DecorationTask>('/production/decorations', data);
     return response;
   },
 
   async updateDecorationTask(taskId: number, data: TrackDecorationTaskRequest): Promise<DecorationTask> {
-    const response = await apiClient.put<DecorationTask>(`/decorations/${taskId}`, data);
+    const response = await apiClient.put<DecorationTask>(`/production/decorations/${taskId}`, data);
     return response;
   },
 
   async deleteDecorationTask(taskId: number): Promise<void> {
-    await apiClient.delete(`/decorations/${taskId}`);
+    await apiClient.delete(`/production/decorations/${taskId}`);
+  },
+
+  // Get all ovens
+  async getOvens(): Promise<Array<{
+    id: number;
+    ovenCode: string;
+    ovenName: string;
+    capacity: number;
+    status: string;
+  }>> {
+    const response = await apiClient.get('/production/ovens');
+    return response.data;
+  },
+
+  // Get all defect reasons
+  async getDefectReasons(): Promise<Array<{
+    id: number;
+    reasonName: string;
+    category: string;
+    description: string;
+  }>> {
+    const response = await apiClient.get('/production/defect-reasons');
+    return response.data;
+  },
+
+  // Get product parts for a POL detail
+  async getProductParts(polDetailId: number): Promise<Array<{
+    id: number;
+    partName: string;
+    partType: string;
+    linkedToPartId: number | null;
+    throwingRequired: boolean;
+    throwingOrder: number | null;
+  }>> {
+    const response = await apiClient.get(`/production/product-parts/${polDetailId}`);
+    return response.data;
+  },
+
+  // Create a product part
+  async createProductPart(data: {
+    polDetailId: number;
+    partName: string;
+    partType?: string;
+    linkedToPartId?: number;
+    throwingRequired?: boolean;
+    throwingOrder?: number;
+  }): Promise<any> {
+    const response = await apiClient.post('/production/product-parts', data);
+    return response.data;
+  },
+
+  // Get remake cycles for a POL detail
+  async getRemakeCycles(polDetailId: number): Promise<Array<{
+    id: number;
+    remakeNumber: number;
+    remakeType: string;
+    rejectStage: string | null;
+    rejectCategory: string | null;
+    rejectQuantity: number;
+    status: string;
+    createdAt: string;
+    rejectReason: {
+      id: number;
+      reasonName: string;
+    } | null;
+  }>> {
+    const response = await apiClient.get(`/production/remake-cycles/${polDetailId}`);
+    return response.data;
+  },
+
+  // Create a remake cycle
+  async createRemakeCycle(data: {
+    polDetailId: number;
+    originalRecordId?: number;
+    remakeNumber: number;
+    remakeType: string;
+    rejectStage?: string;
+    rejectCategory?: string;
+    rejectReasonId?: number;
+    rejectQuantity: number;
+  }): Promise<{ cycle: any; isEscalated: boolean }> {
+    const response = await apiClient.post('/production/remake-cycles', data);
+    return response.data;
+  },
+
+  // Get stages by product type
+  async getStagesByProductType(productType: string): Promise<string[]> {
+    const response = await apiClient.get(`/production/stages-by-product-type/${productType}`);
+    return response.data;
+  },
+
+  // Get operators (users)
+  async getOperators(): Promise<Array<{
+    id: number;
+    username: string;
+    fullName: string;
+    role: string;
+  }>> {
+    const response = await apiClient.get('/production/operators');
+    return response.data;
   },
 };
