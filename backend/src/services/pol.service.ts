@@ -228,7 +228,7 @@ export class POLService {
       throw new AppError('POL not found', 404, 'POL_NOT_FOUND');
     }
 
-    // Calculate qtyToMake based on quantity and extra buffer
+    // Calculate qtyToMake based on quantity and extra buffer (always auto-calculate)
     const quantity = productData.quantity || 0;
     const extraBuffer = productData.extraBuffer || 15; // Default 15%
     const qtyToMake = Math.round(quantity + (quantity * extraBuffer / 100));

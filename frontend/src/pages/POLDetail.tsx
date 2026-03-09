@@ -81,6 +81,8 @@ const POLDetail = (): JSX.Element => {
     material: '',
     size: '',
     orderQuantity: 0,
+    extraBuffer: 15, // Default 15% extra buffer
+    qtyToMake: 0, // Direct qty to make input
   });
   const [editError, setEditError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -144,15 +146,24 @@ const POLDetail = (): JSX.Element => {
     }
   }, [currentPOL]);
 
+  // Calculate qtyToMake based on quantity and extraBuffer
+  const calculateQtyToMake = (quantity: number, extraBuffer: number = 15): number => {
+    return Math.ceil(quantity + (quantity * extraBuffer / 100));
+  };
+
   const handleOpenEditDialog = (detail: any) => {
     setSelectedDetail(detail);
+    const orderQuantity = detail.orderQuantity || 0;
+    const extraBuffer = detail.extraBuffer || 15;
     setEditFormData({
       productCode: detail.productCode || '',
       productName: detail.productName || '',
       color: detail.color || '',
       material: detail.material || '',
       size: detail.size || '',
-      orderQuantity: detail.orderQuantity || 0,
+      orderQuantity: orderQuantity,
+      extraBuffer: extraBuffer,
+      qtyToMake: calculateQtyToMake(orderQuantity, extraBuffer),
     });
     setOpenEditDialog(true);
   };
@@ -173,10 +184,12 @@ const POLDetail = (): JSX.Element => {
         setEditError('Order quantity must be greater than 0');
         return;
       }
-
-      // Call API to update POL detail - only quantity is editable
+      
+      // Call API to update POL detail - quantity, extraBuffer, and qtyToMake are editable
       await polService.updatePOLDetail(selectedDetail.id, {
         quantity: editFormData.orderQuantity,
+        extraBuffer: editFormData.extraBuffer || 15,
+        qtyToMake: editFormData.qtyToMake || 0,
       });
 
       // Refresh POL data
@@ -512,6 +525,8 @@ const POLDetail = (): JSX.Element => {
                       <TableCell>Material</TableCell>
                       <TableCell>Size</TableCell>
                       <TableCell>Order Qty</TableCell>
+                      <TableCell>Extra Buffer (%)</TableCell>
+                      <TableCell>Qty to Make</TableCell>
                       <TableCell>Current Stage</TableCell>
                       <TableCell>Status</TableCell>
                       <TableCell align="right">Actions</TableCell>
@@ -564,6 +579,22 @@ const POLDetail = (): JSX.Element => {
                         <TableCell>{detail.material || '-'}</TableCell>
                         <TableCell>{detail.size || '-'}</TableCell>
                         <TableCell>{detail.orderQuantity || 0}</TableCell>
+                        <TableCell>{detail.extraBuffer || 15}%</TableCell>
+                        <TableCell>
+                          <Box sx={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            minWidth: 100
+                          }}>
+                            <Typography variant="body1" sx={{ fontWeight: 600, color: 'primary.main' }}>
+                              {detail.qtyToMake || calculateQtyToMake(detail.orderQuantity || 0, detail.extraBuffer || 15)}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '10px' }}>
+                              {detail.orderQuantity || 0} + {Math.ceil((detail.orderQuantity || 0) * (detail.extraBuffer || 15) / 100)}
+                            </Typography>
+                          </Box>
+                        </TableCell>
                         <TableCell>
                           <Chip
                             label={detail.currentStage || 'Forming'}
@@ -664,16 +695,48 @@ const POLDetail = (): JSX.Element => {
                   InputProps={{ readOnly: true }}
                 />
               </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Order Quantity"
-                  type="number"
-                  value={editFormData.orderQuantity}
-                  onChange={(e) => setEditFormData({ ...editFormData, orderQuantity: parseInt(e.target.value, 10) || 0 })}
-                  required
-                />
-              </Grid>
+               <Grid item xs={12} sm={6}>
+                 <TextField
+                   fullWidth
+                   label="Order Quantity"
+                   type="number"
+                   value={editFormData.orderQuantity}
+                   onChange={(e) => {
+                     const newOrderQuantity = parseInt(e.target.value, 10) || 0;
+                     const newQtyToMake = calculateQtyToMake(newOrderQuantity, editFormData.extraBuffer || 15);
+                     setEditFormData({ ...editFormData, orderQuantity: newOrderQuantity, qtyToMake: newQtyToMake });
+                   }}
+                   required
+                 />
+               </Grid>
+               <Grid item xs={12} sm={6}>
+                 <TextField
+                   fullWidth
+                   label="Extra Buffer (%)"
+                   type="number"
+                   value={editFormData.extraBuffer || 15}
+                   onChange={(e) => {
+                     const newExtraBuffer = parseInt(e.target.value) || 15;
+                     const newQtyToMake = calculateQtyToMake(editFormData.orderQuantity || 0, newExtraBuffer);
+                     setEditFormData({ ...editFormData, extraBuffer: newExtraBuffer, qtyToMake: newQtyToMake });
+                   }}
+                   inputProps={{ min: 0, max: 100 }}
+                   helperText="Extra % added to order quantity"
+                 />
+               </Grid>
+               <Grid item xs={12} sm={6}>
+                 <TextField
+                   fullWidth
+                   label="Qty to Make"
+                   type="number"
+                   value={editFormData.qtyToMake || 0}
+                   InputProps={{
+                     readOnly: true,
+                     sx: { bgcolor: 'action.hover' }
+                   }}
+                   helperText={`Auto-calculated: ${editFormData.orderQuantity || 0} + ${Math.ceil((editFormData.orderQuantity || 0) * (editFormData.extraBuffer || 15) / 100)} = ${editFormData.qtyToMake || 0}`}
+                 />
+               </Grid>
             </Grid>
           </Box>
         </DialogContent>

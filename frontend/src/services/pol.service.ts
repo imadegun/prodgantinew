@@ -170,6 +170,8 @@ export const polService = {
     material?: string;
     size?: string;
     quantity?: number;
+    extraBuffer?: number;
+    qtyToMake?: number;
   }): Promise<any> {
     const response = await apiClient.put(`/pols/details/${detailId}`, data);
     return response;
