@@ -81,10 +81,12 @@ export class ProductionService {
       const records = stageRecords[stage] || [];
       const latestRecord = records[0];
       const totalQuantity = records.reduce((sum, r) => sum + r.quantity, 0);
+      const totalRejectQuantity = records.reduce((sum, r) => sum + (r.rejectQuantity || 0), 0);
 
       return {
         stage,
         totalQuantity,
+        totalRejectQuantity,
         latestRecord,
         records,
       };
@@ -121,7 +123,7 @@ export class ProductionService {
     }
 
     // Check for discrepancies
-    const discrepancy = await this.checkForDiscrepancy(polDetailId, stage, quantity);
+    const discrepancy = await this.checkForDiscrepancy(polDetailId, stage, quantity, rejectQuantity);
 
     // Auto-determine category if not provided
     const productionCategory = category || this.getCategoryForStage(stage);
@@ -224,7 +226,8 @@ export class ProductionService {
   private async checkForDiscrepancy(
     polDetailId: number,
     stage: ProductionStage,
-    quantity: number
+    quantity: number,
+    rejectQuantity?: number
   ): Promise<DiscrepancyData | null> {
     const stageOrder = ['THROWING', 'TRIMMING', 'DECORATION', 'DRYING', 'LOAD_BISQUE', 'OUT_BISQUE', 'LOAD_HIGH_FIRING', 'OUT_HIGH_FIRING', 'LOAD_RAKU_FIRING', 'OUT_RAKU_FIRING', 'LOAD_LUSTER_FIRING', 'OUT_LUSTER_FIRING', 'SANDING', 'WAXING', 'DIPPING', 'SPRAYING', 'COLOR_DECORATION', 'QC_GOOD', 'QC_REJECT', 'QC_RE_FIRING', 'QC_SECOND'];
     const currentIndex = stageOrder.indexOf(stage);
@@ -250,14 +253,29 @@ export class ProductionService {
       return null;
     }
 
-    const difference = quantity - expectedQuantity;
+    // Get already recorded quantity for current stage (including rejects)
+    const currentRecords = await prisma.productionRecord.findMany({
+      where: {
+        polDetailId,
+        stage,
+      },
+    });
+
+    const alreadyRecordedGood = currentRecords.reduce((sum, r) => sum + r.quantity, 0);
+    const alreadyRecordedRejects = currentRecords.reduce((sum, r) => sum + (r.rejectQuantity || 0), 0);
+    const newRejectQuantity = rejectQuantity || 0;
+
+    // Calculate total after adding new entry (good + rejects)
+    const totalAfterNewEntry = alreadyRecordedGood + quantity + alreadyRecordedRejects + newRejectQuantity;
+
+    const difference = totalAfterNewEntry - expectedQuantity;
 
     // Allow 5% tolerance
     const tolerance = expectedQuantity * 0.05;
     if (Math.abs(difference) > tolerance) {
       return {
         expected: expectedQuantity,
-        actual: quantity,
+        actual: totalAfterNewEntry,
         difference,
         stage,
       };

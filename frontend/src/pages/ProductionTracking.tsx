@@ -311,8 +311,8 @@ const ProductionTracking = () => {
     const alreadyRecordedQty = currentStageData?.totalQuantity || 0;
     const alreadyRecordedRejects = currentStageData?.records?.reduce((sum: number, r: any) => sum + (r.rejectQuantity || 0), 0) || 0;
     
-    // Calculate total after adding new entry
-    const totalAfterNewEntry = alreadyRecordedQty + qty + rejectQty;
+    // Calculate total after adding new entry (including both good and reject quantities)
+    const totalAfterNewEntry = alreadyRecordedQty + qty + alreadyRecordedRejects + rejectQty;
     
     // Define stage flow and validation rules
     const stageFlow = {
@@ -351,7 +351,7 @@ const ProductionTracking = () => {
       if (totalAfterNewEntry > maxQty) {
         return {
           valid: false,
-          error: `Total quantity (${totalAfterNewEntry}) cannot exceed quantity to make (${maxQty}). Already recorded: ${alreadyRecordedQty}, New entry: ${qty + rejectQty}. Order: ${orderQty} + Extra: ${extraBuffer}% = ${maxQty}. Please reduce quantity.`
+          error: `Total quantity (${totalAfterNewEntry}) cannot exceed quantity to make (${maxQty}). Already recorded: ${alreadyRecordedQty} good + ${alreadyRecordedRejects} reject, New entry: ${qty} good + ${rejectQty} reject. Order: ${orderQty} + Extra: ${extraBuffer}% = ${maxQty}. Please reduce quantity.`
         };
       }
       return { valid: true };
@@ -372,9 +372,9 @@ const ProductionTracking = () => {
       let prevStageAvailableQty = 0;
       
       if (flowConfig.useGoodQty) {
-        // Use good quantity (total - rejects) from previous stage
-        const prevStageRejects = prevStageData.records?.reduce((sum: number, r: any) => sum + (r.rejectQuantity || 0), 0) || 0;
-        prevStageAvailableQty = prevStageData.totalQuantity - prevStageRejects;
+        // Use good quantity from previous stage (NOT subtracting rejects - rejects are discarded)
+        // Use totalRejectQuantity from backend if available, otherwise calculate from records
+        prevStageAvailableQty = prevStageData.totalQuantity;
       } else {
         // Use total quantity (good + rejects) from previous stage
         prevStageAvailableQty = prevStageData.totalQuantity;
@@ -384,7 +384,7 @@ const ProductionTracking = () => {
       if (totalAfterNewEntry > prevStageAvailableQty) {
         return {
           valid: false,
-          error: `Total quantity (${totalAfterNewEntry}) cannot exceed available quantity from ${stageNames[flowConfig.prevStage]} (${prevStageAvailableQty}). Already recorded in ${stageNames[stage]}: ${alreadyRecordedQty}, New entry: ${qty + rejectQty}. Please reduce quantity.`
+          error: `Total quantity (${totalAfterNewEntry}) cannot exceed available quantity from ${stageNames[flowConfig.prevStage]} (${prevStageAvailableQty} good - rejects are discarded). Already recorded in ${stageNames[stage]}: ${alreadyRecordedQty} good + ${alreadyRecordedRejects} reject, New entry: ${qty} good + ${rejectQty} reject. Please reduce quantity.`
         };
       }
     }
@@ -636,15 +636,25 @@ const ProductionTracking = () => {
                               <Box sx={{ ml: 'auto' }}>
                                 {categoryStages[category]?.map(stage => {
                                   const stageData = stageRecords[stage];
-                                  if (stageData?.totalQuantity > 0) {
+                                  const totalRejects = stageData?.totalRejectQuantity || stageData?.records?.reduce((sum: number, r: any) => sum + (r.rejectQuantity || 0), 0) || 0;
+                                  if (stageData?.totalQuantity > 0 || totalRejects > 0) {
                                     return (
-                                      <Chip 
-                                        key={stage}
-                                        label={stageData.totalQuantity} 
-                                        size="small" 
-                                        color="success"
-                                        sx={{ ml: 0.5, height: 20, fontSize: '0.7rem' }}
-                                      />
+                                      <Box key={stage} sx={{ display: 'flex', alignItems: 'center', ml: 0.5 }}>
+                                        <Chip
+                                          label={stageData.totalQuantity}
+                                          size="small"
+                                          color="success"
+                                          sx={{ height: 20, fontSize: '0.7rem' }}
+                                        />
+                                        {totalRejects > 0 && (
+                                          <Chip
+                                            label={`-${totalRejects}`}
+                                            size="small"
+                                            color="error"
+                                            sx={{ ml: 0.5, height: 20, fontSize: '0.7rem' }}
+                                          />
+                                        )}
+                                      </Box>
                                     );
                                   }
                                   return null;
@@ -683,12 +693,22 @@ const ProductionTracking = () => {
                               >
                                 {stageNames[stage]}
                                 {hasData && (
-                                  <Chip 
-                                    label={stageData.totalQuantity} 
-                                    size="small" 
-                                    color="success"
-                                    sx={{ ml: 'auto', height: 20, fontSize: '0.7rem' }}
-                                  />
+                                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                    <Chip
+                                      label={stageData.totalQuantity}
+                                      size="small"
+                                      color="success"
+                                      sx={{ height: 20, fontSize: '0.7rem' }}
+                                    />
+                                    {(stageData.totalRejectQuantity || stageData.records?.reduce((sum: number, r: any) => sum + (r.rejectQuantity || 0), 0) > 0) && (
+                                      <Chip
+                                        label={`-${stageData.totalRejectQuantity || stageData.records?.reduce((sum: number, r: any) => sum + (r.rejectQuantity || 0), 0)}`}
+                                        size="small"
+                                        color="error"
+                                        sx={{ ml: 0.5, height: 20, fontSize: '0.7rem' }}
+                                      />
+                                    )}
+                                  </Box>
                                 )}
                               </Button>
                             </Grid>
@@ -720,19 +740,28 @@ const ProductionTracking = () => {
                     </Box>
  
                     {/* Current Stage Info */}
-                    {currentStageData && currentStageData.totalQuantity > 0 && (
-                      <Box sx={{ mb: 3, p: 2, bgcolor: '#e8f5e9', borderRadius: 1 }}>
-                        <Typography variant="subtitle2" color="success.main">
-                          Already recorded: {currentStageData.totalQuantity} units
-                        </Typography>
-                        {currentStageData.latestRecord && (
-                          <Typography variant="body2" color="text.secondary">
-                            Last entry: {format(new Date(currentStageData.latestRecord.createdAt), 'MMM dd, yyyy HH:mm')}
-                            {currentStageData.latestRecord.notes && ` - ${currentStageData.latestRecord.notes}`}
+                    {(() => {
+                      const hasRejects = (currentStageData?.totalRejectQuantity || currentStageData?.records?.reduce((sum: number, r: any) => sum + (r.rejectQuantity || 0), 0) || 0) > 0;
+                      if (!currentStageData || (currentStageData.totalQuantity === 0 && !hasRejects)) return null;
+                      return (
+                        <Box sx={{ mb: 3, p: 2, bgcolor: '#e8f5e9', borderRadius: 1 }}>
+                          <Typography variant="subtitle2" color="success.main">
+                            Already recorded: {currentStageData.totalQuantity} good
+                            {hasRejects && (
+                              <Typography variant="subtitle2" color="error.main" sx={{ ml: 1 }}>
+                                + {currentStageData.totalRejectQuantity || currentStageData.records?.reduce((sum: number, r: any) => sum + (r.rejectQuantity || 0), 0)} reject
+                              </Typography>
+                            )}
                           </Typography>
-                        )}
-                      </Box>
-                    )}
+                          {currentStageData.latestRecord && (
+                            <Typography variant="body2" color="text.secondary">
+                              Last entry: {format(new Date(currentStageData.latestRecord.createdAt), 'MMM dd, yyyy HH:mm')}
+                              {currentStageData.latestRecord.notes && ` - ${currentStageData.latestRecord.notes}`}
+                            </Typography>
+                          )}
+                        </Box>
+                      );
+                    })()}
  
                     {/* Input Form */}
                     <Grid container spacing={2}>
