@@ -26,11 +26,17 @@ import {
   Select,
   FormControl,
   InputLabel,
+  Divider,
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
   Save as SaveIcon,
   Warning as WarningIcon,
+  Info as InfoIcon,
+  Build as BuildIcon,
+  LocalFireDepartment as FireIcon,
+  Palette as LusterIcon,
+  Science as ClayIcon,
 } from '@mui/icons-material';
 import { useAppSelector, useAppDispatch } from '../hooks/useAppSelector';
 import { fetchProductionStages, trackProduction } from '../store/slices/productionSlice';
@@ -104,8 +110,8 @@ const categoryLabels: Record<string, string> = {
   QC: 'Quality Control',
 };
 
-// Stages grouped by category
-const categoryStages: Record<string, string[]> = {
+// Default stages grouped by category (used when workflow not available)
+const defaultCategoryStages: Record<string, string[]> = {
   FORMING: ['THROWING', 'TRIMMING'],
   DECOR: ['DECORATION'],
   DRYING: ['DRYING'],
@@ -154,6 +160,10 @@ const ProductionTracking = () => {
   // Production records for each stage
   const [stageRecords, setStageRecords] = useState<Record<string, any>>({});
   
+  // Production info from MySQL (BuildTech, Clay, Luster, etc.)
+  const [productionInfo, setProductionInfo] = useState<any>(null);
+  const [productionWorkflow, setProductionWorkflow] = useState<any>(null);
+  
   const categories = ['FORMING', 'DECOR', 'DRYING', 'FIRING', 'GLAZING', 'QC'];
   
   useEffect(() => {
@@ -171,6 +181,13 @@ const ProductionTracking = () => {
       loadRemakeCycles();
     }
   }, [selectedProduct, dispatch]);
+
+  useEffect(() => {
+    // Load production info when polDetails is available
+    if (selectedProduct && polDetails.length > 0) {
+      loadProductionInfo();
+    }
+  }, [selectedProduct, polDetails, dispatch]);
 
   const loadProductionStages = async () => {
     try {
@@ -258,7 +275,66 @@ const ProductionTracking = () => {
       console.error('Error loading remake cycles:', error);
     }
   };
- 
+
+  // Helper function to get product code from various sources
+  const getProductCode = (): string | null => {
+    // First try to get from polDetailsData (set from backend)
+    if (polDetailsData?.productCode) {
+      return polDetailsData.productCode;
+    }
+    
+    // Fallback to finding in polDetails array
+    const selectedDetail = polDetails.find((d: any) => d.id === Number(selectedProduct));
+    if (selectedDetail?.productCode) {
+      return selectedDetail.productCode;
+    }
+    
+    return null;
+  };
+
+  // Fallback default stages if no workflow is loaded
+  const getStagesForCategory = (category: string): string[] => {
+    if (productionWorkflow?.stages && productionWorkflow.stages.length > 0) {
+      return productionWorkflow.stages.filter((stage: string) => getCategoryForStage(stage) === category);
+    }
+    return defaultCategoryStages[category] || [];
+  };
+
+  const loadProductionInfo = async (): Promise<void> => {
+    if (!selectedProduct) return;
+    
+    const productCode = getProductCode();
+    
+    if (!productCode) {
+      console.warn('Product code not found for POL detail:', selectedProduct, 'polDetailsData:', polDetailsData, 'polDetails:', polDetails);
+      return;
+    }
+    
+    try {
+      console.log('Loading production info for product code:', productCode);
+      
+      const [infoData, workflowData]: [any, any] = await Promise.all([
+        productionService.getProductProductionInfo(productCode),
+        productionService.getProductWorkflow(productCode),
+      ]);
+      
+      console.log('Production Info for', productCode + ':', infoData);
+      console.log('Production Workflow for', productCode + ':', workflowData);
+      
+      setProductionInfo(infoData);
+      setProductionWorkflow(workflowData);
+      
+      // If workflow loaded successfully, update current stage if needed
+      if (workflowData?.stages && workflowData.stages.length > 0) {
+        const currentCategoryStages = getStagesForCategory(currentCategory);
+        if (currentCategoryStages.length > 0 && !currentCategoryStages.includes(currentStage)) {
+          setCurrentStage(currentCategoryStages[0]);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading production info for', productCode + ':', error);
+    }
+  };
   const handlePOLChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const polId = event.target.value;
     setSelectedPOL(polId);
@@ -289,8 +365,12 @@ const ProductionTracking = () => {
     const newCategory = categories[newValue];
     setCurrentCategory(newCategory);
     
-    // Set the first stage of the category as current
-    const categoryStageList = categoryStages[newValue] || [];
+    // Set first stage of category as current - use workflow stages if available
+    const workflowStages = productionWorkflow?.stages || [];
+    const categoryStageList = workflowStages.length > 0 
+      ? workflowStages.filter(stage => getCategoryForStage(stage) === newCategory)
+      : defaultCategoryStages[newCategory] || [];
+    
     if (categoryStageList.length > 0) {
       setCurrentStage(categoryStageList[0]);
     }
@@ -583,6 +663,110 @@ const ProductionTracking = () => {
                 </Typography>
               </Grid>
             </Grid>
+            
+            {/* Production Workflow Info */}
+            {productionWorkflow && (
+              <Box sx={{ mt: 2, p: 2, bgcolor: '#e3f2fd', borderRadius: 1 }}>
+                <Typography variant="subtitle2" color="primary.main" gutterBottom>
+                  <InfoIcon sx={{ verticalAlign: 'middle', mr: 1, fontSize: 20 }} />
+                  Production Workflow
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="body2">
+                      <strong>Workflow:</strong> {productionWorkflow.workflowType}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="body2">
+                      <strong>Firing Type:</strong> {productionWorkflow.firingType || 'Standard'}
+                    </Typography>
+                  </Grid>
+                  {productionWorkflow.skipHighFiring && (
+                    <Grid item xs={12} sm={6}>
+                      <Chip 
+                        icon={<FireIcon />}
+                        label="Skip High Firing (Raku Clay)"
+                        color="warning"
+                        size="small"
+                      />
+                    </Grid>
+                  )}
+                  {productionWorkflow.hasLusterFiring && (
+                    <Grid item xs={12} sm={6}>
+                      <Chip 
+                        icon={<LusterIcon />}
+                        label="Includes Luster Firing"
+                        color="secondary"
+                        size="small"
+                      />
+                    </Grid>
+                  )}
+                </Grid>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  {productionWorkflow.summary}
+                </Typography>
+              </Box>
+            )}
+            
+            {/* Production Details from MySQL */}
+            {productionInfo && (
+              <Box sx={{ mt: 2 }}>
+                <Divider sx={{ mb: 2 }} />
+                <Typography variant="subtitle2" gutterBottom>
+                  <BuildIcon sx={{ verticalAlign: 'middle', mr: 1, fontSize: 20 }} />
+                  Production Specifications
+                </Typography>
+                <Grid container spacing={2}>
+                  {productionInfo.buildTech && (
+                    <Grid item xs={12} sm={4}>
+                      <Typography variant="body2">
+                        <strong>Build Technique:</strong> {productionInfo.buildTech}
+                      </Typography>
+                    </Grid>
+                  )}
+                  {productionInfo.clayDescription && (
+                    <Grid item xs={12} sm={4}>
+                      <Typography variant="body2">
+                        <strong><ClayIcon sx={{ verticalAlign: 'middle', mr: 0.5, fontSize: 16 }} />Clay:</strong> {productionInfo.clayDescription}
+                        {productionInfo.clayKG && ` (${productionInfo.clayKG} kg)`}
+                      </Typography>
+                    </Grid>
+                  )}
+                  {productionInfo.firing && (
+                    <Grid item xs={12} sm={4}>
+                      <Typography variant="body2">
+                        <strong><FireIcon sx={{ verticalAlign: 'middle', mr: 0.5, fontSize: 16 }} />Firing:</strong> {productionInfo.firing}
+                      </Typography>
+                    </Grid>
+                  )}
+                  {productionInfo.hasLuster && (
+                    <Grid item xs={12} sm={4}>
+                      <Typography variant="body2">
+                        <strong><LusterIcon sx={{ verticalAlign: 'middle', mr: 0.5, fontSize: 16 }} />Luster:</strong> Yes
+                        {productionInfo.lustreTemp && ` (${productionInfo.lustreTemp}°C)`}
+                      </Typography>
+                    </Grid>
+                  )}
+                  {(productionInfo.width || productionInfo.height || productionInfo.diameter) && (
+                    <Grid item xs={12} sm={4}>
+                      <Typography variant="body2">
+                        <strong>Size:</strong> {[
+                          productionInfo.width && `${productionInfo.width}cm W`,
+                          productionInfo.height && `${productionInfo.height}cm H`,
+                          productionInfo.diameter && `${productionInfo.diameter}cm D`,
+                        ].filter(Boolean).join(' x ')}
+                      </Typography>
+                    </Grid>
+                  )}
+                </Grid>
+                {productionInfo.buildTechNote && (
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                    <strong>Build Notes:</strong> {productionInfo.buildTechNote}
+                  </Typography>
+                )}
+              </Box>
+            )}
           </CardContent>
         </Card>
       )}
@@ -634,7 +818,7 @@ const ProductionTracking = () => {
                                 }}
                               />
                               <Box sx={{ ml: 'auto' }}>
-                                {categoryStages[category]?.map(stage => {
+                                {(productionWorkflow?.stages || defaultCategoryStages[category] || [])?.filter((stage: string) => getCategoryForStage(stage) === category)?.map(stage => {
                                   const stageData = stageRecords[stage];
                                   const totalRejects = stageData?.totalRejectQuantity || stageData?.records?.reduce((sum: number, r: any) => sum + (r.rejectQuantity || 0), 0) || 0;
                                   if (stageData?.totalQuantity > 0 || totalRejects > 0) {
@@ -673,11 +857,11 @@ const ProductionTracking = () => {
                         Stages in {categoryLabels[currentCategory]}:
                       </Typography>
                       <Grid container spacing={1}>
-                        {categoryStages[currentCategory]?.map(stage => {
+                        {getStagesForCategory(currentCategory).map(stage => {
                           const stageData = stageRecords[stage];
                           const isActive = currentStage === stage;
                           const hasData = stageData?.totalQuantity > 0;
-                          
+                           
                           return (
                             <Grid item xs={6} key={stage}>
                               <Button
@@ -691,7 +875,7 @@ const ProductionTracking = () => {
                                   bgcolor: isActive ? categoryColors[currentCategory] : undefined,
                                 }}
                               >
-                                {stageNames[stage]}
+                                {stageNames[stage] || stage}
                                 {hasData && (
                                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
                                     <Chip

@@ -177,4 +177,70 @@ router.get('/:code/notes', authenticate, async (req, res) => {
   }
 });
 
+// Get production info (BuildTech, Clay, Luster, etc.)
+router.get('/:code/production-info', authenticate, async (req, res) => {
+  try {
+    const { code } = req.params;
+    
+    const productionInfo = await productService.getProductProductionInfo(code);
+    
+    if (!productionInfo) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'PRODUCT_NOT_FOUND',
+          message: 'Product not found',
+        },
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: productionInfo,
+    });
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
+      success: false,
+      error: {
+        code: error.code || 'GET_PRODUCTION_INFO_FAILED',
+        message: error.message || 'Failed to get production info',
+      },
+    });
+  }
+});
+
+// Get production workflow (determines stages based on product specs)
+router.get('/:code/workflow', authenticate, async (req, res) => {
+  try {
+    const { code } = req.params;
+    
+    const workflow = await productService.getProductionWorkflow(code);
+    
+    if (!workflow) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'PRODUCT_NOT_FOUND',
+          message: 'Product not found',
+        },
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: workflow,
+    });
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
+      success: false,
+      error: {
+        code: error.code || 'GET_WORKFLOW_FAILED',
+        message: error.message || 'Failed to get production workflow',
+      },
+    });
+  }
+});
+
 export default router;

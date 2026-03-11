@@ -79,6 +79,66 @@ interface ToolRequirements {
   };
 }
 
+/**
+ * Extended product info from tblcollect_master including production-specific fields
+ */
+interface ProductProductionInfo {
+  productCode: string;
+  // Build Technique
+  buildTech: string | null;
+  buildTechNote: string | null;
+  // Clay info
+  clayId: number | null;
+  clayCode: string | null;
+  clayDescription: string | null;
+  clayKG: number | null;
+  clayNote: string | null;
+  // Luster info
+  hasLuster: boolean;
+  lustre1: { id: number; code: string; description: string } | null;
+  lustre2: { id: number; code: string; description: string } | null;
+  lustre3: { id: number; code: string; description: string } | null;
+  lustre4: { id: number; code: string; description: string } | null;
+  lustreTemp: number | null;
+  // Firing info
+  firing: string | null;
+  firingNote: string | null;
+  // Glaze info
+  glaze1: { id: number; code: string; description: string } | null;
+  glaze2: { id: number; code: string; description: string } | null;
+  glaze3: { id: number; code: string; description: string } | null;
+  glaze4: { id: number; code: string; description: string } | null;
+  glazeTemp: number | null;
+  // Engobe info
+  engobe1: { id: number; code: string; description: string } | null;
+  engobe2: { id: number; code: string; description: string } | null;
+  engobe3: { id: number; code: string; description: string } | null;
+  engobe4: { id: number; code: string; description: string } | null;
+  // Size info
+  width: number | null;
+  height: number | null;
+  length: number | null;
+  diameter: number | null;
+}
+
+/**
+ * Determine production workflow based on product specs
+ */
+export interface ProductionWorkflow {
+  // Workflow type based on BuildTech
+  workflowType: 'THROWING' | 'HANDBUILD' | 'SLAB';
+  // Whether to skip High Firing (for Raku clay)
+  skipHighFiring: boolean;
+  // Whether to include Luster Firing stages
+  hasLusterFiring: boolean;
+  // Firing type
+  firingType: string | null;
+  // Summary for display
+  summary: string;
+  // All applicable stages for this product
+  stages: string[];
+}
+
 export class ProductService {
   /**
    * Get all clients from tblcollect_design
@@ -195,7 +255,27 @@ export class ProductService {
     
     try {
       const [rows] = await pool.execute(
-        `SELECT * FROM tblcollect_master WHERE product_code = ?`,
+        `SELECT 
+          m.ID as id,
+          m.CollectCode as productCode,
+          c.CategoryName as productName,
+          COALESCE(cl.ColorName, '') as color,
+          COALESCE(mt.MaterialName, '') as material,
+          COALESCE(s.SizeName, '') as size,
+          m.Clay as clayId,
+          clay.ClayCode as clayCode,
+          clay.ClayDescription as clayDescription,
+          m.ClayKG as clayKG,
+          m.BuildTech as buildTech,
+          m.BuildTechNote as buildTechNote,
+          m.Firing as firing,
+          m.FiringNote as firingNote
+       FROM tblcollect_master m
+       LEFT JOIN tblcollect_category c ON m.CategoryCode = c.CategoryCode
+       LEFT JOIN tblcollect_material mt ON m.MaterialCode = mt.MaterialCode
+       LEFT JOIN tblcollect_size s ON m.SizeCode = s.SizeCode
+       LEFT JOIN tblclay clay ON m.Clay = clay.ID
+       WHERE m.CollectCode = ?`,
         [code]
       );
       
@@ -206,24 +286,24 @@ export class ProductService {
       const row = (rows as any[])[0];
       
       const product = {
-        productCode: row.product_code,
-        productName: row.product_name,
+        productCode: row.productCode,
+        productName: row.productName,
         color: row.color || '',
         texture: row.texture || '',
         material: row.material || '',
         size: row.size || '',
-        finalSize: row.final_size || '',
-        clayType: row.clay_type || '',
-        clayQuantity: row.clay_quantity || 0,
+        finalSize: row.finalSize || '',
+        clayType: row.clayDescription || '',
+        clayQuantity: row.clayKG || 0,
         glaze: row.glaze || '',
         engobe: row.engobe || '',
-        luster: row.luster || '',
-        stainsOxides: row.stains_oxides || '',
-        castingTools: row.casting_tools || '',
+        luster: row.lustre || '',
+        stainsOxides: row.stainOxide || '',
+        castingTools: row.castingTools || '',
         extruders: row.extruders || '',
         textures: row.textures || '',
-        generalTools: row.general_tools || '',
-        buildNotes: row.build_notes || '',
+        generalTools: row.tools || '',
+        buildNotes: row.buildTechNote || '',
       };
       
       return product;
@@ -339,12 +419,248 @@ export class ProductService {
   }
 
   /**
-   * Parse comma-separated string to array
-   */
-  private parseCSV(value: string | null): string[] {
-    if (!value) return [];
-    return value.split(',').map(s => s.trim()).filter(s => s.length > 0);
+ * Parse comma-separated string to array
+ */
+private parseCSV(value: string | null): string[] {
+  if (!value) return [];
+  return value.split(',').map(s => s.trim()).filter(s => s.length > 0);
+}
+
+/**
+ * Get production info for a product from tblcollect_master
+ * Includes BuildTech, Clay, Luster, and other production-specific fields
+ */
+async getProductProductionInfo(code: string): Promise<ProductProductionInfo | null> {
+  const pool = getMySQLPool();
+  
+  if (!pool) {
+    throw new AppError('MySQL connection not initialized', 500, 'MYSQL_NOT_INITIALIZED');
   }
+  
+  try {
+    const [rows] = await pool.execute(
+      `SELECT 
+        m.CollectCode as productCode,
+        m.BuildTech as buildTech,
+        m.BuildTechNote as buildTechNote,
+        m.Clay as clayId,
+        c.ClayCode as clayCode,
+        c.ClayDescription as clayDescription,
+        m.ClayKG as clayKG,
+        m.ClayNote as clayNote,
+        m.Lustre1 as lustre1,
+        m.Lustre2 as lustre2,
+        m.Lustre3 as lustre3,
+        m.Lustre4 as lustre4,
+        m.LustreTemp as lustreTemp,
+        m.Firing as firing,
+        m.FiringNote as firingNote,
+        m.Glaze1 as glaze1,
+        m.Glaze2 as glaze2,
+        m.Glaze3 as glaze3,
+        m.Glaze4 as glaze4,
+        m.GlazeTemp as glazeTemp,
+        m.Engobe1 as engobe1,
+        m.Engobe2 as engobe2,
+        m.Engobe3 as engobe3,
+        m.Engobe4 as engobe4,
+        m.Width as width,
+        m.Height as height,
+        m.Length as length,
+        m.Diameter as diameter
+       FROM tblcollect_master m
+       LEFT JOIN tblclay c ON m.Clay = c.ID
+       WHERE m.CollectCode = ?`,
+      [code]
+    );
+    
+    if ((rows as any[]).length === 0) {
+      return null;
+    }
+    
+    const row = (rows as any[])[0];
+    
+    // Check if product has luster (any lustre field is not null)
+    const hasLuster = row.lustre1 || row.lustre2 || row.lustre3 || row.lustre4;
+    
+    // Helper to get luster/glaze/engobe details
+    const getDetail = async (id: number, tableName: string) => {
+      if (!id) return null;
+      const [detailRows] = await pool.execute(
+        `SELECT ID as id, ${tableName}Code as code, ${tableName}Description as description FROM tbl${tableName} WHERE ID = ?`,
+        [id]
+      );
+      return (detailRows as any[])[0] || null;
+    };
+    
+    // Get luster details
+    const luster1 = row.lustre1 ? await getDetail(row.lustre1, 'lustre') : null;
+    const luster2 = row.lustre2 ? await getDetail(row.lustre2, 'lustre') : null;
+    const luster3 = row.lustre3 ? await getDetail(row.lustre3, 'lustre') : null;
+    const luster4 = row.lustre4 ? await getDetail(row.lustre4, 'lustre') : null;
+    
+    // Get glaze details
+    const glaze1 = row.glaze1 ? await getDetail(row.glaze1, 'glaze') : null;
+    const glaze2 = row.glaze2 ? await getDetail(row.glaze2, 'glaze') : null;
+    const glaze3 = row.glaze3 ? await getDetail(row.glaze3, 'glaze') : null;
+    const glaze4 = row.glaze4 ? await getDetail(row.glaze4, 'glaze') : null;
+    
+    // Get engobe details
+    const engobe1 = row.engobe1 ? await getDetail(row.engobe1, 'engobe') : null;
+    const engobe2 = row.engobe2 ? await getDetail(row.engobe2, 'engobe') : null;
+    const engobe3 = row.engobe3 ? await getDetail(row.engobe3, 'engobe') : null;
+    const engobe4 = row.engobe4 ? await getDetail(row.engobe4, 'engobe') : null;
+    
+    return {
+      productCode: row.productCode,
+      buildTech: row.buildTech,
+      buildTechNote: row.buildTechNote,
+      clayId: row.clayId,
+      clayCode: row.clayCode,
+      clayDescription: row.clayDescription,
+      clayKG: row.clayKG,
+      clayNote: row.clayNote,
+      hasLuster,
+      lustre1: luster1,
+      lustre2: luster2,
+      lustre3: luster3,
+      lustre4: luster4,
+      lustreTemp: row.lustreTemp,
+      firing: row.firing,
+      firingNote: row.firingNote,
+      glaze1,
+      glaze2,
+      glaze3,
+      glaze4,
+      glazeTemp: row.glazeTemp,
+      engobe1,
+      engobe2,
+      engobe3,
+      engobe4,
+      width: row.width,
+      height: row.height,
+      length: row.length,
+      diameter: row.diameter,
+    };
+  } catch (error: any) {
+    console.error('Error getting production info from gayafusionall:', error);
+    throw new AppError('Failed to get production info', 500, 'PRODUCTION_INFO_ERROR');
+  }
+}
+
+/**
+ * Determine production workflow based on product specifications
+ * This analyzes BuildTech, Clay type, and Luster requirements
+ */
+async getProductionWorkflow(code: string): Promise<ProductionWorkflow | null> {
+  const pool = getMySQLPool();
+  
+  if (!pool) {
+    throw new AppError('MySQL connection not initialized', 500, 'MYSQL_NOT_INITIALIZED');
+  }
+  
+  try {
+    const [rows] = await pool.execute(
+      `SELECT 
+        m.CollectCode as productCode,
+        m.BuildTech as buildTech,
+        c.ClayCode as clayCode,
+        m.Lustre1 as lustre1,
+        m.Lustre2 as lustre2,
+        m.Lustre3 as lustre3,
+        m.Lustre4 as lustre4,
+        m.Firing as firing
+       FROM tblcollect_master m
+       LEFT JOIN tblclay c ON m.Clay = c.ID
+       WHERE m.CollectCode = ?`,
+      [code]
+    );
+    
+    if ((rows as any[]).length === 0) {
+      return null;
+    }
+    
+    const row = (rows as any[])[0];
+    
+    // Determine workflow type based on BuildTech
+    let workflowType: 'THROWING' | 'HANDBUILD' | 'SLAB' = 'THROWING';
+    const buildTech = row.buildTech?.toUpperCase() || '';
+    
+    if (buildTech.includes('HANDBUILD') || buildTech.includes('HAND BUILD')) {
+      workflowType = 'HANDBUILD';
+    } else if (buildTech.includes('SLAB') || buildTech.includes('SLAB TRAY')) {
+      workflowType = 'SLAB';
+    }
+    
+    // Check if clay is Raku (skip High Firing)
+    const clayCode = row.clayCode?.toUpperCase() || '';
+    const skipHighFiring = clayCode.includes('RAKU');
+    
+    // Check if product has luster
+    const hasLuster = row.lustre1 || row.lustre2 || row.lustre3 || row.lustre4;
+    
+    // Build stage list based on workflow
+    const allStages = [
+      'THROWING',
+      'TRIMMING',
+      'DECORATION',
+      'DRYING',
+      'LOAD_BISQUE',
+      'OUT_BISQUE',
+      'LOAD_HIGH_FIRING',
+      'OUT_HIGH_FIRING',
+      'LOAD_RAKU_FIRING',
+      'OUT_RAKU_FIRING',
+      'LOAD_LUSTER_FIRING',
+      'OUT_LUSTER_FIRING',
+      'SANDING',
+      'WAXING',
+      'DIPPING',
+      'SPRAYING',
+      'COLOR_DECORATION',
+      'QC_GOOD',
+      'QC_REJECT',
+      'QC_RE_FIRING',
+      'QC_SECOND',
+    ];
+    
+    let stages = [...allStages];
+    
+    // Remove stages based on workflow
+    if (workflowType === 'HANDBUILD' || workflowType === 'SLAB') {
+      // Skip THROWING and TRIMMING for Handbuild/Slab
+      stages = stages.filter(s => s !== 'THROWING' && s !== 'TRIMMING');
+    }
+    
+    if (skipHighFiring) {
+      // Skip High Firing for Raku clay
+      stages = stages.filter(s => s !== 'LOAD_HIGH_FIRING' && s !== 'OUT_HIGH_FIRING');
+    }
+    
+    if (!hasLuster) {
+      // Skip Luster Firing if no luster
+      stages = stages.filter(s => s !== 'LOAD_LUSTER_FIRING' && s !== 'OUT_LUSTER_FIRING');
+    }
+    
+    // Build summary
+    const summaryParts: string[] = [];
+    summaryParts.push(`Workflow: ${workflowType}`);
+    if (skipHighFiring) summaryParts.push('Skip High Firing (Raku clay)');
+    if (hasLuster) summaryParts.push('Includes Luster Firing');
+    
+    return {
+      workflowType,
+      skipHighFiring,
+      hasLusterFiring: hasLuster,
+      firingType: row.firing,
+      summary: summaryParts.join(' | '),
+      stages,
+    };
+  } catch (error: any) {
+    console.error('Error determining production workflow:', error);
+    throw new AppError('Failed to determine production workflow', 500, 'WORKFLOW_ERROR');
+  }
+}
 }
 
 export const productService = new ProductService();

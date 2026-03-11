@@ -24,6 +24,46 @@ interface ProductionStagesResponse {
   qtyToMake: number;
   currentStage: string;
   stages: ProductionStage[];
+  workflow?: {
+    workflowType: 'THROWING' | 'HANDBUILD' | 'SLAB';
+    skipHighFiring: boolean;
+    hasLusterFiring: boolean;
+    firingType: string | null;
+    summary: string;
+    stages: string[];
+  };
+}
+
+interface ProductProductionInfo {
+  productCode: string;
+  buildTech: string | null;
+  buildTechNote: string | null;
+  clayId: number | null;
+  clayCode: string | null;
+  clayDescription: string | null;
+  clayKG: number | null;
+  clayNote: string | null;
+  hasLuster: boolean;
+  lustre1: { id: number; code: string; description: string } | null;
+  lustre2: { id: number; code: string; description: string } | null;
+  lustre3: { id: number; code: string; description: string } | null;
+  lustre4: { id: number; code: string; description: string } | null;
+  lustreTemp: number | null;
+  firing: string | null;
+  firingNote: string | null;
+  glaze1: { id: number; code: string; description: string } | null;
+  glaze2: { id: number; code: string; description: string } | null;
+  glaze3: { id: number; code: string; description: string } | null;
+  glaze4: { id: number; code: string; description: string } | null;
+  glazeTemp: number | null;
+  engobe1: { id: number; code: string; description: string } | null;
+  engobe2: { id: number; code: string; description: string } | null;
+  engobe3: { id: number; code: string; description: string } | null;
+  engobe4: { id: number; code: string; description: string } | null;
+  width: number | null;
+  height: number | null;
+  length: number | null;
+  diameter: number | null;
 }
 
 interface TrackProductionRequest {
@@ -245,6 +285,29 @@ export const productionService = {
     role: string;
   }>> {
     const response = await apiClient.get('/production/operators');
+    return response.data;
+  },
+
+  // Get production info (BuildTech, Clay, Luster, etc.)
+  async getProductProductionInfo(productCode: string): Promise<ProductProductionInfo> {
+    const response = await apiClient.get<any>(
+      `/products/${productCode}/production-info`
+    );
+    return response.data;
+  },
+
+  // Get production workflow (determines stages based on product specs)
+  async getProductWorkflow(productCode: string): Promise<{
+    workflowType: 'THROWING' | 'HANDBUILD' | 'SLAB';
+    skipHighFiring: boolean;
+    hasLusterFiring: boolean;
+    firingType: string | null;
+    summary: string;
+    stages: string[];
+  }> {
+    const response = await apiClient.get<any>(
+      `/products/${productCode}/workflow`
+    );
     return response.data;
   },
 };

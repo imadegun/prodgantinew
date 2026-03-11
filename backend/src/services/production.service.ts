@@ -1,6 +1,7 @@
 import { prisma } from '../config/database';
 import { AppError } from '../middleware/error.middleware';
 import { ProductionStage, ProductCategory, RemakeType, ProductType } from '@prisma/client';
+import { productService } from './product.service';
 
 interface TrackProductionData {
   polDetailId: number;
@@ -27,8 +28,8 @@ interface DiscrepancyData {
 
 export class ProductionService {
   /**
-    * Get production stages for a POL detail
-    */
+     * Get production stages for a POL detail
+     */
   async getProductionStages(polDetailId: number) {
     const detail = await prisma.pOLDetail.findUnique({
       where: { id: polDetailId },
@@ -43,6 +44,25 @@ export class ProductionService {
       throw new AppError('POL detail not found', 404, 'DETAIL_NOT_FOUND');
     }
 
+    // Get production workflow from MySQL based on product code
+    let workflowStages: string[] = [];
+    let workflow: any = null;
+    
+    try {
+      workflow = await productService.getProductionWorkflow(detail.productCode);
+      if (workflow) {
+        workflowStages = workflow.stages;
+      }
+    } catch (error) {
+      console.error('Error getting production workflow:', error);
+      // Fall back to default stages if workflow lookup fails
+    }
+
+    // If workflow lookup failed, use default stages based on productType
+    if (workflowStages.length === 0) {
+      workflowStages = this.getStagesByProductType(detail.productType);
+    }
+
     // Group records by stage
     const stageRecords: Record<string, any[]> = {};
     detail.productionRecords.forEach((record) => {
@@ -52,32 +72,8 @@ export class ProductionService {
       stageRecords[record.stage].push(record);
     });
 
-    // Calculate quantities per stage - using actual ProductionStage enum values
-    const stages = [
-      'THROWING',
-      'TRIMMING',
-      'DECORATION',
-      'DRYING',
-      'LOAD_BISQUE',
-      'OUT_BISQUE',
-      'LOAD_HIGH_FIRING',
-      'OUT_HIGH_FIRING',
-      'LOAD_RAKU_FIRING',
-      'OUT_RAKU_FIRING',
-      'LOAD_LUSTER_FIRING',
-      'OUT_LUSTER_FIRING',
-      'SANDING',
-      'WAXING',
-      'DIPPING',
-      'SPRAYING',
-      'COLOR_DECORATION',
-      'QC_GOOD',
-      'QC_REJECT',
-      'QC_RE_FIRING',
-      'QC_SECOND',
-    ] as ProductionStage[];
-
-    const stageData = stages.map((stage) => {
+    // Calculate quantities per stage - using dynamic stages from workflow
+    const stageData = workflowStages.map((stage) => {
       const records = stageRecords[stage] || [];
       const latestRecord = records[0];
       const totalQuantity = records.reduce((sum, r) => sum + r.quantity, 0);
@@ -95,6 +91,7 @@ export class ProductionService {
     return {
       detail,
       qtyToMake: detail.qtyToMake,
+      workflow,
       stages: stageData,
     };
   }
