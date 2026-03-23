@@ -17,6 +17,9 @@ async function main() {
   await prisma.pOLDetail.deleteMany();
   await prisma.pOL.deleteMany();
   await prisma.user.deleteMany();
+  await prisma.oven.deleteMany();
+  await prisma.defectReason.deleteMany();
+  await prisma.productPart.deleteMany();
 
   console.log('✅ Existing data cleared');
 
@@ -47,7 +50,111 @@ async function main() {
     },
   });
 
-  console.log('✅ Users created (2 users)');
+  // Create WORKER users for production tracking
+  const workerNames = [
+    { username: 'worker1', fullName: 'Ayu Sari' },
+    { username: 'worker2', fullName: 'Made Sukarno' },
+    { username: 'worker3', fullName: 'Ketut Budi' },
+    { username: 'worker4', fullName: 'Wayan Susena' },
+    { username: 'worker5', fullName: 'Putu Antariksa' },
+  ];
+
+  for (const worker of workerNames) {
+    await prisma.user.create({
+      data: {
+        username: worker.username,
+        email: `${worker.username}@prodganti.com`,
+        passwordHash: hashedPassword,
+        fullName: worker.fullName,
+        role: 'WORKER',
+        isActive: true,
+      },
+    });
+  }
+
+  console.log('✅ Users created (2 users + 5 workers)');
+
+  // Create Ovens
+  console.log('🔥 Creating Ovens...');
+  
+  const ovens = [];
+  for (let i = 1; i <= 7; i++) {
+    const oven = await prisma.oven.create({
+      data: {
+        ovenCode: `K${i}`,
+        ovenName: `Kiln ${i}`,
+        status: 'ACTIVE',
+        capacity: 100,
+      },
+    });
+    ovens.push(oven);
+  }
+  
+  console.log('✅ Ovens created (7 ovens)');
+
+  // Create Defect Reasons
+  console.log('🔍 Creating Defect Reasons...');
+  
+  const defectReasons = await Promise.all([
+    prisma.defectReason.create({
+      data: {
+        category: 'Defect',
+        description: 'General defect during production',
+        isActive: true,
+      },
+    }),
+    prisma.defectReason.create({
+      data: {
+        category: 'Break',
+        description: 'Item broken during handling or processing',
+        isActive: true,
+      },
+    }),
+    prisma.defectReason.create({
+      data: {
+        category: 'Glaze Color',
+        description: 'Glaze color does not match specification',
+        isActive: true,
+      },
+    }),
+    prisma.defectReason.create({
+      data: {
+        category: 'Crack',
+        description: 'Cracks in the ceramic piece',
+        isActive: true,
+      },
+    }),
+    prisma.defectReason.create({
+      data: {
+        category: 'Warping',
+        description: 'Piece warped during firing',
+        isActive: true,
+      },
+    }),
+    prisma.defectReason.create({
+      data: {
+        category: 'Size Issue',
+        description: 'Size does not meet specifications',
+        isActive: true,
+      },
+    }),
+    prisma.defectReason.create({
+      data: {
+        category: 'Surface Defect',
+        description: 'Surface imperfections',
+        isActive: true,
+      },
+    }),
+    prisma.defectReason.create({
+      data: {
+        category: 'Firing Issue',
+        description: 'Problems during firing process',
+        isActive: true,
+      },
+    }),
+  ]);
+  
+  console.log('✅ Defect Reasons created (8 reasons)');
 
   // Create POLs
   console.log('📋 Creating POLs...');
@@ -206,6 +313,73 @@ async function main() {
   });
 
   console.log('✅ POL Details created (5 details)');
+
+  // Create Product Parts for Teapot
+  console.log('🧩 Creating Product Parts...');
+  
+  // Teapot Body Parts
+  await prisma.productPart.create({
+    data: {
+      polDetailId: detail1.id,
+      partName: 'Body',
+      partType: 'MAIN',
+      throwingRequired: true,
+      throwingOrder: 1,
+    },
+  });
+  
+  await prisma.productPart.create({
+    data: {
+      polDetailId: detail1.id,
+      partName: 'Lid',
+      partType: 'SUB',
+      throwingRequired: true,
+      throwingOrder: 2,
+    },
+  });
+  
+  await prisma.productPart.create({
+    data: {
+      polDetailId: detail1.id,
+      partName: 'Spout',
+      partType: 'SUB',
+      throwingRequired: true,
+      throwingOrder: 3,
+    },
+  });
+  
+  await prisma.productPart.create({
+    data: {
+      polDetailId: detail1.id,
+      partName: 'Handle',
+      partType: 'SUB',
+      throwingRequired: true,
+      throwingOrder: 4,
+    },
+  });
+  
+  // Teapot Lid Parts
+  await prisma.productPart.create({
+    data: {
+      polDetailId: detail2.id,
+      partName: 'Lid Body',
+      partType: 'MAIN',
+      throwingRequired: true,
+      throwingOrder: 1,
+    },
+  });
+  
+  await prisma.productPart.create({
+    data: {
+      polDetailId: detail2.id,
+      partName: 'Knob',
+      partType: 'SUB',
+      throwingRequired: true,
+      throwingOrder: 2,
+    },
+  });
+  
+  console.log('✅ Product Parts created (6 parts)');
 
   // Create Production Records
   console.log('🏭 Creating Production Records...');
@@ -635,6 +809,13 @@ async function main() {
   console.log('👤 Users Created:');
   console.log('   - 1 Manager: manager / manager@prodganti.com');
   console.log('   - 1 Admin: admin / admin@prodganti.com');
+  console.log('   - 5 Workers: worker1-5 / (for production tracking)');
+  console.log('');
+  console.log('🔥 Ovens Created:');
+  console.log('   - K1 through K7 (7 kilns)');
+  console.log('');
+  console.log('🔍 Defect Reasons Created:');
+  console.log('   - Defect, Break, Glaze Color, Crack, Warping, Size Issue, Surface Defect, Firing Issue (8 reasons)');
   console.log('');
   console.log('📋 POLs Created:');
   console.log('   - PO-2026-001: ABC Corporation (IN_PROGRESS)');
@@ -649,6 +830,10 @@ async function main() {
   console.log('   - Cup (Main Body): 100 items (DECOR)');
   console.log('   - Bowl (Main): 75 items (HAND_BUILT)');
   console.log('   - Plate (Main): 50 items (SLAB_TRAY)');
+  console.log('');
+  console.log('🧩 Product Parts Created:');
+  console.log('   - Teapot (Main Body): Body, Lid, Spout, Handle (4 parts)');
+  console.log('   - Teapot (Lid): Lid Body, Knob (2 parts)');
   console.log('');
   console.log('🏭 Production Records Created:');
   console.log('   - Teapot (Main Body): 10 records through all stages');
@@ -686,7 +871,10 @@ async function main() {
   console.log('   Admin: admin / password123');
   console.log('');
   console.log('📊 Database Statistics:');
-  console.log('   - Users: 2');
+  console.log('   - Users: 7 (1 manager, 1 admin, 5 workers)');
+  console.log('   - Ovens: 7');
+  console.log('   - Defect Reasons: 8');
+  console.log('   - Product Parts: 6');
   console.log('   - POLs: 5');
   console.log('   - POL Details: 5');
   console.log('   - Production Records: 12');

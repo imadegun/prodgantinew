@@ -239,6 +239,117 @@ router.get('/defect-reasons', authenticate, async (req, res) => {
   }
 });
 
+// Get all defect reasons (including inactive ones for management)
+router.get('/defect-reasons/all', authenticate, async (req, res) => {
+  try {
+    const result = await productionService.getAllDefectReasons();
+    
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
+      success: false,
+      error: {
+        code: error.code || 'FETCH_DEFECT_REASONS_FAILED',
+        message: error.message || 'Failed to fetch defect reasons',
+      },
+    });
+  }
+});
+
+// Create a new defect reason
+router.post('/defect-reasons', authenticate, async (req, res) => {
+  try {
+    const authReq = req as any;
+    const { category, description } = req.body;
+    
+    if (!category || !description) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'MISSING_FIELDS',
+          message: 'Category and description are required',
+        },
+      });
+    }
+    
+    const result = await productionService.createDefectReason({
+      category,
+      description,
+    });
+    
+    res.status(201).json({
+      success: true,
+      data: result,
+    });
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
+      success: false,
+      error: {
+        code: error.code || 'CREATE_DEFECT_REASON_FAILED',
+        message: error.message || 'Failed to create defect reason',
+      },
+    });
+  }
+});
+
+// Update a defect reason
+router.put('/defect-reasons/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const reasonId = parseInt(id, 10);
+    const { category, description, isActive } = req.body;
+    
+    const result = await productionService.updateDefectReason(reasonId, {
+      category,
+      description,
+      isActive,
+    });
+    
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
+      success: false,
+      error: {
+        code: error.code || 'UPDATE_DEFECT_REASON_FAILED',
+        message: error.message || 'Failed to update defect reason',
+      },
+    });
+  }
+});
+
+// Delete (deactivate) a defect reason
+router.delete('/defect-reasons/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const reasonId = parseInt(id, 10);
+    
+    const result = await productionService.deleteDefectReason(reasonId);
+    
+    res.json({
+      success: true,
+      ...result,
+    });
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
+      success: false,
+      error: {
+        code: error.code || 'DELETE_DEFECT_REASON_FAILED',
+        message: error.message || 'Failed to delete defect reason',
+      },
+    });
+  }
+});
+
 // Get product parts for a POL detail
 router.get('/product-parts/:polDetailId', authenticate, async (req, res) => {
   try {
@@ -288,6 +399,124 @@ router.post('/product-parts', authenticate, async (req, res) => {
       error: {
         code: error.code || 'CREATE_PRODUCT_PART_FAILED',
         message: error.message || 'Failed to create product part',
+      },
+    });
+  }
+});
+
+// Update a product part
+router.put('/product-parts/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const partId = parseInt(id, 10);
+    const { partName, partType, linkedToPartId, throwingRequired, throwingOrder } = req.body;
+    
+    const result = await productionService.updateProductPart(partId, {
+      partName,
+      partType,
+      linkedToPartId,
+      throwingRequired,
+      throwingOrder,
+    });
+    
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
+      success: false,
+      error: {
+        code: error.code || 'UPDATE_PRODUCT_PART_FAILED',
+        message: error.message || 'Failed to update product part',
+      },
+    });
+  }
+});
+
+// Delete a product part
+router.delete('/product-parts/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const partId = parseInt(id, 10);
+    
+    const result = await productionService.deleteProductPart(partId);
+    
+    res.json({
+      success: true,
+      ...result,
+    });
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
+      success: false,
+      error: {
+        code: error.code || 'DELETE_PRODUCT_PART_FAILED',
+        message: error.message || 'Failed to delete product part',
+      },
+    });
+  }
+});
+
+// Get production stages for a specific product part
+router.get('/product-parts/:partId/stages', authenticate, async (req, res) => {
+  try {
+    const { partId } = req.params;
+    const partIdNum = parseInt(partId, 10);
+    
+    const result = await productionService.getPartProductionStages(partIdNum);
+    
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
+      success: false,
+      error: {
+        code: error.code || 'FETCH_PART_STAGES_FAILED',
+        message: error.message || 'Failed to fetch part production stages',
+      },
+    });
+  }
+});
+
+// Track production for a specific product part
+router.post('/track-part', authenticate, async (req, res) => {
+  try {
+    const { polDetailId, partId, stage, quantity, rejectQuantity, remakeCycle, category, remakeType, ovenId, operatorId, rejectReasonId, productionDate, notes } = req.body;
+    const authReq = req as any;
+    
+    const result = await productionService.trackPartProduction({
+      polDetailId,
+      partId,
+      stage,
+      quantity,
+      rejectQuantity: rejectQuantity || 0,
+      remakeCycle: remakeCycle || 0,
+      category,
+      remakeType,
+      ovenId,
+      operatorId,
+      rejectReasonId,
+      productionDate: productionDate ? new Date(productionDate) : undefined,
+      userId: authReq.user.userId,
+      notes,
+    });
+    
+    res.status(201).json({
+      success: true,
+      data: result,
+    });
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
+      success: false,
+      error: {
+        code: error.code || 'TRACK_PART_PRODUCTION_FAILED',
+        message: error.message || 'Failed to track part production',
       },
     });
   }

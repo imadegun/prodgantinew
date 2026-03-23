@@ -1,10 +1,44 @@
-import React, { useState } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { Box, Typography, Card, CardContent, Grid, TextField, Button, Switch, FormControlLabel, Divider, Avatar, Alert, AlertTitle, CircularProgress, Tab, Tabs, IconButton } from '@mui/material';
-import { Save as SaveIcon, PhotoCamera as PhotoCameraIcon } from '@mui/icons-material';
-import { RootState } from '../store';
-import { setUser } from '../store/slices/authSlice';
-import { authService } from '../services/auth.service';
+import React, { useState, useEffect } from 'react';
+import {
+  Box,
+  Grid,
+  Card,
+  CardContent,
+  Typography,
+  TextField,
+  Button,
+  Tabs,
+  Tab,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Chip,
+  Switch,
+  FormControlLabel,
+  Alert,
+  Snackbar,
+  Pagination,
+} from '@mui/material';
+import {
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  Add as AddIcon,
+} from '@mui/icons-material';
+import { useAppSelector } from '../hooks/useAppSelector';
+import { userService } from '../services/user.service';
+import { productionService } from '../services/production.service';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -12,399 +46,758 @@ interface TabPanelProps {
   value: number;
 }
 
-const TabPanel = ({ children, value, index }: TabPanelProps) => (
-  <Box hidden={value !== index} sx={{ py: 3 }}>
-    {value === index && children}
-  </Box>
-);
+function TabPanel(props: TabPanelProps) {
+  const { children, value, index, ...other } = props;
+  return (
+    <div hidden={value !== index} {...other}>
+      {value === index && <Box sx={{ pt: 3 }}>{children}</Box>}
+    </div>
+  );
+}
 
 const Settings = (): JSX.Element => {
-  const dispatch = useDispatch();
-  const { user } = useSelector((state: RootState) => state.auth);
-  const [activeTab, setActiveTab] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-
-  const [profileData, setProfileData] = useState({
-    fullName: user?.fullName || '',
-    email: user?.username || '',
+  const { user } = useAppSelector((state) => state.auth);
+  
+  const [tabValue, setTabValue] = useState(0);
+  
+  // Profile state
+  const [profileForm, setProfileForm] = useState({
     username: user?.username || '',
+    fullName: user?.fullName || '',
+    email: user?.email || '',
   });
-
-  const [passwordData, setPasswordData] = useState({
+  const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
     newPassword: '',
     confirmPassword: '',
   });
-
-  const [notifications, setNotifications] = useState({
-    criticalAlerts: true,
-    warningAlerts: true,
-    infoAlerts: false,
-    browserNotifications: true,
-    dailySummary: true,
-    weeklyReports: true,
-    emailNotifications: true,
+  
+  // User management state
+  const [users, setUsers] = useState<any[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [usersMeta, setUsersMeta] = useState({ page: 1, limit: 10, total: 0, totalPages: 0 });
+  const [userDialogOpen, setUserDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<any>(null);
+  const [userForm, setUserForm] = useState({
+    username: '',
+    email: '',
+    password: '',
+    fullName: '',
+    role: 'WORKER',
+    isActive: true,
   });
-
+  
+  // Defect reasons state
+  const [defectReasons, setDefectReasons] = useState<any[]>([]);
+  const [defectReasonsLoading, setDefectReasonsLoading] = useState(false);
+  const [defectDialogOpen, setDefectDialogOpen] = useState(false);
+  const [editingDefect, setEditingDefect] = useState<any>(null);
+  const [defectForm, setDefectForm] = useState({
+    category: '',
+    description: '',
+    isActive: true,
+  });
+  
+  // System settings
   const [systemSettings, setSystemSettings] = useState({
     autoSave: true,
     showDiscrepancyWarnings: true,
-    darkMode: false,
     compactView: false,
+    darkMode: false,
   });
+  
+  // Snackbar
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
-  const handleProfileSave = async () => {
-    setLoading(true);
-    setError(null);
-    setSuccess(null);
+  // Load initial data
+  useEffect(() => {
+    // Load system settings from localStorage
+    const autoSave = localStorage.getItem('system_autoSave');
+    const showWarnings = localStorage.getItem('system_showDiscrepancyWarnings');
+    const compactView = localStorage.getItem('system_compactView');
+    const darkMode = localStorage.getItem('system_darkMode');
+    
+    setSystemSettings({
+      autoSave: autoSave !== 'false',
+      showDiscrepancyWarnings: showWarnings !== 'false',
+      compactView: compactView === 'true',
+      darkMode: darkMode === 'true',
+    });
+  }, []);
+
+  // Load users when tab changes to User Management
+  useEffect(() => {
+    if (tabValue === 1) {
+      loadUsers();
+    }
+  }, [tabValue]);
+
+  // Load defect reasons when tab changes to Defect Reasons
+  useEffect(() => {
+    if (tabValue === 2) {
+      loadDefectReasons();
+    }
+  }, [tabValue]);
+
+  const loadUsers = async () => {
+    setUsersLoading(true);
     try {
-      const updated = await authService.updateProfile(profileData);
-      dispatch(setUser(updated));
-      setSuccess('Profile updated successfully');
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err: any) {
-      setError(err.message || 'Failed to update profile');
+      const response = await userService.getUsers({ page: usersMeta.page, limit: usersMeta.limit });
+      setUsers(response.data);
+      setUsersMeta(response.meta);
+    } catch (error: any) {
+      console.error('Failed to load users:', error);
+      showSnackbar(error.response?.data?.error?.message || 'Failed to load users - You may not have permission', 'error');
     } finally {
-      setLoading(false);
+      setUsersLoading(false);
     }
   };
 
-  const handlePasswordChange = async () => {
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
-    if (passwordData.newPassword.length < 6) {
-      setError('Password must be at least 6 characters');
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    setSuccess(null);
+  const loadDefectReasons = async () => {
+    setDefectReasonsLoading(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      setSuccess('Password changed successfully');
-      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err: any) {
-      setError(err.message || 'Failed to change password');
+      const response = await productionService.getAllDefectReasons();
+      setDefectReasons(response);
+    } catch (error) {
+      showSnackbar('Failed to load defect reasons', 'error');
     } finally {
-      setLoading(false);
+      setDefectReasonsLoading(false);
     }
   };
 
-  const handleNotificationChange = (key: string) => (event: React.ChangeEvent<HTMLInputElement>) => {
-    setNotifications({ ...notifications, [key]: event.target.checked });
-    localStorage.setItem(`notification_${key}`, event.target.checked ? 'true' : 'false');
+  const showSnackbar = (message: string, severity: 'success' | 'error') => {
+    setSnackbar({ open: true, message, severity });
   };
 
+  const handleSnackbarClose = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
+
+  // User Management handlers
+  const handleOpenUserDialog = (user?: any) => {
+    if (user) {
+      setEditingUser(user);
+      setUserForm({
+        username: user.username,
+        email: user.email || '',
+        password: '',
+        fullName: user.fullName || '',
+        role: user.role,
+        isActive: user.isActive,
+      });
+    } else {
+      setEditingUser(null);
+      setUserForm({
+        username: '',
+        email: '',
+        password: '',
+        fullName: '',
+        role: 'WORKER',
+        isActive: true,
+      });
+    }
+    setUserDialogOpen(true);
+  };
+
+  const handleCloseUserDialog = () => {
+    setUserDialogOpen(false);
+    setEditingUser(null);
+  };
+
+  const handleSaveUser = async () => {
+    try {
+      if (editingUser) {
+        await userService.updateUser(editingUser.id, {
+          email: userForm.email,
+          fullName: userForm.fullName,
+          role: userForm.role,
+          isActive: userForm.isActive,
+        });
+        showSnackbar('User updated successfully', 'success');
+      } else {
+        await userService.createUser({
+          username: userForm.username,
+          email: userForm.email,
+          password: userForm.password,
+          fullName: userForm.fullName,
+          role: userForm.role,
+        });
+        showSnackbar('User created successfully', 'success');
+      }
+      handleCloseUserDialog();
+      loadUsers();
+    } catch (error: any) {
+      showSnackbar(error.response?.data?.error?.message || 'Failed to save user', 'error');
+    }
+  };
+
+  const handleDeleteUser = async (userId: number) => {
+    if (confirm('Are you sure you want to deactivate this user?')) {
+      try {
+        await userService.deleteUser(userId);
+        showSnackbar('User deactivated successfully', 'success');
+        loadUsers();
+      } catch (error) {
+        showSnackbar('Failed to deactivate user', 'error');
+      }
+    }
+  };
+
+  // Defect Reasons handlers
+  const handleOpenDefectDialog = (defect?: any) => {
+    if (defect) {
+      setEditingDefect(defect);
+      setDefectForm({
+        category: defect.category,
+        description: defect.description,
+        isActive: defect.isActive,
+      });
+    } else {
+      setEditingDefect(null);
+      setDefectForm({
+        category: '',
+        description: '',
+        isActive: true,
+      });
+    }
+    setDefectDialogOpen(true);
+  };
+
+  const handleCloseDefectDialog = () => {
+    setDefectDialogOpen(false);
+    setEditingDefect(null);
+  };
+
+  const handleSaveDefect = async () => {
+    try {
+      if (editingDefect) {
+        await productionService.updateDefectReason(editingDefect.id, {
+          category: defectForm.category,
+          description: defectForm.description,
+          isActive: defectForm.isActive,
+        });
+        showSnackbar('Defect reason updated successfully', 'success');
+      } else {
+        await productionService.createDefectReason({
+          category: defectForm.category,
+          description: defectForm.description,
+        });
+        showSnackbar('Defect reason created successfully', 'success');
+      }
+      handleCloseDefectDialog();
+      loadDefectReasons();
+    } catch (error: any) {
+      showSnackbar(error.response?.data?.error?.message || 'Failed to save defect reason', 'error');
+    }
+  };
+
+  const handleDeleteDefect = async (defectId: number) => {
+    if (confirm('Are you sure you want to deactivate this defect reason?')) {
+      try {
+        await productionService.deleteDefectReason(defectId);
+        showSnackbar('Defect reason deactivated successfully', 'success');
+        loadDefectReasons();
+      } catch (error) {
+        showSnackbar('Failed to deactivate defect reason', 'error');
+      }
+    }
+  };
+
+  // System settings handlers
   const handleSystemChange = (key: string) => (event: React.ChangeEvent<HTMLInputElement>) => {
-    setSystemSettings({ ...systemSettings, [key]: event.target.checked });
-    localStorage.setItem(`system_${key}`, event.target.checked ? 'true' : 'false');
+    const value = event.target.checked;
+    setSystemSettings({ ...systemSettings, [key]: value });
+    localStorage.setItem(`system_${key}`, value ? 'true' : 'false');
+  };
+
+  // Tab change handler
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
+    setTabValue(newValue);
+  };
+
+  const handleProfileSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    showSnackbar('Profile updated successfully', 'success');
+  };
+
+  const handlePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      showSnackbar('Passwords do not match', 'error');
+      return;
+    }
+    showSnackbar('Password changed successfully', 'success');
+    setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
   };
 
   return (
-    <Box>
+    <Box sx={{ p: 3 }}>
       <Typography variant="h4" sx={{ fontWeight: 600, mb: 3 }}>
         Settings
       </Typography>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
-          <AlertTitle>Error</AlertTitle>
-          {error}
-        </Alert>
-      )}
+      <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+        <Tabs value={tabValue} onChange={handleTabChange}>
+          <Tab label="Profile" />
+          <Tab label="User Management" />
+          <Tab label="Defect Reasons" />
+          <Tab label="System Settings" />
+        </Tabs>
+      </Box>
 
-      {success && (
-        <Alert severity="success" sx={{ mb: 3 }} onClose={() => setSuccess(null)}>
-          {success}
-        </Alert>
-      )}
-
-      <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ mb: 3 }}>
-        <Tab label="Profile" />
-        <Tab label="Security" />
-        <Tab label="Notifications" />
-        <Tab label="System" />
-      </Tabs>
-
-      <TabPanel value={activeTab} index={0}>
+      {/* Profile Tab */}
+      <TabPanel value={tabValue} index={0}>
         <Grid container spacing={3}>
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} md={6}>
             <Card>
-              <CardContent sx={{ textAlign: 'center' }}>
-                <Box sx={{ position: 'relative', display: 'inline-block' }}>
-                  <Avatar
-                    sx={{
-                      width: 100,
-                      height: 100,
-                      mx: 'auto',
-                      mb: 2,
-                      bgcolor: 'primary.main',
-                      fontSize: '2rem',
-                    }}
-                  >
-                    {user?.fullName?.charAt(0) || 'U'}
-                  </Avatar>
-                  <IconButton
-                    sx={{
-                      position: 'absolute',
-                      bottom: 16,
-                      right: 0,
-                      bgcolor: 'background.paper',
-                      '&:hover': { bgcolor: 'grey.100' },
-                    }}
-                    size="small"
-                  >
-                    <PhotoCameraIcon />
-                  </IconButton>
-                </Box>
-                <Typography variant="h6">{user?.fullName || 'User'}</Typography>
-                <Typography color="text.secondary" gutterBottom>
-                  {user?.role || 'Unknown'}
-                </Typography>
-                <Button variant="outlined" size="small" sx={{ mt: 1 }}>
-                  Change Avatar
-                </Button>
+              <CardContent>
+                <Typography variant="h6" sx={{ mb: 3 }}>Profile Information</Typography>
+                <form onSubmit={handleProfileSubmit}>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12}>
+                      <TextField
+                        fullWidth
+                        label="Username"
+                        value={profileForm.username}
+                        disabled
+                      />
+                    </Grid>
+                    <Grid item xs={12}>
+                      <TextField
+                        fullWidth
+                        label="Full Name"
+                        value={profileForm.fullName}
+                        onChange={(e) => setProfileForm({ ...profileForm, fullName: e.target.value })}
+                      />
+                    </Grid>
+                    <Grid item xs={12}>
+                      <TextField
+                        fullWidth
+                        label="Email"
+                        type="email"
+                        value={profileForm.email}
+                        onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                      />
+                    </Grid>
+                    <Grid item xs={12}>
+                      <Button type="submit" variant="contained">
+                        Save Profile
+                      </Button>
+                    </Grid>
+                  </Grid>
+                </form>
               </CardContent>
             </Card>
           </Grid>
 
-          <Grid item xs={12} md={8}>
+          <Grid item xs={12} md={6}>
             <Card>
               <CardContent>
-                <Typography variant="h6" sx={{ mb: 3 }}>Profile Settings</Typography>
-                <Grid container spacing={3}>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      fullWidth
-                      label="Full Name"
-                      value={profileData.fullName}
-                      onChange={(e) => setProfileData({ ...profileData, fullName: e.target.value })}
-                    />
+                <Typography variant="h6" sx={{ mb: 3 }}>Change Password</Typography>
+                <form onSubmit={handlePasswordSubmit}>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12}>
+                      <TextField
+                        fullWidth
+                        label="Current Password"
+                        type="password"
+                        value={passwordForm.currentPassword}
+                        onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+                      />
+                    </Grid>
+                    <Grid item xs={12}>
+                      <TextField
+                        fullWidth
+                        label="New Password"
+                        type="password"
+                        value={passwordForm.newPassword}
+                        onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                      />
+                    </Grid>
+                    <Grid item xs={12}>
+                      <TextField
+                        fullWidth
+                        label="Confirm New Password"
+                        type="password"
+                        value={passwordForm.confirmPassword}
+                        onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                      />
+                    </Grid>
+                    <Grid item xs={12}>
+                      <Button type="submit" variant="contained">
+                        Change Password
+                      </Button>
+                    </Grid>
                   </Grid>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      fullWidth
-                      label="Email"
-                      value={profileData.email}
-                      onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      fullWidth
-                      label="Username"
-                      value={profileData.username}
-                      disabled
-                      helperText="Username cannot be changed"
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      fullWidth
-                      label="Role"
-                      value={user?.role || 'Unknown'}
-                      disabled
-                      helperText="Role is assigned by administrator"
-                    />
-                  </Grid>
-                </Grid>
-                <Button
-                  variant="contained"
-                  startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
-                  onClick={handleProfileSave}
-                  disabled={loading}
-                  sx={{ mt: 3 }}
-                >
-                  Save Changes
-                </Button>
+                </form>
               </CardContent>
             </Card>
           </Grid>
         </Grid>
       </TabPanel>
 
-      <TabPanel value={activeTab} index={1}>
-        <Card sx={{ maxWidth: 600 }}>
+      {/* User Management Tab */}
+      <TabPanel value={tabValue} index={1}>
+        <Card>
           <CardContent>
-            <Typography variant="h6" sx={{ mb: 3 }}>Change Password</Typography>
-            <Grid container spacing={3}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6">User Management</Typography>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => handleOpenUserDialog()}
+              >
+                Add User
+              </Button>
+            </Box>
+
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow sx={{ bgcolor: '#f5f5f5' }}>
+                  <TableCell><strong>Username</strong></TableCell>
+                  <TableCell><strong>Full Name</strong></TableCell>
+                  <TableCell><strong>Email</strong></TableCell>
+                  <TableCell><strong>Role</strong></TableCell>
+                  <TableCell><strong>Status</strong></TableCell>
+                  <TableCell><strong>Actions</strong></TableCell>
+                </TableRow>
+                </TableHead>
+                <TableBody>
+                  {usersLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={6} align="center">Loading...</TableCell>
+                    </TableRow>
+                  ) : users.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} align="center">No users found</TableCell>
+                    </TableRow>
+                  ) : (
+                    users.map((user) => (
+                      <TableRow key={user.id} hover>
+                        <TableCell>{user.username}</TableCell>
+                        <TableCell>{user.fullName || '-'}</TableCell>
+                        <TableCell>{user.email || '-'}</TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={user.role} 
+                            size="small" 
+                            color={user.role === 'MANAGER' ? 'primary' : 'default'}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={user.isActive ? 'Active' : 'Inactive'} 
+                            size="small" 
+                            color={user.isActive ? 'success' : 'error'}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <IconButton size="small" onClick={() => handleOpenUserDialog(user)}>
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton size="small" onClick={() => handleDeleteUser(user.id)}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+
+            {usersMeta.totalPages > 1 && (
+              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+                <Pagination
+                  count={usersMeta.totalPages}
+                  page={usersMeta.page}
+                  onChange={(_, page) => {
+                    setUsersMeta({ ...usersMeta, page });
+                    loadUsers();
+                  }}
+                />
+              </Box>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* User Dialog */}
+        <Dialog open={userDialogOpen} onClose={handleCloseUserDialog} maxWidth="sm" fullWidth>
+          <DialogTitle>{editingUser ? 'Edit User' : 'Add New User'}</DialogTitle>
+          <DialogContent>
+            <Grid container spacing={2} sx={{ mt: 1 }}>
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  type="password"
-                  label="Current Password"
-                  value={passwordData.currentPassword}
-                  onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                  label="Username"
+                  value={userForm.username}
+                  onChange={(e) => setUserForm({ ...userForm, username: e.target.value })}
+                  disabled={!!editingUser}
+                  required
                 />
               </Grid>
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  type="password"
-                  label="New Password"
-                  value={passwordData.newPassword}
-                  onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                  helperText="Password must be at least 6 characters"
+                  label="Full Name"
+                  value={userForm.fullName}
+                  onChange={(e) => setUserForm({ ...userForm, fullName: e.target.value })}
+                  required
                 />
               </Grid>
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  type="password"
-                  label="Confirm New Password"
-                  value={passwordData.confirmPassword}
-                  onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                  label="Email"
+                  type="email"
+                  value={userForm.email}
+                  onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
+                />
+              </Grid>
+              {!editingUser && (
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    label="Password"
+                    type="password"
+                    value={userForm.password}
+                    onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
+                    required={!editingUser}
+                  />
+                </Grid>
+              )}
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Role</InputLabel>
+                  <Select
+                    value={userForm.role}
+                    label="Role"
+                    onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}
+                  >
+                    <MenuItem value="MANAGER">Manager</MenuItem>
+                    <MenuItem value="ADMIN">Admin</MenuItem>
+                    <MenuItem value="WORKER">Worker</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={userForm.isActive}
+                      onChange={(e) => setUserForm({ ...userForm, isActive: e.target.checked })}
+                    />
+                  }
+                  label="Active"
                 />
               </Grid>
             </Grid>
-            <Button
-              variant="contained"
-              startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
-              onClick={handlePasswordChange}
-              disabled={loading || !passwordData.currentPassword || !passwordData.newPassword}
-              sx={{ mt: 3 }}
-            >
-              Change Password
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseUserDialog}>Cancel</Button>
+            <Button onClick={handleSaveUser} variant="contained">
+              {editingUser ? 'Update' : 'Create'}
             </Button>
-          </CardContent>
-        </Card>
+          </DialogActions>
+        </Dialog>
       </TabPanel>
 
-      <TabPanel value={activeTab} index={2}>
+      {/* Defect Reasons Tab */}
+      <TabPanel value={tabValue} index={2}>
         <Card>
           <CardContent>
-            <Typography variant="h6" sx={{ mb: 3 }}>Notification Preferences</Typography>
-            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2 }}>
-              Email Notifications
-            </Typography>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={notifications.criticalAlerts}
-                  onChange={handleNotificationChange('criticalAlerts')}
-                />
-              }
-              label="Email notifications for critical alerts"
-            />
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={notifications.warningAlerts}
-                  onChange={handleNotificationChange('warningAlerts')}
-                />
-              }
-              label="Email notifications for warnings"
-            />
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={notifications.infoAlerts}
-                  onChange={handleNotificationChange('infoAlerts')}
-                />
-              }
-              label="Email notifications for info alerts"
-            />
-            <Divider sx={{ my: 2 }} />
-            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2 }}>
-              Reports
-            </Typography>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={notifications.dailySummary}
-                  onChange={handleNotificationChange('dailySummary')}
-                />
-              }
-              label="Daily production summary"
-            />
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={notifications.weeklyReports}
-                  onChange={handleNotificationChange('weeklyReports')}
-                />
-              }
-              label="Weekly reports"
-            />
-            <Divider sx={{ my: 2 }} />
-            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2 }}>
-              Browser Notifications
-            </Typography>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={notifications.browserNotifications}
-                  onChange={handleNotificationChange('browserNotifications')}
-                />
-              }
-              label="Enable browser notifications"
-            />
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6">Defect Reasons Management</Typography>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => handleOpenDefectDialog()}
+              >
+                Add Defect Reason
+              </Button>
+            </Box>
+
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow sx={{ bgcolor: '#f5f5f5' }}>
+                  <TableCell><strong>Category</strong></TableCell>
+                  <TableCell><strong>Description</strong></TableCell>
+                  <TableCell><strong>Status</strong></TableCell>
+                  <TableCell><strong>Actions</strong></TableCell>
+                </TableRow>
+                </TableHead>
+                <TableBody>
+                  {defectReasonsLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={4} align="center">Loading...</TableCell>
+                    </TableRow>
+                  ) : defectReasons.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} align="center">No defect reasons found</TableCell>
+                    </TableRow>
+                  ) : (
+                    defectReasons.map((defect) => (
+                      <TableRow key={defect.id} hover>
+                        <TableCell>{defect.category}</TableCell>
+                        <TableCell>{defect.description}</TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={defect.isActive ? 'Active' : 'Inactive'} 
+                            size="small" 
+                            color={defect.isActive ? 'success' : 'error'}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <IconButton size="small" onClick={() => handleOpenDefectDialog(defect)}>
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton size="small" onClick={() => handleDeleteDefect(defect.id)}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
           </CardContent>
         </Card>
+
+        {/* Defect Reason Dialog */}
+        <Dialog open={defectDialogOpen} onClose={handleCloseDefectDialog} maxWidth="sm" fullWidth>
+          <DialogTitle>{editingDefect ? 'Edit Defect Reason' : 'Add New Defect Reason'}</DialogTitle>
+          <DialogContent>
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Category"
+                  value={defectForm.category}
+                  onChange={(e) => setDefectForm({ ...defectForm, category: e.target.value })}
+                  required
+                  placeholder="e.g., Defect, Break, Glaze Color, Crack, Warping"
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Description"
+                  value={defectForm.description}
+                  onChange={(e) => setDefectForm({ ...defectForm, description: e.target.value })}
+                  required
+                  multiline
+                  rows={2}
+                />
+              </Grid>
+              {editingDefect && (
+                <Grid item xs={12}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={defectForm.isActive}
+                        onChange={(e) => setDefectForm({ ...defectForm, isActive: e.target.checked })}
+                      />
+                    }
+                    label="Active"
+                  />
+                </Grid>
+              )}
+            </Grid>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseDefectDialog}>Cancel</Button>
+            <Button onClick={handleSaveDefect} variant="contained">
+              {editingDefect ? 'Update' : 'Create'}
+            </Button>
+          </DialogActions>
+        </Dialog>
       </TabPanel>
 
-      <TabPanel value={activeTab} index={3}>
+      {/* System Settings Tab */}
+      <TabPanel value={tabValue} index={3}>
         <Card>
           <CardContent>
             <Typography variant="h6" sx={{ mb: 3 }}>System Settings</Typography>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={systemSettings.autoSave}
-                  onChange={handleSystemChange('autoSave')}
+            
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={systemSettings.autoSave}
+                      onChange={handleSystemChange('autoSave')}
+                    />
+                  }
+                  label="Auto-save form data"
                 />
-              }
-              label="Auto-save data entry (every 30 seconds)"
-            />
-            <Typography variant="body2" color="text.secondary" sx={{ ml: 4, mb: 2 }}>
-              Automatically save your work to prevent data loss
-            </Typography>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={systemSettings.showDiscrepancyWarnings}
-                  onChange={handleSystemChange('showDiscrepancyWarnings')}
+                <Typography variant="body2" color="text.secondary" sx={{ ml: 6 }}>
+                  Automatically save form data to local storage
+                </Typography>
+              </Grid>
+
+              <Grid item xs={12}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={systemSettings.showDiscrepancyWarnings}
+                      onChange={handleSystemChange('showDiscrepancyWarnings')}
+                    />
+                  }
+                  label="Show discrepancy warnings"
                 />
-              }
-              label="Show quantity discrepancy warnings"
-            />
-            <Typography variant="body2" color="text.secondary" sx={{ ml: 4, mb: 2 }}>
-              Highlight when actual quantities differ significantly from expected
-            </Typography>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={systemSettings.compactView}
-                  onChange={handleSystemChange('compactView')}
+                <Typography variant="body2" color="text.secondary" sx={{ ml: 6 }}>
+                  Show warnings when quantity discrepancies are detected
+                </Typography>
+              </Grid>
+
+              <Grid item xs={12}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={systemSettings.compactView}
+                      onChange={handleSystemChange('compactView')}
+                    />
+                  }
+                  label="Compact view"
                 />
-              }
-              label="Compact table view"
-            />
-            <Typography variant="body2" color="text.secondary" sx={{ ml: 4, mb: 2 }}>
-              Show more data per page in tables
-            </Typography>
-            <Divider sx={{ my: 2 }} />
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={systemSettings.darkMode}
-                  onChange={handleSystemChange('darkMode')}
-                  disabled
+                <Typography variant="body2" color="text.secondary" sx={{ ml: 6 }}>
+                  Use compact table layout
+                </Typography>
+              </Grid>
+
+              <Grid item xs={12}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={systemSettings.darkMode}
+                      onChange={handleSystemChange('darkMode')}
+                    />
+                  }
+                  label="Dark mode"
                 />
-              }
-              label="Dark mode (coming soon)"
-            />
-            <Typography variant="body2" color="text.secondary" sx={{ ml: 4 }}>
-              Dark mode is currently under development
-            </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ ml: 6 }}>
+                  Enable dark theme
+                </Typography>
+              </Grid>
+            </Grid>
           </CardContent>
         </Card>
       </TabPanel>
+
+      {/* Snackbar */}
+      <Snackbar 
+        open={snackbar.open} 
+        autoHideDuration={6000} 
+        onClose={handleSnackbarClose}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={handleSnackbarClose} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

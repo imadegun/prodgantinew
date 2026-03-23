@@ -196,19 +196,92 @@ export const productionService = {
     capacity: number;
     status: string;
   }>> {
-    const response = await apiClient.get('/production/ovens');
-    return response.data;
+    const response = await apiClient.get<Array<{
+      id: number;
+      ovenCode: string;
+      ovenName: string;
+      capacity: number;
+      status: string;
+    }>>('/production/ovens');
+    return response;
   },
 
-  // Get all defect reasons
+  // Get all defect reasons (active only)
   async getDefectReasons(): Promise<Array<{
     id: number;
-    reasonName: string;
     category: string;
     description: string;
   }>> {
-    const response = await apiClient.get('/production/defect-reasons');
-    return response.data;
+    const response = await apiClient.get<Array<{
+      id: number;
+      category: string;
+      description: string;
+    }>>('/production/defect-reasons');
+    return response;
+  },
+
+  // Get all defect reasons including inactive (for management)
+  async getAllDefectReasons(): Promise<Array<{
+    id: number;
+    category: string;
+    description: string;
+    isActive: boolean;
+    createdAt: string;
+    updatedAt: string | null;
+  }>> {
+    const response = await apiClient.get<Array<{
+      id: number;
+      category: string;
+      description: string;
+      isActive: boolean;
+      createdAt: string;
+      updatedAt: string | null;
+    }>>('/production/defect-reasons/all');
+    return response;
+  },
+
+  // Create a new defect reason
+  async createDefectReason(data: {
+    category: string;
+    description: string;
+  }): Promise<{
+    id: number;
+    category: string;
+    description: string;
+    isActive: boolean;
+  }> {
+    const response = await apiClient.post<{
+      id: number;
+      category: string;
+      description: string;
+      isActive: boolean;
+    }>('/production/defect-reasons', data);
+    return response;
+  },
+
+  // Update a defect reason
+  async updateDefectReason(id: number, data: {
+    category?: string;
+    description?: string;
+    isActive?: boolean;
+  }): Promise<{
+    id: number;
+    category: string;
+    description: string;
+    isActive: boolean;
+  }> {
+    const response = await apiClient.put<{
+      id: number;
+      category: string;
+      description: string;
+      isActive: boolean;
+    }>(`/production/defect-reasons/${id}`, data);
+    return response;
+  },
+
+  // Delete (deactivate) a defect reason
+  async deleteDefectReason(id: number): Promise<void> {
+    await apiClient.delete(`/production/defect-reasons/${id}`);
   },
 
   // Get product parts for a POL detail
@@ -220,8 +293,15 @@ export const productionService = {
     throwingRequired: boolean;
     throwingOrder: number | null;
   }>> {
-    const response = await apiClient.get(`/production/product-parts/${polDetailId}`);
-    return response.data;
+    const response = await apiClient.get<Array<{
+      id: number;
+      partName: string;
+      partType: string;
+      linkedToPartId: number | null;
+      throwingRequired: boolean;
+      throwingOrder: number | null;
+    }>>(`/production/product-parts/${polDetailId}`);
+    return response;
   },
 
   // Create a product part
@@ -233,8 +313,51 @@ export const productionService = {
     throwingRequired?: boolean;
     throwingOrder?: number;
   }): Promise<any> {
-    const response = await apiClient.post('/production/product-parts', data);
-    return response.data;
+    const response = await apiClient.post<any>('/production/product-parts', data);
+    return response;
+  },
+
+  // Update a product part
+  async updateProductPart(id: number, data: {
+    partName?: string;
+    partType?: string;
+    linkedToPartId?: number;
+    throwingRequired?: boolean;
+    throwingOrder?: number;
+  }): Promise<any> {
+    const response = await apiClient.put<any>(`/production/product-parts/${id}`, data);
+    return response;
+  },
+
+  // Delete a product part
+  async deleteProductPart(id: number): Promise<void> {
+    await apiClient.delete(`/production/product-parts/${id}`);
+  },
+
+  // Get production stages for a specific product part
+  async getPartProductionStages(partId: number): Promise<any> {
+    const response = await apiClient.get<any>(`/production/product-parts/${partId}/stages`);
+    return response;
+  },
+
+  // Track production for a specific product part
+  async trackPartProduction(data: {
+    polDetailId: number;
+    partId: number;
+    stage: string;
+    quantity: number;
+    rejectQuantity?: number;
+    remakeCycle?: number;
+    category?: string;
+    remakeType?: string;
+    ovenId?: number;
+    operatorId?: number;
+    rejectReasonId?: number;
+    notes?: string;
+    productionDate?: string;
+  }): Promise<any> {
+    const response = await apiClient.post<any>('/production/track-part', data);
+    return response;
   },
 
   // Get remake cycles for a POL detail
@@ -249,11 +372,24 @@ export const productionService = {
     createdAt: string;
     rejectReason: {
       id: number;
-      reasonName: string;
+      category: string;
     } | null;
   }>> {
-    const response = await apiClient.get(`/production/remake-cycles/${polDetailId}`);
-    return response.data;
+    const response = await apiClient.get<Array<{
+      id: number;
+      remakeNumber: number;
+      remakeType: string;
+      rejectStage: string | null;
+      rejectCategory: string | null;
+      rejectQuantity: number;
+      status: string;
+      createdAt: string;
+      rejectReason: {
+        id: number;
+        category: string;
+      } | null;
+    }>>(`/production/remake-cycles/${polDetailId}`);
+    return response;
   },
 
   // Create a remake cycle
@@ -267,14 +403,14 @@ export const productionService = {
     rejectReasonId?: number;
     rejectQuantity: number;
   }): Promise<{ cycle: any; isEscalated: boolean }> {
-    const response = await apiClient.post('/production/remake-cycles', data);
-    return response.data;
+    const response = await apiClient.post<{ cycle: any; isEscalated: boolean }>('/production/remake-cycles', data);
+    return response;
   },
 
   // Get stages by product type
   async getStagesByProductType(productType: string): Promise<string[]> {
-    const response = await apiClient.get(`/production/stages-by-product-type/${productType}`);
-    return response.data;
+    const response = await apiClient.get<string[]>(`/production/stages-by-product-type/${productType}`);
+    return response;
   },
 
   // Get operators (users)
@@ -284,16 +420,21 @@ export const productionService = {
     fullName: string;
     role: string;
   }>> {
-    const response = await apiClient.get('/production/operators');
-    return response.data;
+    const response = await apiClient.get<Array<{
+      id: number;
+      username: string;
+      fullName: string;
+      role: string;
+    }>>('/production/operators');
+    return response;
   },
 
   // Get production info (BuildTech, Clay, Luster, etc.)
   async getProductProductionInfo(productCode: string): Promise<ProductProductionInfo> {
-    const response = await apiClient.get<any>(
+    const response = await apiClient.get<ProductProductionInfo>(
       `/products/${productCode}/production-info`
     );
-    return response.data;
+    return response;
   },
 
   // Get production workflow (determines stages based on product specs)
@@ -305,9 +446,16 @@ export const productionService = {
     summary: string;
     stages: string[];
   }> {
-    const response = await apiClient.get<any>(
+    const response = await apiClient.get<{
+      workflowType: 'THROWING' | 'HANDBUILD' | 'SLAB';
+      skipHighFiring: boolean;
+      hasLusterFiring: boolean;
+      firingType: string | null;
+      summary: string;
+      stages: string[];
+    }>(
       `/products/${productCode}/workflow`
     );
-    return response.data;
+    return response;
   },
 };

@@ -252,6 +252,7 @@ model POLDetail {
 model ProductionRecord {
   id              Int             @id @default(autoincrement())
   polDetailId     Int             @map("pol_detail_id")
+  partId          Int?            @map("part_id") // Optional: link to specific product part
   stage           ProductionStage
   category        ProductCategory @default(FORMING) @map("category")
   quantity        Int
@@ -269,6 +270,7 @@ model ProductionRecord {
   
   // Relationships
   polDetail       POLDetail       @relation(fields: [polDetailId], references: [id], onDelete: Cascade)
+  part            ProductPart?    @relation(fields: [partId], references: [id])
   oven            Oven?           @relation(fields: [ovenId], references: [id])
   operator        User?           @relation("OperatorRecords", fields: [operatorId], references: [id])
   rejectReason    DefectReason?   @relation(fields: [rejectReasonId], references: [id])
@@ -418,6 +420,7 @@ model ProductPart {
   polDetail       POLDetail  @relation(fields: [polDetailId], references: [id], onDelete: Cascade)
   linkedToPart    ProductPart? @relation("PartConnections", fields: [linkedToPartId], references: [id])
   connectedParts  ProductPart[] @relation("PartConnections")
+  productionRecords ProductionRecord[]
   
   @@map("product_parts")
 }

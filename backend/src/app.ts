@@ -14,6 +14,7 @@ import reportRoutes from './routes/report.routes';
 import logbookRoutes from './routes/logbook.routes';
 import revisionRoutes from './routes/revision.routes';
 import productRoutes from './routes/product.routes';
+import usersRoutes from './routes/users.routes';
 import { errorHandler } from './middleware/error.middleware';
 import { notFoundHandler } from './middleware/error.middleware';
 import { initializeMySQL, closeMySQL } from './config/mysql';
@@ -80,6 +81,7 @@ app.use('/api/v1/reports', reportRoutes);
 app.use('/api/v1/logbook', logbookRoutes);
 app.use('/api/v1/revisions', revisionRoutes);
 app.use('/api/v1/products', productRoutes);
+app.use('/api/v1/users', usersRoutes);
 
 // API documentation endpoint
 app.get('/api', (_req, res) => {

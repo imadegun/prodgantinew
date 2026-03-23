@@ -164,6 +164,13 @@ const ProductionTracking = () => {
   const [productionInfo, setProductionInfo] = useState<any>(null);
   const [productionWorkflow, setProductionWorkflow] = useState<any>(null);
   
+  // Add Part Dialog state
+  const [addPartDialogOpen, setAddPartDialogOpen] = useState(false);
+  const [newPartName, setNewPartName] = useState('');
+  const [newPartType, setNewPartType] = useState('MAIN');
+  const [newPartThrowingRequired, setNewPartThrowingRequired] = useState(true);
+  const [newPartThrowingOrder, setNewPartThrowingOrder] = useState<number | ''>('');
+  
   const categories = ['FORMING', 'DECOR', 'DRYING', 'FIRING', 'GLAZING', 'QC'];
   
   useEffect(() => {
@@ -368,7 +375,7 @@ const ProductionTracking = () => {
     // Set first stage of category as current - use workflow stages if available
     const workflowStages = productionWorkflow?.stages || [];
     const categoryStageList = workflowStages.length > 0 
-      ? workflowStages.filter(stage => getCategoryForStage(stage) === newCategory)
+      ? workflowStages.filter((stage: string) => getCategoryForStage(stage) === newCategory)
       : defaultCategoryStages[newCategory] || [];
     
     if (categoryStageList.length > 0) {
@@ -550,6 +557,43 @@ const ProductionTracking = () => {
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: string) => {
     setTabValue(newValue);
+  };
+
+  // Add Part Dialog handlers
+  const handleOpenAddPartDialog = () => {
+    setAddPartDialogOpen(true);
+    setNewPartName('');
+    setNewPartType('MAIN');
+    setNewPartThrowingRequired(true);
+    setNewPartThrowingOrder('');
+  };
+
+  const handleCloseAddPartDialog = () => {
+    setAddPartDialogOpen(false);
+  };
+
+  const handleAddPart = async () => {
+    try {
+      if (!newPartName) {
+        showSnackbar('Please enter part name', 'error');
+        return;
+      }
+
+      await productionService.createProductPart({
+        polDetailId: Number(selectedProduct),
+        partName: newPartName,
+        partType: newPartType,
+        throwingRequired: newPartThrowingRequired,
+        throwingOrder: newPartThrowingOrder ? Number(newPartThrowingOrder) : undefined,
+      });
+
+      showSnackbar('Product part added successfully', 'success');
+      handleCloseAddPartDialog();
+      loadProductParts();
+    } catch (error: any) {
+      console.error('Error adding product part:', error);
+      showSnackbar(error.message || 'Failed to add product part', 'error');
+    }
   };
 
   const getCurrentStageData = () => {
@@ -818,7 +862,7 @@ const ProductionTracking = () => {
                                 }}
                               />
                               <Box sx={{ ml: 'auto' }}>
-                                {(productionWorkflow?.stages || defaultCategoryStages[category] || [])?.filter((stage: string) => getCategoryForStage(stage) === category)?.map(stage => {
+                                {(productionWorkflow?.stages || defaultCategoryStages[category] || [])?.filter((stage: string) => getCategoryForStage(stage) === category)?.map((stage: string) => {
                                   const stageData = stageRecords[stage];
                                   const totalRejects = stageData?.totalRejectQuantity || stageData?.records?.reduce((sum: number, r: any) => sum + (r.rejectQuantity || 0), 0) || 0;
                                   if (stageData?.totalQuantity > 0 || totalRejects > 0) {
@@ -1024,7 +1068,7 @@ const ProductionTracking = () => {
                               <MenuItem value="">Select Reason...</MenuItem>
                               {defectReasons.map((reason) => (
                                 <MenuItem key={reason.id} value={reason.id}>
-                                  {reason.reasonName} ({reason.category})
+                                  {reason.category} - {reason.description}
                                 </MenuItem>
                               ))}
                             </Select>
@@ -1118,7 +1162,7 @@ const ProductionTracking = () => {
               <CardContent>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                   <Typography variant="h6">Product Parts Breakdown</Typography>
-                  <Button size="small" variant="outlined">Add Part</Button>
+                  <Button size="small" variant="outlined" onClick={handleOpenAddPartDialog}>Add Part</Button>
                 </Box>
                 {productParts.length > 0 ? (
                   <TableContainer>
@@ -1202,7 +1246,7 @@ const ProductionTracking = () => {
                                        cycle.status === 'COMPLETED' ? 'success' : 'default'}
                               />
                             </TableCell>
-                            <TableCell>{cycle.rejectReason?.reasonName || '-'}</TableCell>
+                            <TableCell>{cycle.rejectReason?.category || '-'}</TableCell>
                             <TableCell>
                               {cycle.createdAt ? format(new Date(cycle.createdAt), 'MM/dd/yyyy') : '-'}
                             </TableCell>
@@ -1281,6 +1325,69 @@ const ProductionTracking = () => {
           {snackbarMessage}
         </MuiAlert>
       </Snackbar>
+
+      {/* Add Part Dialog */}
+      <Dialog open={addPartDialogOpen} onClose={handleCloseAddPartDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>Add New Product Part</DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Part Name"
+                value={newPartName}
+                onChange={(e) => setNewPartName(e.target.value)}
+                placeholder="e.g., Body, Lid, Spout, Handle"
+                autoFocus
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth>
+                <InputLabel>Part Type</InputLabel>
+                <Select
+                  value={newPartType}
+                  onChange={(e) => setNewPartType(e.target.value)}
+                  label="Part Type"
+                >
+                  <MenuItem value="MAIN">Main (Primary Component)</MenuItem>
+                  <MenuItem value="SUB">Sub (Additional Component)</MenuItem>
+                  <MenuItem value="ASSEMBLY">Assembly (Joined Part)</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth>
+                <InputLabel>Throwing Required</InputLabel>
+                <Select
+                  value={newPartThrowingRequired ? 'Yes' : 'No'}
+                  onChange={(e) => setNewPartThrowingRequired(e.target.value === 'Yes')}
+                  label="Throwing Required"
+                >
+                  <MenuItem value="Yes">Yes</MenuItem>
+                  <MenuItem value="No">No</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Throwing Order"
+                type="number"
+                value={newPartThrowingOrder}
+                onChange={(e) => setNewPartThrowingOrder(e.target.value ? Number(e.target.value) : '')}
+                placeholder="Optional: 1, 2, 3..."
+                helperText="Order for multi-part throwing sequence"
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseAddPartDialog}>Cancel</Button>
+          <Button onClick={handleAddPart} variant="contained" disabled={!newPartName}>
+            Add Part
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

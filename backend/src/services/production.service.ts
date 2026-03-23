@@ -541,7 +541,7 @@ export class ProductionService {
   }
 
   /**
-   * Get all defect reasons
+   * Get all defect reasons (active only)
    */
   async getDefectReasons() {
     const reasons = await prisma.defectReason.findMany({
@@ -549,6 +549,113 @@ export class ProductionService {
       orderBy: { category: 'asc' },
     });
     return reasons;
+  }
+
+  /**
+   * Get all defect reasons including inactive (for management)
+   */
+  async getAllDefectReasons() {
+    const reasons = await prisma.defectReason.findMany({
+      orderBy: { category: 'asc' },
+    });
+    return reasons;
+  }
+
+  /**
+   * Create a new defect reason
+   */
+  async createDefectReason(data: {
+    category: string;
+    description: string;
+  }) {
+    // Check for duplicate category + description combination
+    const existing = await prisma.defectReason.findFirst({
+      where: {
+        category: data.category,
+        description: data.description,
+      },
+    });
+
+    if (existing) {
+      throw new AppError('Defect reason with same category and description already exists', 400, 'DUPLICATE_REASON');
+    }
+
+    const reason = await prisma.defectReason.create({
+      data: {
+        category: data.category,
+        description: data.description,
+        isActive: true,
+      },
+    });
+
+    return reason;
+  }
+
+  /**
+   * Update a defect reason
+   */
+  async updateDefectReason(
+    reasonId: number,
+    data: {
+      category?: string;
+      description?: string;
+      isActive?: boolean;
+    }
+  ) {
+    const reason = await prisma.defectReason.findUnique({
+      where: { id: reasonId },
+    });
+
+    if (!reason) {
+      throw new AppError('Defect reason not found', 404, 'REASON_NOT_FOUND');
+    }
+
+    // Check for duplicate if updating category and description
+    if (data.category && data.description) {
+      const existing = await prisma.defectReason.findFirst({
+        where: {
+          category: data.category,
+          description: data.description,
+          NOT: { id: reasonId },
+        },
+      });
+
+      if (existing) {
+        throw new AppError('Defect reason with same category and description already exists', 400, 'DUPLICATE_REASON');
+      }
+    }
+
+    const updated = await prisma.defectReason.update({
+      where: { id: reasonId },
+      data: {
+        ...(data.category && { category: data.category }),
+        ...(data.description && { description: data.description }),
+        ...(data.isActive !== undefined && { isActive: data.isActive }),
+      },
+    });
+
+    return updated;
+  }
+
+  /**
+   * Delete (deactivate) a defect reason
+   */
+  async deleteDefectReason(reasonId: number) {
+    const reason = await prisma.defectReason.findUnique({
+      where: { id: reasonId },
+    });
+
+    if (!reason) {
+      throw new AppError('Defect reason not found', 404, 'REASON_NOT_FOUND');
+    }
+
+    // Soft delete - just set isActive to false
+    await prisma.defectReason.update({
+      where: { id: reasonId },
+      data: { isActive: false },
+    });
+
+    return { message: 'Defect reason deactivated successfully' };
   }
 
   /**
@@ -584,6 +691,257 @@ export class ProductionService {
       },
     });
     return part;
+  }
+
+  /**
+   * Update a product part
+   */
+  async updateProductPart(
+    partId: number,
+    data: {
+      partName?: string;
+      partType?: 'MAIN' | 'SUB' | 'ASSEMBLY';
+      linkedToPartId?: number;
+      throwingRequired?: boolean;
+      throwingOrder?: number;
+    }
+  ) {
+    const part = await prisma.productPart.findUnique({
+      where: { id: partId },
+    });
+
+    if (!part) {
+      throw new AppError('Product part not found', 404, 'PART_NOT_FOUND');
+    }
+
+    const updated = await prisma.productPart.update({
+      where: { id: partId },
+      data: {
+        ...(data.partName && { partName: data.partName }),
+        ...(data.partType && { partType: data.partType }),
+        ...(data.linkedToPartId !== undefined && { linkedToPartId: data.linkedToPartId }),
+        ...(data.throwingRequired !== undefined && { throwingRequired: data.throwingRequired }),
+        ...(data.throwingOrder !== undefined && { throwingOrder: data.throwingOrder }),
+      },
+    });
+
+    return updated;
+  }
+
+  /**
+   * Delete a product part
+   */
+  async deleteProductPart(partId: number) {
+    const part = await prisma.productPart.findUnique({
+      where: { id: partId },
+    });
+
+    if (!part) {
+      throw new AppError('Product part not found', 404, 'PART_NOT_FOUND');
+    }
+
+    await prisma.productPart.delete({
+      where: { id: partId },
+    });
+
+    return { message: 'Product part deleted successfully' };
+  }
+
+  /**
+   * Get production stages for a specific product part
+   */
+  async getPartProductionStages(partId: number) {
+    const part = await prisma.productPart.findUnique({
+      where: { id: partId },
+      include: {
+        polDetail: {
+          include: {
+            pol: true,
+          },
+        },
+        productionRecords: {
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+
+    if (!part) {
+      throw new AppError('Product part not found', 404, 'PART_NOT_FOUND');
+    }
+
+    // Get workflow stages
+    let workflowStages: string[] = [];
+    try {
+      const workflow = await productService.getProductionWorkflow(part.polDetail.productCode);
+      if (workflow) {
+        workflowStages = workflow.stages;
+      }
+    } catch (error) {
+      console.error('Error getting production workflow:', error);
+    }
+
+    if (workflowStages.length === 0) {
+      workflowStages = this.getStagesByProductType(part.polDetail.productType);
+    }
+
+    // Group records by stage
+    const stageRecords: Record<string, any[]> = {};
+    part.productionRecords.forEach((record) => {
+      if (!stageRecords[record.stage]) {
+        stageRecords[record.stage] = [];
+      }
+      stageRecords[record.stage].push(record);
+    });
+
+    // Calculate quantities per stage
+    const stageData = workflowStages.map((stage) => {
+      const records = stageRecords[stage] || [];
+      const latestRecord = records[0];
+      const totalQuantity = records.reduce((sum, r) => sum + r.quantity, 0);
+      const totalRejectQuantity = records.reduce((sum, r) => sum + (r.rejectQuantity || 0), 0);
+
+      return {
+        stage,
+        totalQuantity,
+        totalRejectQuantity,
+        latestRecord,
+        records,
+      };
+    });
+
+    return {
+      part,
+      polDetail: part.polDetail,
+      stages: stageData,
+    };
+  }
+
+  /**
+   * Track production for a specific part
+   */
+  async trackPartProduction(data: TrackProductionData & { partId: number }) {
+    const { partId, polDetailId, stage, quantity, rejectQuantity, remakeCycle, category, remakeType, ovenId, operatorId, rejectReasonId, productionDate, userId, notes } = data;
+
+    // Validate part exists
+    const part = await prisma.productPart.findUnique({
+      where: { id: partId },
+    });
+
+    if (!part) {
+      throw new AppError('Product part not found', 404, 'PART_NOT_FOUND');
+    }
+
+    // Validate quantity
+    if (quantity <= 0) {
+      throw new AppError('Quantity must be greater than 0', 400, 'INVALID_QUANTITY');
+    }
+
+    // Check for discrepancies
+    const discrepancy = await this.checkForPartDiscrepancy(partId, stage, quantity, rejectQuantity);
+
+    // Auto-determine category if not provided
+    const productionCategory = category || this.getCategoryForStage(stage);
+
+    // Create production record with part reference
+    const record = await prisma.productionRecord.create({
+      data: {
+        polDetailId,
+        partId,
+        stage,
+        quantity,
+        rejectQuantity: rejectQuantity || 0,
+        remakeCycle: remakeCycle || 0,
+        category: productionCategory,
+        remakeType,
+        ovenId,
+        operatorId,
+        rejectReasonId,
+        productionDate: productionDate || undefined,
+        createdBy: userId,
+        notes,
+      },
+    });
+
+    // Create discrepancy alert if needed
+    if (discrepancy) {
+      const detail = await prisma.pOLDetail.findUnique({
+        where: { id: polDetailId },
+      });
+
+      if (detail) {
+        await this.createDiscrepancyAlert({
+          polId: detail.polId,
+          polDetailId,
+          stage,
+          expected: discrepancy.expected,
+          actual: discrepancy.actual,
+          difference: discrepancy.difference,
+          userId,
+        });
+      }
+    }
+
+    return record;
+  }
+
+  /**
+   * Check for quantity discrepancies at part level
+   */
+  private async checkForPartDiscrepancy(
+    partId: number,
+    stage: ProductionStage,
+    quantity: number,
+    rejectQuantity?: number
+  ): Promise<DiscrepancyData | null> {
+    const stageOrder = ['THROWING', 'TRIMMING', 'DECORATION', 'DRYING', 'LOAD_BISQUE', 'OUT_BISQUE', 'LOAD_HIGH_FIRING', 'OUT_HIGH_FIRING', 'LOAD_RAKU_FIRING', 'OUT_RAKU_FIRING', 'LOAD_LUSTER_FIRING', 'OUT_LUSTER_FIRING', 'SANDING', 'WAXING', 'DIPPING', 'SPRAYING', 'COLOR_DECORATION', 'QC_GOOD', 'QC_REJECT', 'QC_RE_FIRING', 'QC_SECOND'];
+    const currentIndex = stageOrder.indexOf(stage);
+
+    if (currentIndex === 0) {
+      return null;
+    }
+
+    const previousStage = stageOrder[currentIndex - 1] as ProductionStage;
+
+    // Get total quantity from previous stage for this part
+    const previousRecords = await prisma.productionRecord.findMany({
+      where: {
+        partId,
+        stage: previousStage,
+      },
+    });
+
+    const expectedQuantity = previousRecords.reduce((sum, r) => sum + r.quantity, 0);
+
+    if (expectedQuantity === 0) {
+      return null;
+    }
+
+    // Get already recorded quantity for current stage
+    const currentRecords = await prisma.productionRecord.findMany({
+      where: {
+        partId,
+        stage,
+      },
+    });
+
+    const alreadyRecordedGood = currentRecords.reduce((sum, r) => sum + r.quantity, 0);
+    const alreadyRecordedRejects = currentRecords.reduce((sum, r) => sum + (r.rejectQuantity || 0), 0);
+    const newRejectQuantity = rejectQuantity || 0;
+
+    const totalAfterNewEntry = alreadyRecordedGood + quantity + alreadyRecordedRejects + newRejectQuantity;
+    const difference = totalAfterNewEntry - expectedQuantity;
+
+    const tolerance = expectedQuantity * 0.05;
+    if (Math.abs(difference) > tolerance) {
+      return {
+        expected: expectedQuantity,
+        actual: totalAfterNewEntry,
+        difference,
+        stage,
+      };
+    }
+
+    return null;
   }
 
   /**
@@ -713,10 +1071,14 @@ export class ProductionService {
 
   /**
    * Get all operators (users) for selection
+   * Only returns active users with WORKER role for production tracking
    */
   async getOperators() {
     const users = await prisma.user.findMany({
-      where: { isActive: true },
+      where: { 
+        role: 'WORKER',
+        isActive: true,
+      },
       select: {
         id: true,
         username: true,

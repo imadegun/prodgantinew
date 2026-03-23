@@ -147,6 +147,12 @@ export class POLService {
       throw new AppError('POL number already exists', 400, 'POL_EXISTS');
     }
 
+    // Validate that createdBy is provided and is a valid number
+    // This field is required by the database schema (non-nullable integer)
+    if (data.createdBy === undefined) {
+      throw new AppError('Created by user is required', 400, 'CREATED_BY_REQUIRED');
+    }
+
     const pol = await prisma.pOL.create({
       data: {
         poNumber: data.poNumber,
