@@ -189,6 +189,7 @@ model User {
   reportedAlerts       DiscrepancyAlert[] @relation("AlertReportedBy")
   acknowledgedAlerts   DiscrepancyAlert[] @relation("AlertAcknowledgedBy")
   resolvedAlerts       DiscrepancyAlert[] @relation("AlertResolvedBy")
+  partCombinations    ProductPartCombination[]
   
   @@map("users")
 }
@@ -244,6 +245,7 @@ model POLDetail {
   revisionTickets      RevisionTicket[]
   productParts         ProductPart[]
   remakeCycles        RemakeCycle[]
+  partCombinations    ProductPartCombination[]
   
   @@map("pol_details")
 }
@@ -421,6 +423,7 @@ model ProductPart {
   linkedToPart    ProductPart? @relation("PartConnections", fields: [linkedToPartId], references: [id])
   connectedParts  ProductPart[] @relation("PartConnections")
   productionRecords ProductionRecord[]
+  combinationItems ProductPartCombinationItem[]
   
   @@map("product_parts")
 }
@@ -480,4 +483,41 @@ model RemakeCycle {
   rejectReason    DefectReason?  @relation(fields: [rejectReasonId], references: [id])
   
   @@map("remake_cycles")
+}
+
+// Product Part Combinations table - tracks combination events
+model ProductPartCombination {
+  id                Int             @id @default(autoincrement())
+  polDetailId       Int             @map("pol_detail_id")
+  combinedAtStage   ProductionStage @map("combined_at_stage")
+  combinedQuantity  Int             @map("combined_quantity")
+  combinedBy        Int             @map("combined_by")
+  combinedAt        DateTime        @default(now()) @map("combined_at")
+  notes             String?
+  createdAt         DateTime        @default(now()) @map("createdAt")
+  updatedAt         DateTime        @updatedAt @map("updatedAt")
+  
+  // Relationships
+  polDetail         POLDetail                    @relation(fields: [polDetailId], references: [id], onDelete: Cascade)
+  combinedByUser    User                         @relation(fields: [combinedBy], references: [id])
+  combinationItems  ProductPartCombinationItem[]
+  
+  @@map("product_part_combinations")
+}
+
+// Product Part Combination Items table - tracks which parts are in each combination
+model ProductPartCombinationItem {
+  id              Int                  @id @default(autoincrement())
+  combinationId   Int                  @map("combination_id")
+  partId          Int                  @map("part_id")
+  quantityUsed    Int                  @map("quantity_used")
+  createdAt       DateTime             @default(now()) @map("createdAt")
+  updatedAt       DateTime             @updatedAt @map("updatedAt")
+  
+  // Relationships
+  combination     ProductPartCombination @relation(fields: [combinationId], references: [id], onDelete: Cascade)
+  part            ProductPart           @relation(fields: [partId], references: [id])
+  
+  @@unique([combinationId, partId])
+  @@map("product_part_combination_items")
 }

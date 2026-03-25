@@ -332,6 +332,71 @@ The backend has TypeScript compilation errors due to a **Prisma schema field nam
 ### Planning Artifacts
 - [`_bmad-output/planning-artifacts/implementation-summary-and-next-tasks.md`](implementation-summary-and-next-tasks.md) - This document
 
+## New Feature: Dynamic Part Combination (Manual Assembly)
+
+### Overview
+A new feature has been added to support manual combination of product parts at any production stage. This addresses the need for flexible assembly tracking in handcrafted ceramic production where products like teapots and large vases have varying assembly points.
+
+### Feature Details
+
+**PRD Reference:** FR-002.K (PRD v1.2)
+**TDD Reference:** Part Combination API (TDD v1.1)
+
+**Business Context:**
+- Ceramic products are handcrafted with wide variety of designs
+- Assembly points vary by product design (e.g., teapot vs large vase)
+- Artisans need flexibility to combine parts at different stages based on product requirements
+
+**Example Workflows:**
+
+1. **Teapot Product:**
+   - FORMING (Throwing, Trimming): Track Body, Lid, Handle, Spout separately
+   - DECORATION (Assembly): Combine Body + Handle + Spout → Combined Unit
+   - DRYING → FIRING → GLAZING → QC: Track Combined Unit + Lid separately
+
+2. **Large Vase Product:**
+   - THROWING: Track Part A, Part B separately
+   - TRIMMING (Assembly): Combine Part A + Part B → Combined Unit
+   - DECORATION → DRYING → FIRING → GLAZING → QC: Track Combined Unit
+
+### Database Changes
+
+**New Tables:**
+1. `product_part_combinations` - Tracks combination events
+   - `combination_id` (PK)
+   - `pol_detail_id` (FK)
+   - `combined_at_stage` (ProductionStage)
+   - `combined_quantity` (Int)
+   - `combined_by` (FK to users)
+   - `combined_at` (DateTime)
+   - `notes` (String)
+
+2. `product_part_combination_items` - Tracks which parts are in each combination
+   - `item_id` (PK)
+   - `combination_id` (FK)
+   - `part_id` (FK)
+   - `quantity_used` (Int)
+
+3. `product_parts` - Tracks individual parts
+   - `part_id` (PK)
+   - `pol_detail_id` (FK)
+   - `part_name` (String)
+   - `part_type` (String: MAIN, SUB, ASSEMBLY)
+   - `throwing_required` (Boolean)
+   - `throwing_order` (Int)
+
+### API Changes
+
+**New Endpoints:**
+1. `POST /api/v1/production/combine-parts` - Combine parts at any stage
+2. `GET /api/v1/production/:polDetailId/combinations` - Get all combinations for a POL detail
+
+### Implementation Status
+- ✅ PRD updated (v1.2)
+- ✅ TDD updated (v1.1)
+- ⏳ Backend implementation pending
+- ⏳ Frontend implementation pending
+
 ## Next Immediate Steps
 
 1. **Fix TypeScript compilation errors** (Priority 1)

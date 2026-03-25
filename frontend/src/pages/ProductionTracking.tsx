@@ -37,7 +37,11 @@ import {
   LocalFireDepartment as FireIcon,
   Palette as LusterIcon,
   Science as ClayIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  Add as AddIcon,
 } from '@mui/icons-material';
+import { IconButton } from '@mui/material';
 import { useAppSelector, useAppDispatch } from '../hooks/useAppSelector';
 import { fetchProductionStages, trackProduction } from '../store/slices/productionSlice';
 import { fetchPOLs } from '../store/slices/polSlice';
@@ -170,6 +174,40 @@ const ProductionTracking = () => {
   const [newPartType, setNewPartType] = useState('MAIN');
   const [newPartThrowingRequired, setNewPartThrowingRequired] = useState(true);
   const [newPartThrowingOrder, setNewPartThrowingOrder] = useState<number | ''>('');
+  
+  // Edit Part Dialog state
+  const [editPartDialogOpen, setEditPartDialogOpen] = useState(false);
+  const [editingPart, setEditingPart] = useState<any>(null);
+  const [editPartName, setEditPartName] = useState('');
+  const [editPartType, setEditPartType] = useState('MAIN');
+  const [editPartThrowingRequired, setEditPartThrowingRequired] = useState(true);
+  const [editPartThrowingOrder, setEditPartThrowingOrder] = useState<number | ''>('');
+  const [editPartLinkedToPartId, setEditPartLinkedToPartId] = useState<number | null>(null);
+  
+  // Part Production Tracking state
+  const [selectedPart, setSelectedPart] = useState<any>(null);
+  const [partStages, setPartStages] = useState<any[]>([]);
+  const [partCurrentStage, setPartCurrentStage] = useState('');
+  const [partCurrentCategory, setPartCurrentCategory] = useState('FORMING');
+  const [partQuantity, setPartQuantity] = useState('');
+  const [partRejectQuantity, setPartRejectQuantity] = useState('');
+  const [partProductionDate, setPartProductionDate] = useState('');
+  const [partNotes, setPartNotes] = useState('');
+  const [partSelectedOperator, setPartSelectedOperator] = useState('');
+  const [partSelectedOven, setPartSelectedOven] = useState('');
+  const [partSelectedDefectReason, setPartSelectedDefectReason] = useState('');
+  const [partSelectedRemakeType, setPartSelectedRemakeType] = useState('');
+  const [partValidationError, setPartValidationError] = useState('');
+  const [partStageRecords, setPartStageRecords] = useState<Record<string, any>>({});
+  
+  // Combine Parts state
+  const [combineDialogOpen, setCombineDialogOpen] = useState(false);
+  const [combineStage, setCombineStage] = useState('');
+  const [combineCategory, setCombineCategory] = useState('FORMING');
+  const [selectedPartsForCombine, setSelectedPartsForCombine] = useState<Record<string, number>>({});
+  const [combineNotes, setCombineNotes] = useState('');
+  const [combineLoading, setCombineLoading] = useState(false);
+  const [partCombinations, setPartCombinations] = useState<any[]>([]);
   
   const categories = ['FORMING', 'DECOR', 'DRYING', 'FIRING', 'GLAZING', 'QC'];
   
@@ -572,27 +610,337 @@ const ProductionTracking = () => {
     setAddPartDialogOpen(false);
   };
 
-  const handleAddPart = async () => {
+   const handleAddPart = async () => {
+     try {
+       if (!newPartName) {
+         showSnackbar('Please enter part name', 'error');
+         return;
+       }
+
+       await productionService.createProductPart({
+         polDetailId: Number(selectedProduct),
+         partName: newPartName,
+         partType: newPartType,
+         throwingRequired: newPartThrowingRequired,
+         throwingOrder: newPartThrowingOrder ? Number(newPartThrowingOrder) : undefined,
+       });
+
+       showSnackbar('Product part added successfully', 'success');
+       handleCloseAddPartDialog();
+       loadProductParts();
+     } catch (error: any) {
+       console.error('Error adding product part:', error);
+       showSnackbar(error.message || 'Failed to add product part', 'error');
+     }
+   };
+
+   const handleOpenEditPartDialog = (part: any) => {
+     setEditingPart(part);
+     setEditPartName(part.partName);
+     setEditPartType(part.partType);
+     setEditPartThrowingRequired(part.throwingRequired);
+     setEditPartThrowingOrder(part.throwingOrder || '');
+     setEditPartLinkedToPartId(part.linkedToPartId || null);
+     setEditPartDialogOpen(true);
+   };
+
+   const handleCloseEditPartDialog = () => {
+     setEditPartDialogOpen(false);
+     setEditingPart(null);
+   };
+
+   const handleUpdatePart = async () => {
+     try {
+       if (!editPartName) {
+         showSnackbar('Please enter part name', 'error');
+         return;
+       }
+
+       await productionService.updateProductPart(editingPart.id, {
+         partName: editPartName,
+         partType: editPartType,
+         linkedToPartId: editPartLinkedToPartId === null ? undefined : editPartLinkedToPartId,
+         throwingRequired: editPartThrowingRequired,
+         throwingOrder: editPartThrowingOrder ? Number(editPartThrowingOrder) : undefined,
+       });
+
+       showSnackbar('Product part updated successfully', 'success');
+       handleCloseEditPartDialog();
+       loadProductParts();
+     } catch (error: any) {
+       console.error('Error updating product part:', error);
+       showSnackbar(error.message || 'Failed to update product part', 'error');
+     }
+   };
+
+   const handleDeletePart = async (partId: number) => {
+     if (confirm('Are you sure you want to delete this part?')) {
+       try {
+         await productionService.deleteProductPart(partId);
+         showSnackbar('Product part deleted successfully', 'success');
+         loadProductParts();
+       } catch (error: any) {
+         console.error('Error deleting product part:', error);
+         showSnackbar(error.message || 'Failed to delete product part', 'error');
+       }
+     }
+   };
+
+  // Part Production Tracking handlers
+  const handlePartSelect = async (part: any) => {
+    setSelectedPart(part);
+    setPartCurrentStage('');
+    setPartCurrentCategory('FORMING');
+    setPartStageRecords({});
+    
+    if (part) {
+      try {
+        const result = await productionService.getPartProductionStages(part.id);
+        if (result) {
+          setPartStages(result.stages || []);
+          
+          // Find current stage from records
+          let currentStageFound = 'THROWING';
+          result.stages?.forEach((stageData: any) => {
+            if (stageData.records && stageData.records.length > 0) {
+              currentStageFound = stageData.stage;
+            }
+          });
+          
+          setPartCurrentStage(currentStageFound);
+          setPartCurrentCategory(getCategoryForStage(currentStageFound));
+          
+          // Store stage records
+          const recordsMap: Record<string, any> = {};
+          result.stages?.forEach((stageData: any) => {
+            recordsMap[stageData.stage] = stageData;
+          });
+          setPartStageRecords(recordsMap);
+        }
+      } catch (error) {
+        console.error('Error loading part production stages:', error);
+      }
+    }
+  };
+
+  const handlePartCategoryTabChange = (_event: React.SyntheticEvent, newValue: number) => {
+    const newCategory = categories[newValue];
+    setPartCurrentCategory(newCategory);
+    
+    // Set first stage of category as current
+    const categoryStageList = getStagesForCategory(newCategory);
+    if (categoryStageList.length > 0) {
+      setPartCurrentStage(categoryStageList[0]);
+    }
+  };
+
+  const handlePartStageSelect = (stage: string) => {
+    setPartCurrentStage(stage);
+  };
+
+  const validatePartStageQuantity = (stage: string, qty: number, rejectQty: number): { valid: boolean; error?: string } => {
+    if (!selectedPart) return { valid: false, error: 'No part selected' };
+    
+    // Get already recorded quantity for this stage
+    const currentStageData = partStageRecords[stage];
+    const alreadyRecordedQty = currentStageData?.totalQuantity || 0;
+    const alreadyRecordedRejects = currentStageData?.records?.reduce((sum: number, r: any) => sum + (r.rejectQuantity || 0), 0) || 0;
+    
+    // Calculate total after adding new entry
+    const totalAfterNewEntry = alreadyRecordedQty + qty + alreadyRecordedRejects + rejectQty;
+    
+    // Define stage flow and validation rules
+    const stageFlow: Record<string, { prevStage: string | null; maxQty?: number }> = {
+      THROWING: { prevStage: null },
+      TRIMMING: { prevStage: 'THROWING' },
+      DECORATION: { prevStage: 'TRIMMING' },
+      DRYING: { prevStage: 'DECORATION' },
+      LOAD_BISQUE: { prevStage: 'DRYING' },
+      OUT_BISQUE: { prevStage: 'LOAD_BISQUE' },
+      LOAD_HIGH_FIRING: { prevStage: 'OUT_BISQUE' },
+      OUT_HIGH_FIRING: { prevStage: 'LOAD_HIGH_FIRING' },
+      LOAD_RAKU_FIRING: { prevStage: 'OUT_HIGH_FIRING' },
+      OUT_RAKU_FIRING: { prevStage: 'LOAD_RAKU_FIRING' },
+      LOAD_LUSTER_FIRING: { prevStage: 'OUT_RAKU_FIRING' },
+      OUT_LUSTER_FIRING: { prevStage: 'LOAD_LUSTER_FIRING' },
+      SANDING: { prevStage: 'OUT_LUSTER_FIRING' },
+      WAXING: { prevStage: 'SANDING' },
+      DIPPING: { prevStage: 'WAXING' },
+      SPRAYING: { prevStage: 'DIPPING' },
+      COLOR_DECORATION: { prevStage: 'SPRAYING' },
+      QC_GOOD: { prevStage: 'COLOR_DECORATION' },
+      QC_REJECT: { prevStage: 'COLOR_DECORATION' },
+      QC_RE_FIRING: { prevStage: 'COLOR_DECORATION' },
+      QC_SECOND: { prevStage: 'COLOR_DECORATION' },
+    };
+    
+    const flowConfig = stageFlow[stage];
+    
+    if (!flowConfig) {
+      return { valid: true };
+    }
+    
+    // For THROWING stage, no validation needed
+    if (flowConfig.prevStage === null) {
+      return { valid: true };
+    }
+    
+    // For other stages, validate against previous stage's output
+    if (flowConfig.prevStage) {
+      const prevStageData = partStageRecords[flowConfig.prevStage];
+      
+      if (!prevStageData || prevStageData.totalQuantity === 0) {
+        return {
+          valid: false,
+          error: `Previous stage (${stageNames[flowConfig.prevStage]}) has no recorded quantity. Please complete ${stageNames[flowConfig.prevStage]} first.`
+        };
+      }
+      
+      const prevStageAvailableQty = prevStageData.totalQuantity;
+      
+      if (totalAfterNewEntry > prevStageAvailableQty) {
+        return {
+          valid: false,
+          error: `Total quantity (${totalAfterNewEntry}) cannot exceed available quantity from ${stageNames[flowConfig.prevStage]} (${prevStageAvailableQty}). Already recorded in ${stageNames[stage]}: ${alreadyRecordedQty} good + ${alreadyRecordedRejects} reject, New entry: ${qty} good + ${rejectQty} reject. Please reduce quantity.`
+        };
+      }
+    }
+    
+    return { valid: true };
+  };
+
+  const handlePartSubmit = async () => {
     try {
-      if (!newPartName) {
-        showSnackbar('Please enter part name', 'error');
+      if (!selectedPart || !partQuantity || parseInt(partQuantity) <= 0) {
+        showSnackbar('Please select part and enter valid quantity', 'error');
         return;
       }
 
-      await productionService.createProductPart({
+      if (!partProductionDate) {
+        showSnackbar('Please select production date', 'error');
+        return;
+      }
+
+      const qty = parseInt(partQuantity);
+      const rejectQty = parseInt(partRejectQuantity) || 0;
+      
+      const validationResult = validatePartStageQuantity(partCurrentStage, qty, rejectQty);
+      if (!validationResult.valid) {
+        const errorMessage = validationResult.error || 'Validation failed';
+        setPartValidationError(errorMessage);
+        return;
+      }
+
+      const result = await productionService.trackPartProduction({
         polDetailId: Number(selectedProduct),
-        partName: newPartName,
-        partType: newPartType,
-        throwingRequired: newPartThrowingRequired,
-        throwingOrder: newPartThrowingOrder ? Number(newPartThrowingOrder) : undefined,
+        partId: selectedPart.id,
+        stage: partCurrentStage,
+        quantity: qty,
+        rejectQuantity: rejectQty,
+        category: partCurrentCategory,
+        remakeType: partSelectedRemakeType || undefined,
+        ovenId: partSelectedOven ? Number(partSelectedOven) : undefined,
+        operatorId: partSelectedOperator ? Number(partSelectedOperator) : undefined,
+        rejectReasonId: partSelectedDefectReason ? Number(partSelectedDefectReason) : undefined,
+        notes: partNotes,
+        productionDate: partProductionDate || undefined,
       });
 
-      showSnackbar('Product part added successfully', 'success');
-      handleCloseAddPartDialog();
-      loadProductParts();
+      const payload = result as any;
+      if (payload?.discrepancyDetected) {
+        setDiscrepancyAlert(payload);
+        showSnackbar('Quantity discrepancy detected', 'warning');
+      } else {
+        setPartQuantity('');
+        setPartRejectQuantity('');
+        setPartNotes('');
+        setPartProductionDate('');
+        setPartSelectedOperator('');
+        setPartSelectedOven('');
+        setPartSelectedDefectReason('');
+        setPartSelectedRemakeType('');
+        setPartValidationError('');
+        showSnackbar('Part production data saved successfully', 'success');
+        handlePartSelect(selectedPart);
+      }
     } catch (error: any) {
-      console.error('Error adding product part:', error);
-      showSnackbar(error.message || 'Failed to add product part', 'error');
+      console.error('Error tracking part production:', error);
+      showSnackbar(error.message || 'Failed to track part production', 'error');
+    }
+  };
+
+  // Load part combinations
+  const loadPartCombinations = async () => {
+    if (!selectedProduct) return;
+    try {
+      const combinations = await productionService.getPartCombinations(Number(selectedProduct));
+      setPartCombinations(combinations || []);
+    } catch (error) {
+      console.error('Error loading part combinations:', error);
+    }
+  };
+
+  // Combine Parts handlers
+  const handleOpenCombineDialog = () => {
+    setCombineDialogOpen(true);
+    setCombineStage('');
+    setCombineCategory('FORMING');
+    setSelectedPartsForCombine({});
+    setCombineNotes('');
+  };
+
+  const handleCloseCombineDialog = () => {
+    setCombineDialogOpen(false);
+  };
+
+  const handlePartSelectionForCombine = (partId: number, quantity: number) => {
+    setSelectedPartsForCombine(prev => {
+      const newSelection = { ...prev };
+      if (quantity <= 0) {
+        delete newSelection[partId];
+      } else {
+        newSelection[partId] = quantity;
+      }
+      return newSelection;
+    });
+  };
+
+  const handleCombineParts = async () => {
+    try {
+      const parts = Object.entries(selectedPartsForCombine)
+        .filter(([_, qty]) => qty > 0)
+        .map(([partId, quantity]) => ({
+          partId: Number(partId),
+          quantity,
+        }));
+
+      if (parts.length < 2) {
+        showSnackbar('Please select at least 2 parts to combine', 'error');
+        return;
+      }
+
+      if (!combineStage) {
+        showSnackbar('Please select a stage for combination', 'error');
+        return;
+      }
+
+      setCombineLoading(true);
+      await productionService.combineParts({
+        polDetailId: Number(selectedProduct),
+        stage: combineStage,
+        parts,
+        notes: combineNotes,
+      });
+
+      showSnackbar('Parts combined successfully', 'success');
+      handleCloseCombineDialog();
+      loadPartCombinations();
+      loadProductionStages();
+    } catch (error: any) {
+      console.error('Error combining parts:', error);
+      showSnackbar(error.message || 'Failed to combine parts', 'error');
+    } finally {
+      setCombineLoading(false);
     }
   };
 
@@ -818,11 +1166,13 @@ const ProductionTracking = () => {
       {/* Main Content Tabs */}
       {selectedProduct && (
         <>
-          <Tabs value={tabValue} onChange={handleTabChange} sx={{ mb: 2 }}>
-            <Tab label="Input Production" value="production" />
-            <Tab label="Product Parts" value="parts" />
-            <Tab label="Remake History" value="remakes" />
-          </Tabs>
+            <Tabs value={tabValue} onChange={handleTabChange} sx={{ mb: 2 }}>
+              <Tab label="Input Production" value="production" />
+              <Tab label="Product Parts" value="parts" />
+              <Tab label="Part Production" value="part-production" />
+              <Tab label="Combine Parts" value="combine-parts" />
+              <Tab label="Remake History" value="remakes" />
+            </Tabs>
  
           {/* Production Input Tab */}
           {tabValue === 'production' && (
@@ -1176,16 +1526,26 @@ const ProductionTracking = () => {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {productParts.map((part) => (
-                          <TableRow key={part.id} hover>
-                            <TableCell>{part.partName}</TableCell>
-                            <TableCell>
-                              <Chip label={part.partType} size="small" />
-                            </TableCell>
-                            <TableCell>{part.throwingRequired ? 'Yes' : 'No'}</TableCell>
-                            <TableCell>{part.throwingOrder || '-'}</TableCell>
-                          </TableRow>
-                        ))}
+                 {productParts.map((part) => (
+                           <TableRow key={part.id} hover>
+                             <TableCell>{part.partName}</TableCell>
+                             <TableCell>
+                               <Chip label={part.partType} size="small" />
+                             </TableCell>
+                             <TableCell>{part.throwingRequired ? 'Yes' : 'No'}</TableCell>
+                             <TableCell>{part.throwingOrder || '-'}</TableCell>
+                             <TableCell>
+                               <Box sx={{ display: 'flex', gap: 1 }}>
+                                 <IconButton size="small" onClick={() => handleOpenEditPartDialog(part)}>
+                                   <EditIcon fontSize="small" />
+                                 </IconButton>
+                                 <IconButton size="small" onClick={() => handleDeletePart(part.id)}>
+                                   <DeleteIcon fontSize="small" />
+                                 </IconButton>
+                               </Box>
+                             </TableCell>
+                           </TableRow>
+                         ))}
                       </TableBody>
                     </Table>
                   </TableContainer>
@@ -1203,6 +1563,555 @@ const ProductionTracking = () => {
             </Card>
           )}
  
+          {/* Part Production Tab */}
+          {tabValue === 'part-production' && (
+            <Card>
+              <CardContent>
+                <Typography variant="h6" sx={{ mb: 2 }}>Part Production Tracking</Typography>
+                {productParts.length > 0 ? (
+                  <>
+                    {/* Part Selection */}
+                    <Box sx={{ mb: 3 }}>
+                      <Typography variant="subtitle2" gutterBottom>Select Part to Track:</Typography>
+                      <Grid container spacing={1}>
+                        {productParts.map((part) => (
+                          <Grid item key={part.id}>
+                            <Chip
+                              label={`${part.partName} (${part.partType})`}
+                              onClick={() => handlePartSelect(part)}
+                              color={selectedPart?.id === part.id ? 'primary' : 'default'}
+                              variant={selectedPart?.id === part.id ? 'filled' : 'outlined'}
+                              sx={{ cursor: 'pointer' }}
+                            />
+                          </Grid>
+                        ))}
+                      </Grid>
+                    </Box>
+
+                    {selectedPart && (
+                      <Grid container spacing={3}>
+                        {/* Left Side - Category Tabs */}
+                        <Grid item xs={12} md={4}>
+                          <Card sx={{ height: '100%' }}>
+                            <CardContent>
+                              <Typography variant="h6" gutterBottom>Production Categories</Typography>
+                              <Tabs
+                                orientation="vertical"
+                                value={categories.indexOf(partCurrentCategory)}
+                                onChange={handlePartCategoryTabChange}
+                                variant="fullWidth"
+                                sx={{ 
+                                  '& .MuiTab-root': { 
+                                    justifyContent: 'flex-start',
+                                    textAlign: 'left',
+                                    borderRadius: 1,
+                                    mb: 0.5,
+                                  }
+                                }}
+                              >
+                                {categories.map((category, index) => (
+                                  <Tab 
+                                    key={category} 
+                                    label={
+                                      <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                                        <Chip 
+                                          label={categoryLabels[category]} 
+                                          size="small"
+                                          sx={{ 
+                                            bgcolor: categoryColors[category], 
+                                            color: 'white',
+                                            fontWeight: 'bold',
+                                            minWidth: 70
+                                          }}
+                                        />
+                                        <Box sx={{ ml: 'auto' }}>
+                                          {getStagesForCategory(category)?.filter((stage: string) => getCategoryForStage(stage) === category)?.map((stage: string) => {
+                                            const stageData = partStageRecords[stage];
+                                            const totalRejects = stageData?.totalRejectQuantity || stageData?.records?.reduce((sum: number, r: any) => sum + (r.rejectQuantity || 0), 0) || 0;
+                                            if (stageData?.totalQuantity > 0 || totalRejects > 0) {
+                                              return (
+                                                <Box key={stage} sx={{ display: 'flex', alignItems: 'center', ml: 0.5 }}>
+                                                  <Chip
+                                                    label={stageData.totalQuantity}
+                                                    size="small"
+                                                    color="success"
+                                                    sx={{ height: 20, fontSize: '0.7rem' }}
+                                                  />
+                                                  {totalRejects > 0 && (
+                                                    <Chip
+                                                      label={`-${totalRejects}`}
+                                                      size="small"
+                                                      color="error"
+                                                      sx={{ ml: 0.5, height: 20, fontSize: '0.7rem' }}
+                                                    />
+                                                  )}
+                                                </Box>
+                                              );
+                                            }
+                                            return null;
+                                          })}
+                                        </Box>
+                                      </Box>
+                                    }
+                                    value={index}
+                                  />
+                                ))}
+                              </Tabs>
+                              
+                              {/* Stages in selected category */}
+                              <Box sx={{ mt: 2 }}>
+                                <Typography variant="subtitle2" gutterBottom>
+                                  Stages in {categoryLabels[partCurrentCategory]}:
+                                </Typography>
+                                <Grid container spacing={1}>
+                                  {getStagesForCategory(partCurrentCategory).map(stage => {
+                                    const stageData = partStageRecords[stage];
+                                    const isActive = partCurrentStage === stage;
+                                    const hasData = stageData?.totalQuantity > 0;
+                                     
+                                    return (
+                                      <Grid item xs={6} key={stage}>
+                                        <Button
+                                          fullWidth
+                                          variant={isActive ? 'contained' : hasData ? 'outlined' : 'text'}
+                                          color={isActive ? 'primary' : hasData ? 'success' : 'inherit'}
+                                          onClick={() => handlePartStageSelect(stage)}
+                                          size="small"
+                                          sx={{ 
+                                            justifyContent: 'flex-start',
+                                            bgcolor: isActive ? categoryColors[partCurrentCategory] : undefined,
+                                          }}
+                                        >
+                                          {stageNames[stage] || stage}
+                                          {hasData && (
+                                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                              <Chip
+                                                label={stageData.totalQuantity}
+                                                size="small"
+                                                color="success"
+                                                sx={{ height: 20, fontSize: '0.7rem' }}
+                                              />
+                                              {(stageData.totalRejectQuantity || stageData.records?.reduce((sum: number, r: any) => sum + (r.rejectQuantity || 0), 0) > 0) && (
+                                                <Chip
+                                                  label={`-${stageData.totalRejectQuantity || stageData.records?.reduce((sum: number, r: any) => sum + (r.rejectQuantity || 0), 0)}`}
+                                                  size="small"
+                                                  color="error"
+                                                  sx={{ ml: 0.5, height: 20, fontSize: '0.7rem' }}
+                                                />
+                                              )}
+                                            </Box>
+                                          )}
+                                        </Button>
+                                      </Grid>
+                                    );
+                                  })}
+                                </Grid>
+                              </Box>
+                            </CardContent>
+                          </Card>
+                        </Grid>
+                        
+                        {/* Right Side - Input Form */}
+                        <Grid item xs={12} md={8}>
+                          <Card sx={{ height: '100%' }}>
+                            <CardContent>
+                              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                                <Chip 
+                                  label={categoryLabels[partCurrentCategory]} 
+                                  sx={{ 
+                                    bgcolor: categoryColors[partCurrentCategory], 
+                                    color: 'white',
+                                    fontWeight: 'bold',
+                                    mr: 2
+                                  }}
+                                />
+                                <Typography variant="h6">
+                                  {stageNames[partCurrentStage] || partCurrentStage}
+                                </Typography>
+                              </Box>
+                              
+                              {/* Current Stage Info */}
+                              {(() => {
+                                const stageData = partStageRecords[partCurrentStage];
+                                const hasRejects = (stageData?.totalRejectQuantity || stageData?.records?.reduce((sum: number, r: any) => sum + (r.rejectQuantity || 0), 0) || 0) > 0;
+                                if (!stageData || (stageData.totalQuantity === 0 && !hasRejects)) return null;
+                                return (
+                                  <Box sx={{ mb: 3, p: 2, bgcolor: '#e8f5e9', borderRadius: 1 }}>
+                                    <Typography variant="subtitle2" color="success.main">
+                                      Already recorded: {stageData.totalQuantity} good
+                                      {hasRejects && (
+                                        <Typography variant="subtitle2" color="error.main" sx={{ ml: 1 }}>
+                                          + {stageData.totalRejectQuantity || stageData.records?.reduce((sum: number, r: any) => sum + (r.rejectQuantity || 0), 0)} reject
+                                        </Typography>
+                                      )}
+                                    </Typography>
+                                    {stageData.latestRecord && (
+                                      <Typography variant="body2" color="text.secondary">
+                                        Last entry: {format(new Date(stageData.latestRecord.createdAt), 'MMM dd, yyyy HH:mm')}
+                                        {stageData.latestRecord.notes && ` - ${stageData.latestRecord.notes}`}
+                                      </Typography>
+                                    )}
+                                  </Box>
+                                );
+                              })()}
+                              
+                              {/* Input Form */}
+                              <Grid container spacing={2}>
+                                <Grid item xs={12} sm={6}>
+                                  <TextField
+                                    fullWidth
+                                    label="Quantity Produced"
+                                    type="number"
+                                    value={partQuantity}
+                                    onChange={(e) => setPartQuantity(e.target.value)}
+                                    required
+                                    size="medium"
+                                  />
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                  <TextField
+                                    fullWidth
+                                    label="Reject Quantity"
+                                    type="number"
+                                    value={partRejectQuantity}
+                                    onChange={(e) => setPartRejectQuantity(e.target.value)}
+                                    size="medium"
+                                  />
+                                </Grid>
+                                
+                                {/* Operator Selection */}
+                                <Grid item xs={12} sm={6}>
+                                  <FormControl fullWidth>
+                                    <InputLabel>Operator</InputLabel>
+                                    <Select
+                                      value={partSelectedOperator}
+                                      onChange={(e) => setPartSelectedOperator(e.target.value)}
+                                      label="Operator"
+                                    >
+                                      <MenuItem value="">Select Operator...</MenuItem>
+                                      {operators.map((op) => (
+                                        <MenuItem key={op.id} value={op.id}>
+                                          {op.fullName || op.username}
+                                        </MenuItem>
+                                      ))}
+                                    </Select>
+                                  </FormControl>
+                                </Grid>
+                                
+                                {/* Oven Selection - Only for firing stages */}
+                                {firingStages.includes(partCurrentStage) && (
+                                  <Grid item xs={12} sm={6}>
+                                    <FormControl fullWidth>
+                                      <InputLabel>Oven</InputLabel>
+                                      <Select
+                                        value={partSelectedOven}
+                                        onChange={(e) => setPartSelectedOven(e.target.value)}
+                                        label="Oven"
+                                      >
+                                        <MenuItem value="">Select Oven...</MenuItem>
+                                        {ovens.filter(o => o.status === 'ACTIVE').map((oven) => (
+                                          <MenuItem key={oven.id} value={oven.id}>
+                                            {oven.ovenCode} - {oven.ovenName}
+                                          </MenuItem>
+                                        ))}
+                                      </Select>
+                                    </FormControl>
+                                  </Grid>
+                                )}
+                                
+                                {/* Defect Reason - Show when there are rejects */}
+                                {(parseInt(partRejectQuantity) > 0 || partSelectedDefectReason) && (
+                                  <Grid item xs={12} sm={6}>
+                                    <FormControl fullWidth>
+                                      <InputLabel>Reject Reason</InputLabel>
+                                      <Select
+                                        value={partSelectedDefectReason}
+                                        onChange={(e) => setPartSelectedDefectReason(e.target.value)}
+                                        label="Reject Reason"
+                                      >
+                                        <MenuItem value="">Select Reason...</MenuItem>
+                                        {defectReasons.map((reason) => (
+                                          <MenuItem key={reason.id} value={reason.id}>
+                                            {reason.category} - {reason.description}
+                                          </MenuItem>
+                                        ))}
+                                      </Select>
+                                    </FormControl>
+                                  </Grid>
+                                )}
+                                
+                                {/* Remake Type */}
+                                <Grid item xs={12} sm={6}>
+                                  <FormControl fullWidth>
+                                    <InputLabel>Production Type</InputLabel>
+                                    <Select
+                                      value={partSelectedRemakeType}
+                                      onChange={(e) => setPartSelectedRemakeType(e.target.value)}
+                                      label="Production Type"
+                                    >
+                                      <MenuItem value="">Normal Production</MenuItem>
+                                      <MenuItem value="RPR">RPR (Pre-Firing Remake)</MenuItem>
+                                      <MenuItem value="RQC">RQC (Post-Firing Remake)</MenuItem>
+                                    </Select>
+                                  </FormControl>
+                                </Grid>
+                                
+                                {/* Production Date */}
+                                <Grid item xs={12} sm={6}>
+                                  <TextField
+                                    fullWidth
+                                    label="Production Date *"
+                                    type="date"
+                                    value={partProductionDate}
+                                    onChange={(e) => setPartProductionDate(e.target.value)}
+                                    InputLabelProps={{ shrink: true }}
+                                    required
+                                    error={!partProductionDate}
+                                    helperText={!partProductionDate ? 'Production date is required' : ''}
+                                  />
+                                </Grid>
+                                
+                                {/* Notes */}
+                                <Grid item xs={12}>
+                                  <TextField
+                                    fullWidth
+                                    label="Notes"
+                                    multiline
+                                    rows={3}
+                                    value={partNotes}
+                                    onChange={(e) => setPartNotes(e.target.value)}
+                                  />
+                                </Grid>
+                                
+                                {/* Validation Error Alert */}
+                                {partValidationError && (
+                                  <Box sx={{ mb: 2, p: 2, bgcolor: '#ffebee', borderRadius: 1 }}>
+                                    <Typography variant="body2" color="error">
+                                      {partValidationError}
+                                    </Typography>
+                                  </Box>
+                                )}
+                                
+                                {/* Submit Button */}
+                                <Grid item xs={12}>
+                                  <Button
+                                    variant="contained"
+                                    fullWidth
+                                    size="large"
+                                    startIcon={<SaveIcon />}
+                                    onClick={handlePartSubmit}
+                                    disabled={!partQuantity || parseInt(partQuantity) <= 0 || !partProductionDate}
+                                    sx={{ 
+                                      py: 1.5,
+                                      bgcolor: categoryColors[partCurrentCategory],
+                                      '&:hover': {
+                                        bgcolor: categoryColors[partCurrentCategory],
+                                        opacity: 0.9,
+                                      }
+                                    }}
+                                  >
+                                    Save Part Production Data
+                                  </Button>
+                                </Grid>
+                              </Grid>
+                            </CardContent>
+                          </Card>
+                        </Grid>
+                      </Grid>
+                    )}
+                  </>
+                ) : (
+                  <Box sx={{ p: 4, textAlign: 'center' }}>
+                    <Typography variant="body1" color="textSecondary">
+                      No product parts defined yet.
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      Add parts first in the "Product Parts" tab to track individual component production.
+                    </Typography>
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Combine Parts Tab */}
+          {tabValue === 'combine-parts' && (
+            <Card>
+              <CardContent>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Typography variant="h6">Combine Parts at Any Stage</Typography>
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={handleOpenCombineDialog}
+                    disabled={productParts.length < 2}
+                  >
+                    Combine Parts
+                  </Button>
+                </Box>
+                
+                {productParts.length < 2 ? (
+                  <Box sx={{ p: 4, textAlign: 'center' }}>
+                    <Typography variant="body1" color="textSecondary">
+                      You need at least 2 parts to combine.
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      Add more parts in the "Product Parts" tab first.
+                    </Typography>
+                  </Box>
+                ) : partCombinations.length > 0 ? (
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow sx={{ bgcolor: '#f5f5f5' }}>
+                          <TableCell><strong>Combined At Stage</strong></TableCell>
+                          <TableCell><strong>Combined Quantity</strong></TableCell>
+                          <TableCell><strong>Parts Included</strong></TableCell>
+                          <TableCell><strong>Combined By</strong></TableCell>
+                          <TableCell><strong>Date</strong></TableCell>
+                          <TableCell><strong>Notes</strong></TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {partCombinations.map((combo) => (
+                          <TableRow key={combo.id} hover>
+                            <TableCell>
+                              <Chip 
+                                label={stageNames[combo.combinedAtStage] || combo.combinedAtStage} 
+                                size="small" 
+                                color="primary"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2" fontWeight="bold">
+                                {combo.combinedQuantity}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                {combo.combinationItems.map((item: any) => (
+                                  <Chip
+                                    key={item.id}
+                                    label={`${item.part.partName} (${item.quantityUsed})`}
+                                    size="small"
+                                    variant="outlined"
+                                  />
+                                ))}
+                              </Box>
+                            </TableCell>
+                            <TableCell>{combo.combinedByUser?.fullName || '-'}</TableCell>
+                            <TableCell>
+                              {combo.createdAt ? format(new Date(combo.createdAt), 'MMM dd, yyyy HH:mm') : '-'}
+                            </TableCell>
+                            <TableCell>{combo.notes || '-'}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                ) : (
+                  <Box sx={{ p: 4, textAlign: 'center' }}>
+                    <Typography variant="body1" color="textSecondary">
+                      No part combinations recorded yet.
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      Click "Combine Parts" to manually combine parts at any production stage.
+                    </Typography>
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Combine Parts Tab */}
+          {tabValue === 'combine-parts' && (
+            <Card>
+              <CardContent>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Typography variant="h6">Combine Parts at Any Stage</Typography>
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={handleOpenCombineDialog}
+                    disabled={productParts.length < 2}
+                  >
+                    Combine Parts
+                  </Button>
+                </Box>
+                
+                {productParts.length < 2 ? (
+                  <Box sx={{ p: 4, textAlign: 'center' }}>
+                    <Typography variant="body1" color="textSecondary">
+                      You need at least 2 parts to combine.
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      Add more parts in the "Product Parts" tab first.
+                    </Typography>
+                  </Box>
+                ) : partCombinations.length > 0 ? (
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow sx={{ bgcolor: '#f5f5f5' }}>
+                          <TableCell><strong>Combined At Stage</strong></TableCell>
+                          <TableCell><strong>Combined Quantity</strong></TableCell>
+                          <TableCell><strong>Parts Included</strong></TableCell>
+                          <TableCell><strong>Combined By</strong></TableCell>
+                          <TableCell><strong>Date</strong></TableCell>
+                          <TableCell><strong>Notes</strong></TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {partCombinations.map((combo) => (
+                          <TableRow key={combo.id} hover>
+                            <TableCell>
+                              <Chip 
+                                label={stageNames[combo.combinedAtStage] || combo.combinedAtStage} 
+                                size="small" 
+                                color="primary"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2" fontWeight="bold">
+                                {combo.combinedQuantity}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                {combo.combinationItems.map((item: any) => (
+                                  <Chip
+                                    key={item.id}
+                                    label={`${item.part.partName} (${item.quantityUsed})`}
+                                    size="small"
+                                    variant="outlined"
+                                  />
+                                ))}
+                              </Box>
+                            </TableCell>
+                            <TableCell>{combo.combinedByUser?.fullName || '-'}</TableCell>
+                            <TableCell>
+                              {combo.createdAt ? format(new Date(combo.createdAt), 'MMM dd, yyyy HH:mm') : '-'}
+                            </TableCell>
+                            <TableCell>{combo.notes || '-'}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                ) : (
+                  <Box sx={{ p: 4, textAlign: 'center' }}>
+                    <Typography variant="body1" color="textSecondary">
+                      No part combinations recorded yet.
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      Click "Combine Parts" to manually combine parts at any production stage.
+                    </Typography>
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Remake History Tab */}
           {tabValue === 'remakes' && (
             <Card>
@@ -1326,70 +2235,319 @@ const ProductionTracking = () => {
         </MuiAlert>
       </Snackbar>
 
-      {/* Add Part Dialog */}
-      <Dialog open={addPartDialogOpen} onClose={handleCloseAddPartDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>Add New Product Part</DialogTitle>
-        <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Part Name"
-                value={newPartName}
-                onChange={(e) => setNewPartName(e.target.value)}
-                placeholder="e.g., Body, Lid, Spout, Handle"
-                autoFocus
-              />
+       {/* Add Part Dialog */}
+       <Dialog open={addPartDialogOpen} onClose={handleCloseAddPartDialog} maxWidth="sm" fullWidth>
+         <DialogTitle>Add New Product Part</DialogTitle>
+         <DialogContent>
+           <Grid container spacing={2} sx={{ mt: 1 }}>
+             <Grid item xs={12}>
+               <TextField
+                 fullWidth
+                 label="Part Name"
+                 value={newPartName}
+                 onChange={(e) => setNewPartName(e.target.value)}
+                 placeholder="e.g., Body, Lid, Spout, Handle"
+                 autoFocus
+               />
+             </Grid>
+             <Grid item xs={12} sm={6}>
+               <FormControl fullWidth>
+                 <InputLabel>Part Type</InputLabel>
+                 <Select
+                   value={newPartType}
+                   onChange={(e) => setNewPartType(e.target.value)}
+                   label="Part Type"
+                 >
+                   <MenuItem value="MAIN">Main (Primary Component)</MenuItem>
+                   <MenuItem value="SUB">Sub (Additional Component)</MenuItem>
+                   <MenuItem value="ASSEMBLY">Assembly (Joined Part)</MenuItem>
+                 </Select>
+               </FormControl>
+             </Grid>
+             <Grid item xs={12} sm={6}>
+               <FormControl fullWidth>
+                 <InputLabel>Throwing Required</InputLabel>
+                 <Select
+                   value={newPartThrowingRequired ? 'Yes' : 'No'}
+                   onChange={(e) => setNewPartThrowingRequired(e.target.value === 'Yes')}
+                   label="Throwing Required"
+                 >
+                   <MenuItem value="Yes">Yes</MenuItem>
+                   <MenuItem value="No">No</MenuItem>
+                 </Select>
+               </FormControl>
+             </Grid>
+             <Grid item xs={12} sm={6}>
+               <TextField
+                 fullWidth
+                 label="Throwing Order"
+                 type="number"
+                 value={newPartThrowingOrder}
+                 onChange={(e) => setNewPartThrowingOrder(e.target.value ? Number(e.target.value) : '')}
+                 placeholder="Optional: 1, 2, 3..."
+                 helperText="Order for multi-part throwing sequence"
+               />
+             </Grid>
+           </Grid>
+         </DialogContent>
+         <DialogActions>
+           <Button onClick={handleCloseAddPartDialog}>Cancel</Button>
+           <Button onClick={handleAddPart} variant="contained" disabled={!newPartName}>
+             Add Part
+           </Button>
+         </DialogActions>
+       </Dialog>
+       
+        {/* Edit Part Dialog */}
+        <Dialog open={editPartDialogOpen} onClose={handleCloseEditPartDialog} maxWidth="sm" fullWidth>
+          <DialogTitle>{editingPart ? 'Edit Product Part' : 'Add New Product Part'}</DialogTitle>
+          <DialogContent>
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Part Name"
+                  value={editPartName}
+                  onChange={(e) => setEditPartName(e.target.value)}
+                  placeholder="e.g., Body, Lid, Spout, Handle"
+                  autoFocus
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Part Type</InputLabel>
+                  <Select
+                    value={editPartType}
+                    onChange={(e) => setEditPartType(e.target.value)}
+                    label="Part Type"
+                  >
+                    <MenuItem value="MAIN">Main (Primary Component)</MenuItem>
+                    <MenuItem value="SUB">Sub (Additional Component)</MenuItem>
+                    <MenuItem value="ASSEMBLY">Assembly (Joined Part)</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Throwing Required</InputLabel>
+                  <Select
+                    value={editPartThrowingRequired ? 'Yes' : 'No'}
+                    onChange={(e) => setEditPartThrowingRequired(e.target.value === 'Yes')}
+                    label="Throwing Required"
+                  >
+                    <MenuItem value="Yes">Yes</MenuItem>
+                    <MenuItem value="No">No</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Linked To Part</InputLabel>
+                  <Select
+                    value={editPartLinkedToPartId ?? ''}
+                    onChange={(e) => setEditPartLinkedToPartId(e.target.value ? Number(e.target.value) : null)}
+                    label="Linked To Part"
+                  >
+                    <MenuItem value="">None</MenuItem>
+                    {productParts
+                      .filter(p => p.id !== editingPart?.id) // Exclude current part from linking to itself
+                      .map((part) => (
+                        <MenuItem key={part.id} value={part.id}>
+                          {part.partName} ({part.partType})
+                        </MenuItem>
+                      ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Throwing Order"
+                  type="number"
+                  value={editPartThrowingOrder}
+                  onChange={(e) => setEditPartThrowingOrder(e.target.value ? Number(e.target.value) : '')}
+                  placeholder="Optional: 1, 2, 3..."
+                  helperText="Order for multi-part throwing sequence"
+                />
+              </Grid>
             </Grid>
-            <Grid item xs={12} sm={6}>
-              <FormControl fullWidth>
-                <InputLabel>Part Type</InputLabel>
-                <Select
-                  value={newPartType}
-                  onChange={(e) => setNewPartType(e.target.value)}
-                  label="Part Type"
-                >
-                  <MenuItem value="MAIN">Main (Primary Component)</MenuItem>
-                  <MenuItem value="SUB">Sub (Additional Component)</MenuItem>
-                  <MenuItem value="ASSEMBLY">Assembly (Joined Part)</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <FormControl fullWidth>
-                <InputLabel>Throwing Required</InputLabel>
-                <Select
-                  value={newPartThrowingRequired ? 'Yes' : 'No'}
-                  onChange={(e) => setNewPartThrowingRequired(e.target.value === 'Yes')}
-                  label="Throwing Required"
-                >
-                  <MenuItem value="Yes">Yes</MenuItem>
-                  <MenuItem value="No">No</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="Throwing Order"
-                type="number"
-                value={newPartThrowingOrder}
-                onChange={(e) => setNewPartThrowingOrder(e.target.value ? Number(e.target.value) : '')}
-                placeholder="Optional: 1, 2, 3..."
-                helperText="Order for multi-part throwing sequence"
-              />
-            </Grid>
-          </Grid>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseAddPartDialog}>Cancel</Button>
-          <Button onClick={handleAddPart} variant="contained" disabled={!newPartName}>
-            Add Part
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Box>
-  );
-};
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseEditPartDialog}>Cancel</Button>
+            <Button onClick={handleUpdatePart} variant="contained" disabled={!editPartName}>
+              {editingPart ? 'Update' : 'Create'}
+            </Button>
+          </DialogActions>
+        </Dialog>
 
-export default ProductionTracking;
+        {/* Combine Parts Dialog */}
+        <Dialog open={combineDialogOpen} onClose={handleCloseCombineDialog} maxWidth="md" fullWidth>
+          <DialogTitle>Combine Parts at Any Stage</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+              Select parts to combine and specify the stage where combination occurs. The combined quantity will be the minimum of all selected parts.
+            </Typography>
+            
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              {/* Stage Selection */}
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Combine At Stage</InputLabel>
+                  <Select
+                    value={combineStage}
+                    onChange={(e) => {
+                      setCombineStage(e.target.value);
+                      setCombineCategory(getCategoryForStage(e.target.value));
+                    }}
+                    label="Combine At Stage"
+                  >
+                    <MenuItem value="">Select Stage...</MenuItem>
+                    {categories.map((category) => [
+                      <MenuItem key={category} disabled sx={{ fontWeight: 'bold', bgcolor: '#f5f5f5' }}>
+                        {categoryLabels[category]}
+                      </MenuItem>,
+                      ...getStagesForCategory(category).map((stage) => (
+                        <MenuItem key={stage} value={stage} sx={{ pl: 4 }}>
+                          {stageNames[stage] || stage}
+                        </MenuItem>
+                      ))
+                    ])}
+                  </Select>
+                </FormControl>
+              </Grid>
+              
+              {/* Category Display */}
+              {combineStage && (
+                <Grid item xs={12} sm={6}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+                    <Chip 
+                      label={categoryLabels[combineCategory]} 
+                      sx={{ 
+                        bgcolor: categoryColors[combineCategory], 
+                        color: 'white',
+                        fontWeight: 'bold'
+                      }}
+                    />
+                  </Box>
+                </Grid>
+              )}
+              
+              {/* Parts Selection */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" gutterBottom sx={{ mt: 1 }}>
+                  Select Parts to Combine:
+                </Typography>
+                <TableContainer component={Paper} variant="outlined">
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow sx={{ bgcolor: '#f5f5f5' }}>
+                        <TableCell padding="checkbox"><strong>Select</strong></TableCell>
+                        <TableCell><strong>Part Name</strong></TableCell>
+                        <TableCell><strong>Type</strong></TableCell>
+                        <TableCell><strong>Available Qty</strong></TableCell>
+                        <TableCell><strong>Quantity to Combine</strong></TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {productParts.map((part) => {
+                        const isSelected = selectedPartsForCombine[part.id] !== undefined;
+                        const quantity = selectedPartsForCombine[part.id] || 0;
+                        
+                        return (
+                          <TableRow key={part.id} hover>
+                            <TableCell padding="checkbox">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    handlePartSelectionForCombine(part.id, 1);
+                                  } else {
+                                    handlePartSelectionForCombine(part.id, 0);
+                                  }
+                                }}
+                              />
+                            </TableCell>
+                            <TableCell>{part.partName}</TableCell>
+                            <TableCell>
+                              <Chip label={part.partType} size="small" />
+                            </TableCell>
+                            <TableCell>-</TableCell>
+                            <TableCell>
+                              {isSelected && (
+                                <TextField
+                                  type="number"
+                                  size="small"
+                                  value={quantity}
+                                  onChange={(e) => handlePartSelectionForCombine(part.id, Number(e.target.value))}
+                                  sx={{ width: 100 }}
+                                  inputProps={{ min: 1 }}
+                                />
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Grid>
+              
+              {/* Notes */}
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Notes"
+                  multiline
+                  rows={2}
+                  value={combineNotes}
+                  onChange={(e) => setCombineNotes(e.target.value)}
+                  placeholder="Optional notes about this combination..."
+                />
+              </Grid>
+              
+              {/* Summary */}
+              {Object.keys(selectedPartsForCombine).filter(id => selectedPartsForCombine[Number(id)] > 0).length >= 2 && (
+                <Grid item xs={12}>
+                  <Box sx={{ p: 2, bgcolor: '#e3f2fd', borderRadius: 1 }}>
+                    <Typography variant="subtitle2" color="primary">
+                      Combination Summary:
+                    </Typography>
+                    <Typography variant="body2">
+                      {Object.entries(selectedPartsForCombine)
+                        .filter(([_, qty]) => qty > 0)
+                        .map(([partId, qty]) => {
+                          const part = productParts.find(p => p.id === Number(partId));
+                          return `${part?.partName}: ${qty}`;
+                        })
+                        .join(' + ')}
+                      {' = '}
+                      <strong>
+                        {Math.min(...Object.values(selectedPartsForCombine).filter(qty => qty > 0))} combined units
+                      </strong>
+                    </Typography>
+                  </Box>
+                </Grid>
+              )}
+            </Grid>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseCombineDialog}>Cancel</Button>
+            <Button 
+              onClick={handleCombineParts} 
+              variant="contained" 
+              disabled={
+                combineLoading ||
+                !combineStage || 
+                Object.keys(selectedPartsForCombine).filter(id => selectedPartsForCombine[Number(id)] > 0).length < 2
+              }
+            >
+              {combineLoading ? 'Combining...' : 'Combine Parts'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+     </Box>
+   );
+ };
+
+ export default ProductionTracking;

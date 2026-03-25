@@ -10,9 +10,9 @@ author: 'Madegun'
 
 **Author:** Madegun  
 **Date:** 2026-02-01  
-**Version:** 1.0  
+**Version:** 1.1  
 **Status:** Draft  
-**Based on PRD:** ProdGantiNew Product Requirements Document (2026-01-31)
+**Based on PRD:** ProdGantiNew Product Requirements Document (2026-01-31, v1.2)
 
 ---
 
@@ -21,6 +21,7 @@ author: 'Madegun'
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2026-02-01 | Madegun | Initial TDD creation |
+| 1.1 | 2026-03-24 | Madegun | Added Dynamic Part Combination (Manual Assembly) - new `product_part_combinations` table and API endpoints for combining parts at any production stage |
 
 ---
 
@@ -807,6 +808,58 @@ model ActivityLog {
   user User @relation(fields: [user_id], references: [user_id])
   
   @@map("activity_logs")
+}
+
+// Product Part Combinations table (for manual assembly tracking)
+model ProductPartCombination {
+  combination_id   String   @id @default(uuid())
+  pol_detail_id    String
+  combined_at_stage ProductionStage
+  combined_quantity Int
+  combined_by      String
+  combined_at      DateTime @default(now())
+  notes            String?
+  
+  // Relationships
+  pol_detail       POLDetail @relation(fields: [pol_detail_id], references: [pol_detail_id], onDelete: Cascade)
+  combinedByUser   User      @relation(fields: [combined_by], references: [user_id])
+  combination_parts ProductPartCombinationItem[]
+  
+  @@map("product_part_combinations")
+}
+
+// Product Part Combination Items (parts included in a combination)
+model ProductPartCombinationItem {
+  item_id        String @id @default(uuid())
+  combination_id String
+  part_id        String
+  quantity_used  Int
+  
+  // Relationships
+  combination ProductPartCombination @relation(fields: [combination_id], references: [combination_id], onDelete: Cascade)
+  part        ProductPart             @relation(fields: [part_id], references: [part_id])
+  
+  @@unique([combination_id, part_id])
+  @@map("product_part_combination_items")
+}
+
+// Product Parts table
+model ProductPart {
+  part_id        String   @id @default(uuid())
+  pol_detail_id  String
+  part_name      String
+  part_type      String   @default("MAIN") // MAIN, SUB, ASSEMBLY
+  throwing_required Boolean @default(true)
+  throwing_order Int?
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+  
+  // Relationships
+  pol_detail     POLDetail @relation(fields: [pol_detail_id], references: [pol_detail_id], onDelete: Cascade)
+  production_records ProductionRecord[]
+  combination_items ProductPartCombinationItem[]
+  
+  @@map("product_parts")
 }
 ```
 
@@ -1941,6 +1994,73 @@ interface ToolRequirementsResponse {
 interface BuildNotesResponse {
   productCode: string;
   buildNotes: string;
+}
+```
+
+### Part Combination API
+
+#### POST /api/v1/production/combine-parts
+
+**Description:** Manually combine multiple product parts at any production stage
+
+**Request:**
+```typescript
+interface CombinePartsRequest {
+  polDetailId: string;
+  stage: ProductionStage;
+  parts: Array<{
+    partId: string;
+    quantity: number;
+  }>;
+  notes?: string;
+}
+```
+
+**Response:**
+```typescript
+interface CombinePartsResponse {
+  combinationId: string;
+  combinedQuantity: number;
+  parts: Array<{
+    partId: string;
+    partName: string;
+    quantityUsed: number;
+  }>;
+  createdAt: string;
+}
+```
+
+**Business Logic:**
+- Validates that all parts belong to the same POL detail
+- Validates that sufficient quantity exists for each part at the current stage
+- Calculates combined quantity as minimum quantity across all selected parts
+- Creates a `ProductPartCombination` record
+- Creates `ProductPartCombinationItem` records for each part
+- Updates production records to reflect the combination
+
+#### GET /api/v1/production/:polDetailId/combinations
+
+**Description:** Get all part combinations for a POL detail
+
+**Response:**
+```typescript
+interface PartCombinationsResponse {
+  combinations: Array<{
+    combinationId: string;
+    stage: string;
+    quantity: number;
+    parts: Array<{
+      partId: string;
+      partName: string;
+      quantityUsed: number;
+    }>;
+    combinedBy: {
+      userId: string;
+      fullName: string;
+    };
+    combinedAt: string;
+    notes: string;
+  }>;
 }
 ```
 
@@ -3715,6 +3835,8 @@ VITE_APP_NAME=ProdGantiNew
 | POL | /api/v1/pols/:id | PUT | Update POL |
 | Production | /api/v1/production/:id/stages | GET | Get production stages |
 | Production | /api/v1/production/track | POST | Track production |
+| Production | /api/v1/production/combine-parts | POST | Combine parts at any stage |
+| Production | /api/v1/production/:id/combinations | GET | Get part combinations |
 | Alerts | /api/v1/alerts | GET | List alerts |
 | Alerts | /api/v1/alerts/:id/acknowledge | PUT | Acknowledge alert |
 | Reports | /api/v1/reports/pol-summary | GET | POL summary report |

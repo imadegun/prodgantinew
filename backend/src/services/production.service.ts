@@ -1089,6 +1089,125 @@ export class ProductionService {
     });
     return users;
   }
+
+  /**
+   * Combine multiple product parts at any production stage
+   */
+  async combineParts(data: {
+    polDetailId: number;
+    stage: ProductionStage;
+    parts: Array<{ partId: number; quantity: number }>;
+    notes?: string;
+    userId: number;
+  }) {
+    const { polDetailId, stage, parts, notes, userId } = data;
+
+    // Validate POL detail exists
+    const detail = await prisma.pOLDetail.findUnique({
+      where: { id: polDetailId },
+    });
+
+    if (!detail) {
+      throw new AppError('POL detail not found', 404, 'DETAIL_NOT_FOUND');
+    }
+
+    // Validate at least 2 parts are provided
+    if (parts.length < 2) {
+      throw new AppError('At least 2 parts are required for combination', 400, 'INSUFFICIENT_PARTS');
+    }
+
+    // Validate all parts exist and belong to this POL detail
+    const partIds = parts.map(p => p.partId);
+    const existingParts = await prisma.productPart.findMany({
+      where: {
+        id: { in: partIds },
+        polDetailId,
+      },
+    });
+
+    if (existingParts.length !== partIds.length) {
+      throw new AppError('One or more parts not found', 404, 'PARTS_NOT_FOUND');
+    }
+
+    // Calculate combined quantity (minimum of all parts)
+    const quantities = parts.map(p => p.quantity);
+    const combinedQuantity = Math.min(...quantities);
+
+    if (combinedQuantity <= 0) {
+      throw new AppError('Combined quantity must be greater than 0', 400, 'INVALID_QUANTITY');
+    }
+
+    // Create combination record
+    const combination = await prisma.productPartCombination.create({
+      data: {
+        polDetailId,
+        combinedAtStage: stage,
+        combinedQuantity,
+        combinedBy: userId,
+        notes,
+      },
+    });
+
+    // Create combination items
+    const combinationItems = await Promise.all(
+      parts.map(part =>
+        prisma.productPartCombinationItem.create({
+          data: {
+            combinationId: combination.id,
+            partId: part.partId,
+            quantityUsed: part.quantity,
+          },
+        })
+      )
+    );
+
+    // Create a production record for the combined unit
+    const productionRecord = await prisma.productionRecord.create({
+      data: {
+        polDetailId,
+        stage,
+        quantity: combinedQuantity,
+        rejectQuantity: 0,
+        remakeCycle: 0,
+        category: this.getCategoryForStage(stage),
+        createdBy: userId,
+        notes: `Combined from ${parts.length} parts: ${notes || ''}`,
+      },
+    });
+
+    return {
+      combination,
+      combinationItems,
+      productionRecord,
+      combinedQuantity,
+    };
+  }
+
+  /**
+   * Get all part combinations for a POL detail
+   */
+  async getPartCombinations(polDetailId: number) {
+    const combinations = await prisma.productPartCombination.findMany({
+      where: { polDetailId },
+      include: {
+        combinationItems: {
+          include: {
+            part: true,
+          },
+        },
+        combinedByUser: {
+          select: {
+            id: true,
+            fullName: true,
+            username: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return combinations;
+  }
 }
 
 export const productionService = new ProductionService();

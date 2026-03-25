@@ -10,7 +10,7 @@ author: 'Madegun'
 
 **Author:** Madegun
 **Date:** 2026-01-31
-**Version:** 1.0
+**Version:** 1.2
 **Status:** Draft
 
 ---
@@ -21,6 +21,7 @@ author: 'Madegun'
 |---------|------|--------|---------|
 | 1.0 | 2026-01-31 | Madegun | Initial PRD creation |
 | 1.1 | 2026-03-08 | Madegun | Added detailed production tracking requirements (Product Types, Parts Breakdown, Remake Tracking, Extra Buffer) |
+| 1.2 | 2026-03-24 | Madegun | Added FR-002.K: Dynamic Part Combination (Manual Assembly) - allows manual combination of product parts at any production stage to accommodate handcrafted ceramic products with varying designs and assembly points |
 
 ---
 
@@ -427,6 +428,60 @@ A modern web application that:
   - Optional reject quantity field
   - Optional notes field
   - Submit button with validation
+
+**FR-002.K: Dynamic Part Combination (Manual Assembly)**
+
+**Description:** System shall allow manual combination of product parts at any production stage to accommodate handcrafted ceramic products with varying designs and assembly points.
+
+**Business Context:**
+- Ceramic products are handcrafted with wide variety of designs
+- Assembly points vary by product design (e.g., teapot vs large vase)
+- Artisans need flexibility to combine parts at different stages based on product requirements
+
+**Requirements:**
+
+**FR-002.K.1: Manual Part Combination**
+- System shall allow Admin to manually select 2 or more parts to combine at any production stage
+- System shall display available parts with current quantities for selection
+- System shall calculate combined quantity as minimum quantity across selected parts
+- System shall create a "Combined Unit" from selected parts
+- System shall record which parts were combined, at which stage, and by whom
+
+**FR-002.K.2: Combined Unit Tracking**
+- Combined unit shall be tracked as a single entity through remaining production stages
+- System shall display combined unit with list of included parts
+- Rejects on combined unit apply to the entire assembled product
+- Combined unit quantity cannot exceed the minimum quantity of its component parts
+
+**FR-002.K.3: Remaining Separate Parts**
+- Parts not combined continue tracking separately through all stages
+- System shall clearly distinguish between combined units and separate parts
+- Each part/unit maintains independent quantity tracking
+
+**FR-002.K.4: Combination History**
+- System shall maintain complete history of all part combinations
+- History includes: parts combined, stage of combination, quantity, operator, timestamp
+- System shall allow viewing combination history for audit purposes
+
+**Example Workflows:**
+
+1. **Teapot Product:**
+   - FORMING (Throwing, Trimming): Track Body, Lid, Handle, Spout separately
+   - DECORATION (Assembly): Combine Body + Handle + Spout → Combined Unit
+   - DRYING → FIRING → GLAZING → QC: Track Combined Unit + Lid separately
+
+2. **Large Vase Product:**
+   - THROWING: Track Part A, Part B separately
+   - TRIMMING (Assembly): Combine Part A + Part B → Combined Unit
+   - DECORATION → DRYING → FIRING → GLAZING → QC: Track Combined Unit
+
+**Acceptance Criteria:**
+- Admin can select multiple parts to combine at any stage
+- System calculates combined quantity correctly (minimum of selected parts)
+- Combined unit is tracked through remaining stages
+- Separate parts continue tracking independently
+- Combination history is maintained for audit
+- System displays clear distinction between combined units and separate parts
 
 **Acceptance Criteria:**
 - Admin can enter quantities at each production stage
@@ -1746,6 +1801,7 @@ A modern web application that:
 |---------|------|--------|---------|
 | 1.0 | 2026-01-31 | Madegun | Initial PRD creation |
 | 1.1 | 2026-03-08 | Madegun | Added detailed production tracking requirements: Product Types (Handbuild/Slab skip Forming), Parts Breakdown (Body/Lid/Spout/Handle), Remake Tracking (RPR/RQC types), Extra Buffer (15%), Daily Production Input fields, Oven tracking |
+| 1.2 | 2026-03-24 | Madegun | Added FR-002.K: Dynamic Part Combination (Manual Assembly) - allows manual combination of product parts at any production stage to accommodate handcrafted ceramic products with varying designs and assembly points |
 
 ---
 

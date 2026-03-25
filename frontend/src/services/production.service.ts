@@ -458,4 +458,61 @@ export const productionService = {
     );
     return response;
   },
+
+  // Combine parts at any stage
+  async combineParts(data: {
+    polDetailId: number;
+    stage: string;
+    parts: Array<{ partId: number; quantity: number }>;
+    notes?: string;
+  }): Promise<any> {
+    const response = await apiClient.post<any>('/production/combine-parts', data);
+    return response;
+  },
+
+  // Get part combinations for a POL detail
+  async getPartCombinations(polDetailId: number): Promise<Array<{
+    id: number;
+    combinedAtStage: string;
+    combinedQuantity: number;
+    notes: string | null;
+    createdAt: string;
+    combinedByUser: {
+      id: number;
+      fullName: string;
+      username: string;
+    };
+    combinationItems: Array<{
+      id: number;
+      quantityUsed: number;
+      part: {
+        id: number;
+        partName: string;
+        partType: string;
+      };
+    }>;
+  }>> {
+    const response = await apiClient.get<Array<{
+      id: number;
+      combinedAtStage: string;
+      combinedQuantity: number;
+      notes: string | null;
+      createdAt: string;
+      combinedByUser: {
+        id: number;
+        fullName: string;
+        username: string;
+      };
+      combinationItems: Array<{
+        id: number;
+        quantityUsed: number;
+        part: {
+          id: number;
+          partName: string;
+          partType: string;
+        };
+      }>;
+    }>>(`/production/part-combinations/${polDetailId}`);
+    return response;
+  },
 };

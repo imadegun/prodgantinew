@@ -624,4 +624,68 @@ router.get('/operators', authenticate, async (req, res) => {
   }
 });
 
+// Combine product parts at any stage
+router.post('/combine-parts', authenticate, async (req, res) => {
+  try {
+    const { polDetailId, stage, parts, notes } = req.body;
+    const authReq = req as any;
+    
+    if (!polDetailId || !stage || !parts || !Array.isArray(parts) || parts.length < 2) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_REQUEST',
+          message: 'polDetailId, stage, and at least 2 parts are required',
+        },
+      });
+    }
+    
+    const result = await productionService.combineParts({
+      polDetailId,
+      stage,
+      parts,
+      notes,
+      userId: authReq.user.userId,
+    });
+    
+    res.status(201).json({
+      success: true,
+      data: result,
+    });
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
+      success: false,
+      error: {
+        code: error.code || 'COMBINE_PARTS_FAILED',
+        message: error.message || 'Failed to combine parts',
+      },
+    });
+  }
+});
+
+// Get part combinations for a POL detail
+router.get('/part-combinations/:polDetailId', authenticate, async (req, res) => {
+  try {
+    const { polDetailId } = req.params;
+    const detailId = parseInt(polDetailId, 10);
+    
+    const result = await productionService.getPartCombinations(detailId);
+    
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
+      success: false,
+      error: {
+        code: error.code || 'FETCH_PART_COMBINATIONS_FAILED',
+        message: error.message || 'Failed to fetch part combinations',
+      },
+    });
+  }
+});
+
 export default router;
