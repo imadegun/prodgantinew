@@ -97,8 +97,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       <AppBar
         position="fixed"
         sx={{
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          ml: { sm: `${drawerWidth}px` },
+          width: { sm: sidebarOpen ? `calc(100% - ${drawerWidth}px)` : '100%' },
+          ml: { sm: sidebarOpen ? `${drawerWidth}px` : 0 },
           zIndex: (theme) => theme.zIndex.drawer + 1,
         }}
       >
@@ -167,7 +167,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </Toolbar>
       </AppBar>
 
-      <Box component="nav" sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}>
+      <Box component="nav" sx={{ width: { sm: sidebarOpen ? drawerWidth : 0 }, flexShrink: { sm: 0 } }}>
         <Drawer
           variant="temporary"
           open={mobileOpen}
@@ -183,7 +183,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           {drawerContent}
         </Drawer>
         <Drawer
-          variant="permanent"
+          variant="persistent"
           sx={{
             display: { xs: 'none', sm: 'block' },
             '& .MuiDrawer-paper': {
@@ -192,7 +192,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               borderRight: '1px solid rgba(0, 0, 0, 0.12)',
             },
           }}
-          open
+          open={sidebarOpen}
         >
           {drawerContent}
         </Drawer>
@@ -203,7 +203,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         sx={{
           flexGrow: 1,
           p: 3,
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
+          width: { sm: sidebarOpen ? `calc(100% - ${drawerWidth}px)` : '100%' },
           mt: '64px',
         }}
       >
@@ -251,3 +251,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 };
 
 export default Layout;
+
+
+

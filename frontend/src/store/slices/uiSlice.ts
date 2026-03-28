@@ -19,7 +19,7 @@ interface UIState {
 }
 
   const initialState: UIState = {
-  sidebarOpen: true,
+  sidebarOpen: false,
   alertDialogOpen: false,
   alertDialogAlert: null,
   loading: false,

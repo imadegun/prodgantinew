@@ -27,6 +27,7 @@ import {
   FormControl,
   InputLabel,
   Divider,
+  Paper,
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
@@ -69,10 +70,10 @@ const stageNames: Record<string, string> = {
   DIPPING: 'Dipping',
   SPRAYING: 'Spraying',
   COLOR_DECORATION: 'Color Decoration',
-  QC_GOOD: 'QC Good',
-  QC_REJECT: 'QC Reject',
-  QC_RE_FIRING: 'QC Re-firing',
-  QC_SECOND: 'QC Second',
+  QC_GOOD: 'Good',
+  QC_REJECT: 'Reject',
+  QC_RE_FIRING: 'BU',
+  QC_SECOND: 'Second',
 };
 
 // Category colors
@@ -111,7 +112,7 @@ const categoryLabels: Record<string, string> = {
   DRYING: 'Drying',
   FIRING: 'Firing',
   GLAZING: 'Glazing',
-  QC: 'Quality Control',
+  QC: 'QC',
 };
 
 // Default stages grouped by category (used when workflow not available)
@@ -141,7 +142,7 @@ const ProductionTracking = () => {
   const [productionDate, setProductionDate] = useState('');
   const [notes, setNotes] = useState('');
   const [discrepancyAlert, setDiscrepancyAlert] = useState<any>(null);
-  const [tabValue, setTabValue] = useState('production');
+  const [tabValue, setTabValue] = useState('part-production');
   const [categoryTab, setCategoryTab] = useState(0);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
@@ -200,6 +201,16 @@ const ProductionTracking = () => {
   const [partValidationError, setPartValidationError] = useState('');
   const [partStageRecords, setPartStageRecords] = useState<Record<string, any>>({});
   
+  // Auto-dismiss validation error after 5 seconds
+  useEffect(() => {
+    if (partValidationError) {
+      const timer = setTimeout(() => {
+        setPartValidationError('');
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [partValidationError]);
+  
   // Combine Parts state
   const [combineDialogOpen, setCombineDialogOpen] = useState(false);
   const [combineStage, setCombineStage] = useState('');
@@ -221,6 +232,13 @@ const ProductionTracking = () => {
 
   useEffect(() => {
     if (selectedProduct) {
+      // Clear previous product's data when switching products
+      setSelectedPart(null);
+      setPartStages([]);
+      setPartStageRecords({});
+      setPartCurrentStage('');
+      setPartCurrentCategory('FORMING');
+      
       loadProductionStages();
       loadProductParts();
       loadRemakeCycles();
@@ -233,6 +251,13 @@ const ProductionTracking = () => {
       loadProductionInfo();
     }
   }, [selectedProduct, polDetails, dispatch]);
+
+  // Auto-load part combinations when combine tab is selected
+  useEffect(() => {
+    if (tabValue === 'combine-parts' && selectedProduct) {
+      loadPartCombinations();
+    }
+  }, [tabValue, selectedProduct]);
 
   const loadProductionStages = async () => {
     try {
@@ -306,7 +331,40 @@ const ProductionTracking = () => {
   const loadProductParts = async () => {
     try {
       const partsData = await productionService.getProductParts(Number(selectedProduct));
-      setProductParts(partsData || []);
+      
+      // Auto-create default MAIN part if no parts exist
+      if (!partsData || partsData.length === 0) {
+        try {
+          const defaultPart = await productionService.createProductPart({
+            polDetailId: Number(selectedProduct),
+            partName: 'Main',
+            partType: 'MAIN',
+            throwingRequired: true,
+            throwingOrder: 1,
+          });
+          
+          // Reload parts after creating default
+          const refreshedParts = await productionService.getProductParts(Number(selectedProduct));
+          setProductParts(refreshedParts || []);
+          
+          // Auto-select the default part and load its stage data
+          if (refreshedParts && refreshedParts.length > 0) {
+            await handlePartSelect(refreshedParts[0]);
+          }
+          
+          showSnackbar('Default part created automatically. Start tracking production!', 'info');
+        } catch (createError) {
+          console.error('Error creating default part:', createError);
+          setProductParts(partsData || []);
+        }
+      } else {
+        setProductParts(partsData);
+        
+        // Auto-select first part and load stage data if no part is currently selected
+        if (partsData.length > 0 && !selectedPart) {
+          await handlePartSelect(partsData[0]);
+        }
+      }
     } catch (error) {
       console.error('Error loading product parts:', error);
     }
@@ -696,6 +754,7 @@ const ProductionTracking = () => {
     if (part) {
       try {
         const result = await productionService.getPartProductionStages(part.id);
+        console.log('Loaded part production stages for part', part.id, ':', result);
         if (result) {
           setPartStages(result.stages || []);
           
@@ -741,47 +800,60 @@ const ProductionTracking = () => {
   const validatePartStageQuantity = (stage: string, qty: number, rejectQty: number): { valid: boolean; error?: string } => {
     if (!selectedPart) return { valid: false, error: 'No part selected' };
     
+    // Get the part's target quantity - use qtyToMake (order + extra buffer) like Input Production
+    const orderQty = polDetailsData?.quantity || 0;
+    const extraBuffer = polDetailsData?.extraBuffer || 0;
+    const qtyToMake = Math.round(orderQty + (orderQty * extraBuffer / 100));
+    const partTargetQty = selectedPart.partType === 'MAIN' ? qtyToMake : (selectedPart.throwingOrder ? 1 : qtyToMake);
+    
     // Get already recorded quantity for this stage
     const currentStageData = partStageRecords[stage];
     const alreadyRecordedQty = currentStageData?.totalQuantity || 0;
     const alreadyRecordedRejects = currentStageData?.records?.reduce((sum: number, r: any) => sum + (r.rejectQuantity || 0), 0) || 0;
     
-    // Calculate total after adding new entry
+    // Calculate total after adding new entry (including both good and reject quantities)
     const totalAfterNewEntry = alreadyRecordedQty + qty + alreadyRecordedRejects + rejectQty;
     
-    // Define stage flow and validation rules
-    const stageFlow: Record<string, { prevStage: string | null; maxQty?: number }> = {
-      THROWING: { prevStage: null },
-      TRIMMING: { prevStage: 'THROWING' },
-      DECORATION: { prevStage: 'TRIMMING' },
-      DRYING: { prevStage: 'DECORATION' },
-      LOAD_BISQUE: { prevStage: 'DRYING' },
-      OUT_BISQUE: { prevStage: 'LOAD_BISQUE' },
-      LOAD_HIGH_FIRING: { prevStage: 'OUT_BISQUE' },
-      OUT_HIGH_FIRING: { prevStage: 'LOAD_HIGH_FIRING' },
-      LOAD_RAKU_FIRING: { prevStage: 'OUT_HIGH_FIRING' },
-      OUT_RAKU_FIRING: { prevStage: 'LOAD_RAKU_FIRING' },
-      LOAD_LUSTER_FIRING: { prevStage: 'OUT_RAKU_FIRING' },
-      OUT_LUSTER_FIRING: { prevStage: 'LOAD_LUSTER_FIRING' },
-      SANDING: { prevStage: 'OUT_LUSTER_FIRING' },
-      WAXING: { prevStage: 'SANDING' },
-      DIPPING: { prevStage: 'WAXING' },
-      SPRAYING: { prevStage: 'DIPPING' },
-      COLOR_DECORATION: { prevStage: 'SPRAYING' },
-      QC_GOOD: { prevStage: 'COLOR_DECORATION' },
-      QC_REJECT: { prevStage: 'COLOR_DECORATION' },
-      QC_RE_FIRING: { prevStage: 'COLOR_DECORATION' },
-      QC_SECOND: { prevStage: 'COLOR_DECORATION' },
+    // Define stage flow and validation rules - same as Input Production
+    const stageFlow = {
+      THROWING: { prevStage: null, maxQty: partTargetQty },
+      TRIMMING: { prevStage: 'THROWING', useGoodQty: false },
+      DECORATION: { prevStage: 'TRIMMING', useGoodQty: true },
+      DRYING: { prevStage: 'DECORATION', useGoodQty: true },
+      LOAD_BISQUE: { prevStage: 'DRYING', useGoodQty: true },
+      OUT_BISQUE: { prevStage: 'LOAD_BISQUE', useGoodQty: true },
+      LOAD_HIGH_FIRING: { prevStage: 'OUT_BISQUE', useGoodQty: true },
+      OUT_HIGH_FIRING: { prevStage: 'LOAD_HIGH_FIRING', useGoodQty: true },
+      LOAD_RAKU_FIRING: { prevStage: 'OUT_HIGH_FIRING', useGoodQty: true },
+      OUT_RAKU_FIRING: { prevStage: 'LOAD_RAKU_FIRING', useGoodQty: true },
+      LOAD_LUSTER_FIRING: { prevStage: 'OUT_RAKU_FIRING', useGoodQty: true },
+      OUT_LUSTER_FIRING: { prevStage: 'LOAD_LUSTER_FIRING', useGoodQty: true },
+      SANDING: { prevStage: 'OUT_LUSTER_FIRING', useGoodQty: true },
+      WAXING: { prevStage: 'SANDING', useGoodQty: true },
+      DIPPING: { prevStage: 'WAXING', useGoodQty: true },
+      SPRAYING: { prevStage: 'DIPPING', useGoodQty: true },
+      COLOR_DECORATION: { prevStage: 'SPRAYING', useGoodQty: true },
+      QC_GOOD: { prevStage: 'COLOR_DECORATION', useGoodQty: true },
+      QC_REJECT: { prevStage: 'COLOR_DECORATION', useGoodQty: true },
+      QC_RE_FIRING: { prevStage: 'COLOR_DECORATION', useGoodQty: true },
+      QC_SECOND: { prevStage: 'COLOR_DECORATION', useGoodQty: true },
     };
     
-    const flowConfig = stageFlow[stage];
+    const flowConfig = stageFlow[stage as keyof typeof stageFlow];
     
     if (!flowConfig) {
       return { valid: true };
     }
     
-    // For THROWING stage, no validation needed
-    if (flowConfig.prevStage === null) {
+    // For THROWING stage, validate against part target quantity
+    if ('maxQty' in flowConfig) {
+      const maxQty = flowConfig.maxQty;
+      if (totalAfterNewEntry > maxQty) {
+        return {
+          valid: false,
+          error: `Total quantity (${totalAfterNewEntry}) cannot exceed quantity to make (${maxQty}). Order: ${orderQty} + Extra: ${extraBuffer}% = ${qtyToMake}. Already recorded: ${alreadyRecordedQty} good + ${alreadyRecordedRejects} reject, New entry: ${qty} good + ${rejectQty} reject. Please reduce quantity.`
+        };
+      }
       return { valid: true };
     }
     
@@ -796,12 +868,22 @@ const ProductionTracking = () => {
         };
       }
       
-      const prevStageAvailableQty = prevStageData.totalQuantity;
+      // Calculate previous stage's available quantity
+      let prevStageAvailableQty = 0;
       
+      if (flowConfig.useGoodQty) {
+        // Use good quantity from previous stage (NOT subtracting rejects - rejects are discarded)
+        prevStageAvailableQty = prevStageData.totalQuantity;
+      } else {
+        // Use total quantity (good + rejects) from previous stage
+        prevStageAvailableQty = prevStageData.totalQuantity;
+      }
+      
+      // Validate - current stage total should not exceed previous stage's available quantity
       if (totalAfterNewEntry > prevStageAvailableQty) {
         return {
           valid: false,
-          error: `Total quantity (${totalAfterNewEntry}) cannot exceed available quantity from ${stageNames[flowConfig.prevStage]} (${prevStageAvailableQty}). Already recorded in ${stageNames[stage]}: ${alreadyRecordedQty} good + ${alreadyRecordedRejects} reject, New entry: ${qty} good + ${rejectQty} reject. Please reduce quantity.`
+          error: `Total quantity (${totalAfterNewEntry}) cannot exceed available quantity from ${stageNames[flowConfig.prevStage]} (${prevStageAvailableQty} good - rejects are discarded). Already recorded in ${stageNames[stage]}: ${alreadyRecordedQty} good + ${alreadyRecordedRejects} reject, New entry: ${qty} good + ${rejectQty} reject. Please reduce quantity.`
         };
       }
     }
@@ -846,6 +928,7 @@ const ProductionTracking = () => {
         productionDate: partProductionDate || undefined,
       });
 
+      console.log('Production record created:', result);
       const payload = result as any;
       if (payload?.discrepancyDetected) {
         setDiscrepancyAlert(payload);
@@ -1167,344 +1250,11 @@ const ProductionTracking = () => {
       {selectedProduct && (
         <>
             <Tabs value={tabValue} onChange={handleTabChange} sx={{ mb: 2 }}>
-              <Tab label="Input Production" value="production" />
+              <Tab label="Production" value="part-production" />
               <Tab label="Product Parts" value="parts" />
-              <Tab label="Part Production" value="part-production" />
               <Tab label="Combine Parts" value="combine-parts" />
               <Tab label="Remake History" value="remakes" />
             </Tabs>
- 
-          {/* Production Input Tab */}
-          {tabValue === 'production' && (
-            <Grid container spacing={3}>
-              {/* Left Side - Category Tabs */}
-              <Grid item xs={12} md={4}>
-                <Card sx={{ height: '100%' }}>
-                  <CardContent>
-                    <Typography variant="h6" gutterBottom>Production Categories</Typography>
-                    <Tabs
-                      orientation="vertical"
-                      value={categoryTab}
-                      onChange={handleCategoryTabChange}
-                      variant="fullWidth"
-                      sx={{ 
-                        '& .MuiTab-root': { 
-                          justifyContent: 'flex-start',
-                          textAlign: 'left',
-                          borderRadius: 1,
-                          mb: 0.5,
-                        }
-                      }}
-                    >
-                      {categories.map((category, index) => (
-                        <Tab 
-                          key={category} 
-                          label={
-                            <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                              <Chip 
-                                label={categoryLabels[category]} 
-                                size="small"
-                                sx={{ 
-                                  bgcolor: categoryColors[category], 
-                                  color: 'white',
-                                  fontWeight: 'bold',
-                                  minWidth: 70
-                                }}
-                              />
-                              <Box sx={{ ml: 'auto' }}>
-                                {(productionWorkflow?.stages || defaultCategoryStages[category] || [])?.filter((stage: string) => getCategoryForStage(stage) === category)?.map((stage: string) => {
-                                  const stageData = stageRecords[stage];
-                                  const totalRejects = stageData?.totalRejectQuantity || stageData?.records?.reduce((sum: number, r: any) => sum + (r.rejectQuantity || 0), 0) || 0;
-                                  if (stageData?.totalQuantity > 0 || totalRejects > 0) {
-                                    return (
-                                      <Box key={stage} sx={{ display: 'flex', alignItems: 'center', ml: 0.5 }}>
-                                        <Chip
-                                          label={stageData.totalQuantity}
-                                          size="small"
-                                          color="success"
-                                          sx={{ height: 20, fontSize: '0.7rem' }}
-                                        />
-                                        {totalRejects > 0 && (
-                                          <Chip
-                                            label={`-${totalRejects}`}
-                                            size="small"
-                                            color="error"
-                                            sx={{ ml: 0.5, height: 20, fontSize: '0.7rem' }}
-                                          />
-                                        )}
-                                      </Box>
-                                    );
-                                  }
-                                  return null;
-                                })}
-                              </Box>
-                            </Box>
-                          }
-                          value={index}
-                        />
-                      ))}
-                    </Tabs>
- 
-                    {/* Stages in selected category */}
-                    <Box sx={{ mt: 2 }}>
-                      <Typography variant="subtitle2" gutterBottom>
-                        Stages in {categoryLabels[currentCategory]}:
-                      </Typography>
-                      <Grid container spacing={1}>
-                        {getStagesForCategory(currentCategory).map(stage => {
-                          const stageData = stageRecords[stage];
-                          const isActive = currentStage === stage;
-                          const hasData = stageData?.totalQuantity > 0;
-                           
-                          return (
-                            <Grid item xs={6} key={stage}>
-                              <Button
-                                fullWidth
-                                variant={isActive ? 'contained' : hasData ? 'outlined' : 'text'}
-                                color={isActive ? 'primary' : hasData ? 'success' : 'inherit'}
-                                onClick={() => handleStageSelect(stage)}
-                                size="small"
-                                sx={{ 
-                                  justifyContent: 'flex-start',
-                                  bgcolor: isActive ? categoryColors[currentCategory] : undefined,
-                                }}
-                              >
-                                {stageNames[stage] || stage}
-                                {hasData && (
-                                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                    <Chip
-                                      label={stageData.totalQuantity}
-                                      size="small"
-                                      color="success"
-                                      sx={{ height: 20, fontSize: '0.7rem' }}
-                                    />
-                                    {(stageData.totalRejectQuantity || stageData.records?.reduce((sum: number, r: any) => sum + (r.rejectQuantity || 0), 0) > 0) && (
-                                      <Chip
-                                        label={`-${stageData.totalRejectQuantity || stageData.records?.reduce((sum: number, r: any) => sum + (r.rejectQuantity || 0), 0)}`}
-                                        size="small"
-                                        color="error"
-                                        sx={{ ml: 0.5, height: 20, fontSize: '0.7rem' }}
-                                      />
-                                    )}
-                                  </Box>
-                                )}
-                              </Button>
-                            </Grid>
-                          );
-                        })}
-                      </Grid>
-                    </Box>
-                  </CardContent>
-                </Card>
-              </Grid>
- 
-              {/* Right Side - Input Form */}
-              <Grid item xs={12} md={8}>
-                <Card sx={{ height: '100%' }}>
-                  <CardContent>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                      <Chip 
-                        label={categoryLabels[currentCategory]} 
-                        sx={{ 
-                          bgcolor: categoryColors[currentCategory], 
-                          color: 'white',
-                          fontWeight: 'bold',
-                          mr: 2
-                        }}
-                      />
-                      <Typography variant="h6">
-                        {stageNames[currentStage]}
-                      </Typography>
-                    </Box>
- 
-                    {/* Current Stage Info */}
-                    {(() => {
-                      const hasRejects = (currentStageData?.totalRejectQuantity || currentStageData?.records?.reduce((sum: number, r: any) => sum + (r.rejectQuantity || 0), 0) || 0) > 0;
-                      if (!currentStageData || (currentStageData.totalQuantity === 0 && !hasRejects)) return null;
-                      return (
-                        <Box sx={{ mb: 3, p: 2, bgcolor: '#e8f5e9', borderRadius: 1 }}>
-                          <Typography variant="subtitle2" color="success.main">
-                            Already recorded: {currentStageData.totalQuantity} good
-                            {hasRejects && (
-                              <Typography variant="subtitle2" color="error.main" sx={{ ml: 1 }}>
-                                + {currentStageData.totalRejectQuantity || currentStageData.records?.reduce((sum: number, r: any) => sum + (r.rejectQuantity || 0), 0)} reject
-                              </Typography>
-                            )}
-                          </Typography>
-                          {currentStageData.latestRecord && (
-                            <Typography variant="body2" color="text.secondary">
-                              Last entry: {format(new Date(currentStageData.latestRecord.createdAt), 'MMM dd, yyyy HH:mm')}
-                              {currentStageData.latestRecord.notes && ` - ${currentStageData.latestRecord.notes}`}
-                            </Typography>
-                          )}
-                        </Box>
-                      );
-                    })()}
- 
-                    {/* Input Form */}
-                    <Grid container spacing={2}>
-                      <Grid item xs={12} sm={6}>
-                        <TextField
-                          fullWidth
-                          label="Quantity Produced"
-                          type="number"
-                          value={quantity}
-                          onChange={(e) => setQuantity(e.target.value)}
-                          required
-                          size="medium"
-                        />
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <TextField
-                          fullWidth
-                          label="Reject Quantity"
-                          type="number"
-                          value={rejectQuantity}
-                          onChange={(e) => setRejectQuantity(e.target.value)}
-                          size="medium"
-                        />
-                      </Grid>
-                      
-                      {/* Operator Selection */}
-                      <Grid item xs={12} sm={6}>
-                        <FormControl fullWidth>
-                          <InputLabel>Operator</InputLabel>
-                          <Select
-                            value={selectedOperator}
-                            onChange={(e) => setSelectedOperator(e.target.value)}
-                            label="Operator"
-                          >
-                            <MenuItem value="">Select Operator...</MenuItem>
-                            {operators.map((op) => (
-                              <MenuItem key={op.id} value={op.id}>
-                                {op.fullName || op.username}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
-                      </Grid>
-                      
-                      {/* Oven Selection - Only for firing stages */}
-                      {firingStages.includes(currentStage) && (
-                        <Grid item xs={12} sm={6}>
-                          <FormControl fullWidth>
-                            <InputLabel>Oven</InputLabel>
-                            <Select
-                              value={selectedOven}
-                              onChange={(e) => setSelectedOven(e.target.value)}
-                              label="Oven"
-                            >
-                              <MenuItem value="">Select Oven...</MenuItem>
-                              {ovens.filter(o => o.status === 'ACTIVE').map((oven) => (
-                                <MenuItem key={oven.id} value={oven.id}>
-                                  {oven.ovenCode} - {oven.ovenName}
-                                </MenuItem>
-                              ))}
-                            </Select>
-                          </FormControl>
-                        </Grid>
-                      )}
-                      
-                      {/* Defect Reason - Show when there are rejects */}
-                      {(parseInt(rejectQuantity) > 0 || selectedDefectReason) && (
-                        <Grid item xs={12} sm={6}>
-                          <FormControl fullWidth>
-                            <InputLabel>Reject Reason</InputLabel>
-                            <Select
-                              value={selectedDefectReason}
-                              onChange={(e) => setSelectedDefectReason(e.target.value)}
-                              label="Reject Reason"
-                            >
-                              <MenuItem value="">Select Reason...</MenuItem>
-                              {defectReasons.map((reason) => (
-                                <MenuItem key={reason.id} value={reason.id}>
-                                  {reason.category} - {reason.description}
-                                </MenuItem>
-                              ))}
-                            </Select>
-                          </FormControl>
-                        </Grid>
-                      )}
-                      
-                      {/* Remake Type */}
-                      <Grid item xs={12} sm={6}>
-                        <FormControl fullWidth>
-                          <InputLabel>Production Type</InputLabel>
-                          <Select
-                            value={selectedRemakeType}
-                            onChange={(e) => setSelectedRemakeType(e.target.value)}
-                            label="Production Type"
-                          >
-                            <MenuItem value="">Normal Production</MenuItem>
-                            <MenuItem value="RPR">RPR (Pre-Firing Remake)</MenuItem>
-                            <MenuItem value="RQC">RQC (Post-Firing Remake)</MenuItem>
-                          </Select>
-                        </FormControl>
-                      </Grid>
-                      
-                      {/* Production Date */}
-                      <Grid item xs={12} sm={6}>
-                        <TextField
-                          fullWidth
-                          label="Production Date *"
-                          type="date"
-                          value={productionDate}
-                          onChange={(e) => setProductionDate(e.target.value)}
-                          InputLabelProps={{ shrink: true }}
-                          required
-                          error={!productionDate}
-                          helperText={!productionDate ? 'Production date is required' : ''}
-                        />
-                      </Grid>
-                      
-                      {/* Notes */}
-                      <Grid item xs={12}>
-                        <TextField
-                          fullWidth
-                          label="Notes"
-                          multiline
-                          rows={3}
-                          value={notes}
-                          onChange={(e) => setNotes(e.target.value)}
-                        />
-                      </Grid>
-                      
-                      {/* Validation Error Alert */}
-                      {validationError && (
-                        <Box sx={{ mb: 2, p: 2, bgcolor: '#ffebee', borderRadius: 1 }}>
-                          <Typography variant="body2" color="error">
-                            {validationError}
-                          </Typography>
-                        </Box>
-                      )}
-                      
-                      {/* Submit Button */}
-                      <Grid item xs={12}>
-                        <Button
-                          variant="contained"
-                          fullWidth
-                          size="large"
-                          startIcon={<SaveIcon />}
-                          onClick={handleSubmit}
-                          disabled={!quantity || parseInt(quantity) <= 0 || !productionDate}
-                          sx={{ 
-                            py: 1.5,
-                            bgcolor: categoryColors[currentCategory],
-                            '&:hover': {
-                              bgcolor: categoryColors[currentCategory],
-                              opacity: 0.9,
-                            }
-                          }}
-                        >
-                          Save Production Data
-                        </Button>
-                      </Grid>
-                    </Grid>
-                  </CardContent>
-                </Card>
-              </Grid>
-            </Grid>
-          )}
  
           {/* Product Parts Tab */}
           {tabValue === 'parts' && (
@@ -1567,7 +1317,7 @@ const ProductionTracking = () => {
           {tabValue === 'part-production' && (
             <Card>
               <CardContent>
-                <Typography variant="h6" sx={{ mb: 2 }}>Part Production Tracking</Typography>
+                <Typography variant="h6" sx={{ mb: 2 }}>Production Tracking</Typography>
                 {productParts.length > 0 ? (
                   <>
                     {/* Part Selection */}
@@ -1588,10 +1338,20 @@ const ProductionTracking = () => {
                       </Grid>
                     </Box>
 
-                    {selectedPart && (
+                    {/* No Part Selected State */}
+                    {!selectedPart ? (
+                      <Box sx={{ p: 4, textAlign: 'center', bgcolor: '#f5f5f5', borderRadius: 2 }}>
+                        <Typography variant="h6" color="textSecondary" gutterBottom>
+                          Select a Part to Start Tracking
+                        </Typography>
+                        <Typography variant="body2" color="textSecondary">
+                          Click on a part chip above to track production for that component.
+                        </Typography>
+                      </Box>
+                    ) : (
                       <Grid container spacing={3}>
                         {/* Left Side - Category Tabs */}
-                        <Grid item xs={12} md={4}>
+                        <Grid item xs={12} md={7} sx={{ width: { md: '50%' }, flexBasis: { md: '50%' }, maxWidth: { md: '50%' } }}>
                           <Card sx={{ height: '100%' }}>
                             <CardContent>
                               <Typography variant="h6" gutterBottom>Production Categories</Typography>
@@ -1599,13 +1359,20 @@ const ProductionTracking = () => {
                                 orientation="vertical"
                                 value={categories.indexOf(partCurrentCategory)}
                                 onChange={handlePartCategoryTabChange}
-                                variant="fullWidth"
+                                variant="scrollable"
+                                scrollButtons="auto"
                                 sx={{ 
+                                  minWidth: 280,
+                                  '& .MuiTabs-flexContainer': {
+                                    alignItems: 'stretch',
+                                  },
                                   '& .MuiTab-root': { 
                                     justifyContent: 'flex-start',
                                     textAlign: 'left',
                                     borderRadius: 1,
                                     mb: 0.5,
+                                    minWidth: 260,
+                                    maxWidth: 'none',
                                   }
                                 }}
                               >
@@ -1613,38 +1380,45 @@ const ProductionTracking = () => {
                                   <Tab 
                                     key={category} 
                                     label={
-                                      <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                                        <Chip 
-                                          label={categoryLabels[category]} 
-                                          size="small"
-                                          sx={{ 
-                                            bgcolor: categoryColors[category], 
-                                            color: 'white',
-                                            fontWeight: 'bold',
-                                            minWidth: 70
-                                          }}
-                                        />
-                                        <Box sx={{ ml: 'auto' }}>
+                                      <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%', gap: 0.5 }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                                          <Chip 
+                                            label={categoryLabels[category]} 
+                                            size="small"
+                                            sx={{ 
+                                              bgcolor: categoryColors[category], 
+                                              color: 'white',
+                                              fontWeight: 'bold',
+                                              minWidth: 70
+                                            }}
+                                          />
+                                        </Box>
+                                        <Box sx={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 0.5, mt: 0.5, width: '100%', overflow: 'visible' }}>
                                           {getStagesForCategory(category)?.filter((stage: string) => getCategoryForStage(stage) === category)?.map((stage: string) => {
                                             const stageData = partStageRecords[stage];
                                             const totalRejects = stageData?.totalRejectQuantity || stageData?.records?.reduce((sum: number, r: any) => sum + (r.rejectQuantity || 0), 0) || 0;
                                             if (stageData?.totalQuantity > 0 || totalRejects > 0) {
                                               return (
-                                                <Box key={stage} sx={{ display: 'flex', alignItems: 'center', ml: 0.5 }}>
-                                                  <Chip
-                                                    label={stageData.totalQuantity}
-                                                    size="small"
-                                                    color="success"
-                                                    sx={{ height: 20, fontSize: '0.7rem' }}
-                                                  />
-                                                  {totalRejects > 0 && (
+                                                <Box key={stage} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+                                                  <Typography variant="caption" sx={{ fontSize: '0.75rem', minWidth: 'auto', color: 'text.secondary', whiteSpace: 'nowrap' }}>
+                                                    {stageNames[stage]?.split(' ')[0] || stage}:
+                                                  </Typography>
+                                                  <Box sx={{ display: 'flex', gap: 0.5 }}>
                                                     <Chip
-                                                      label={`-${totalRejects}`}
+                                                      label={stageData.totalQuantity}
                                                       size="small"
-                                                      color="error"
-                                                      sx={{ ml: 0.5, height: 20, fontSize: '0.7rem' }}
+                                                      color="success"
+                                                      sx={{ height: 26, fontSize: '0.85rem', fontWeight: 'bold', minWidth: 35 }}
                                                     />
-                                                  )}
+                                                    {totalRejects > 0 && (
+                                                      <Chip
+                                                        label={`-${totalRejects}`}
+                                                        size="small"
+                                                        color="error"
+                                                        sx={{ height: 26, fontSize: '0.85rem', fontWeight: 'bold', minWidth: 35 }}
+                                                      />
+                                                    )}
+                                                  </Box>
                                                 </Box>
                                               );
                                             }
@@ -1712,7 +1486,7 @@ const ProductionTracking = () => {
                         </Grid>
                         
                         {/* Right Side - Input Form */}
-                        <Grid item xs={12} md={8}>
+                        <Grid item xs={12} md={5} sx={{ width: { md: '50%' }, flexBasis: { md: '50%' }, maxWidth: { md: '50%' } }}>
                           <Card sx={{ height: '100%' }}>
                             <CardContent>
                               <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
@@ -1757,29 +1531,20 @@ const ProductionTracking = () => {
                               
                               {/* Input Form */}
                               <Grid container spacing={2}>
+                                {/* Row 1: Date and Operator */}
                                 <Grid item xs={12} sm={6}>
                                   <TextField
                                     fullWidth
-                                    label="Quantity Produced"
-                                    type="number"
-                                    value={partQuantity}
-                                    onChange={(e) => setPartQuantity(e.target.value)}
+                                    label="Production Date *"
+                                    type="date"
+                                    value={partProductionDate}
+                                    onChange={(e) => setPartProductionDate(e.target.value)}
+                                    InputLabelProps={{ shrink: true }}
                                     required
-                                    size="medium"
+                                    error={!partProductionDate}
+                                    helperText={!partProductionDate ? 'Production date is required' : ''}
                                   />
                                 </Grid>
-                                <Grid item xs={12} sm={6}>
-                                  <TextField
-                                    fullWidth
-                                    label="Reject Quantity"
-                                    type="number"
-                                    value={partRejectQuantity}
-                                    onChange={(e) => setPartRejectQuantity(e.target.value)}
-                                    size="medium"
-                                  />
-                                </Grid>
-                                
-                                {/* Operator Selection */}
                                 <Grid item xs={12} sm={6}>
                                   <FormControl fullWidth>
                                     <InputLabel>Operator</InputLabel>
@@ -1798,28 +1563,30 @@ const ProductionTracking = () => {
                                   </FormControl>
                                 </Grid>
                                 
-                                {/* Oven Selection - Only for firing stages */}
-                                {firingStages.includes(partCurrentStage) && (
-                                  <Grid item xs={12} sm={6}>
-                                    <FormControl fullWidth>
-                                      <InputLabel>Oven</InputLabel>
-                                      <Select
-                                        value={partSelectedOven}
-                                        onChange={(e) => setPartSelectedOven(e.target.value)}
-                                        label="Oven"
-                                      >
-                                        <MenuItem value="">Select Oven...</MenuItem>
-                                        {ovens.filter(o => o.status === 'ACTIVE').map((oven) => (
-                                          <MenuItem key={oven.id} value={oven.id}>
-                                            {oven.ovenCode} - {oven.ovenName}
-                                          </MenuItem>
-                                        ))}
-                                      </Select>
-                                    </FormControl>
-                                  </Grid>
-                                )}
+                                {/* Row 2: Quantity */}
+                                <Grid item xs={12}>
+                                  <TextField
+                                    fullWidth
+                                    label="Quantity Produced"
+                                    type="number"
+                                    value={partQuantity}
+                                    onChange={(e) => setPartQuantity(e.target.value)}
+                                    required
+                                    size="medium"
+                                  />
+                                </Grid>
                                 
-                                {/* Defect Reason - Show when there are rejects */}
+                                {/* Row 3: Reject and Reason */}
+                                <Grid item xs={12} sm={6}>
+                                  <TextField
+                                    fullWidth
+                                    label="Reject Quantity"
+                                    type="number"
+                                    value={partRejectQuantity}
+                                    onChange={(e) => setPartRejectQuantity(e.target.value)}
+                                    size="medium"
+                                  />
+                                </Grid>
                                 {(parseInt(partRejectQuantity) > 0 || partSelectedDefectReason) && (
                                   <Grid item xs={12} sm={6}>
                                     <FormControl fullWidth>
@@ -1840,7 +1607,7 @@ const ProductionTracking = () => {
                                   </Grid>
                                 )}
                                 
-                                {/* Remake Type */}
+                                {/* Row 4: Product Type and Oven */}
                                 <Grid item xs={12} sm={6}>
                                   <FormControl fullWidth>
                                     <InputLabel>Production Type</InputLabel>
@@ -1855,23 +1622,27 @@ const ProductionTracking = () => {
                                     </Select>
                                   </FormControl>
                                 </Grid>
+                                {firingStages.includes(partCurrentStage) && (
+                                  <Grid item xs={12} sm={6}>
+                                    <FormControl fullWidth>
+                                      <InputLabel>Oven</InputLabel>
+                                      <Select
+                                        value={partSelectedOven}
+                                        onChange={(e) => setPartSelectedOven(e.target.value)}
+                                        label="Oven"
+                                      >
+                                        <MenuItem value="">Select Oven...</MenuItem>
+                                        {ovens.filter(o => o.status === 'ACTIVE').map((oven) => (
+                                          <MenuItem key={oven.id} value={oven.id}>
+                                            {oven.ovenCode} - {oven.ovenName}
+                                          </MenuItem>
+                                        ))}
+                                      </Select>
+                                    </FormControl>
+                                  </Grid>
+                                )}
                                 
-                                {/* Production Date */}
-                                <Grid item xs={12} sm={6}>
-                                  <TextField
-                                    fullWidth
-                                    label="Production Date *"
-                                    type="date"
-                                    value={partProductionDate}
-                                    onChange={(e) => setPartProductionDate(e.target.value)}
-                                    InputLabelProps={{ shrink: true }}
-                                    required
-                                    error={!partProductionDate}
-                                    helperText={!partProductionDate ? 'Production date is required' : ''}
-                                  />
-                                </Grid>
-                                
-                                {/* Notes */}
+                                {/* Row 5: Notes */}
                                 <Grid item xs={12}>
                                   <TextField
                                     fullWidth
@@ -2023,95 +1794,6 @@ const ProductionTracking = () => {
             </Card>
           )}
 
-          {/* Combine Parts Tab */}
-          {tabValue === 'combine-parts' && (
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Typography variant="h6">Combine Parts at Any Stage</Typography>
-                  <Button
-                    variant="contained"
-                    startIcon={<AddIcon />}
-                    onClick={handleOpenCombineDialog}
-                    disabled={productParts.length < 2}
-                  >
-                    Combine Parts
-                  </Button>
-                </Box>
-                
-                {productParts.length < 2 ? (
-                  <Box sx={{ p: 4, textAlign: 'center' }}>
-                    <Typography variant="body1" color="textSecondary">
-                      You need at least 2 parts to combine.
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      Add more parts in the "Product Parts" tab first.
-                    </Typography>
-                  </Box>
-                ) : partCombinations.length > 0 ? (
-                  <TableContainer>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow sx={{ bgcolor: '#f5f5f5' }}>
-                          <TableCell><strong>Combined At Stage</strong></TableCell>
-                          <TableCell><strong>Combined Quantity</strong></TableCell>
-                          <TableCell><strong>Parts Included</strong></TableCell>
-                          <TableCell><strong>Combined By</strong></TableCell>
-                          <TableCell><strong>Date</strong></TableCell>
-                          <TableCell><strong>Notes</strong></TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {partCombinations.map((combo) => (
-                          <TableRow key={combo.id} hover>
-                            <TableCell>
-                              <Chip 
-                                label={stageNames[combo.combinedAtStage] || combo.combinedAtStage} 
-                                size="small" 
-                                color="primary"
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Typography variant="body2" fontWeight="bold">
-                                {combo.combinedQuantity}
-                              </Typography>
-                            </TableCell>
-                            <TableCell>
-                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                                {combo.combinationItems.map((item: any) => (
-                                  <Chip
-                                    key={item.id}
-                                    label={`${item.part.partName} (${item.quantityUsed})`}
-                                    size="small"
-                                    variant="outlined"
-                                  />
-                                ))}
-                              </Box>
-                            </TableCell>
-                            <TableCell>{combo.combinedByUser?.fullName || '-'}</TableCell>
-                            <TableCell>
-                              {combo.createdAt ? format(new Date(combo.createdAt), 'MMM dd, yyyy HH:mm') : '-'}
-                            </TableCell>
-                            <TableCell>{combo.notes || '-'}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                ) : (
-                  <Box sx={{ p: 4, textAlign: 'center' }}>
-                    <Typography variant="body1" color="textSecondary">
-                      No part combinations recorded yet.
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      Click "Combine Parts" to manually combine parts at any production stage.
-                    </Typography>
-                  </Box>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
           {/* Remake History Tab */}
           {tabValue === 'remakes' && (
             <Card>
@@ -2133,11 +1815,11 @@ const ProductionTracking = () => {
                       </TableHead>
                       <TableBody>
                         {remakeCycles.map((cycle) => (
-                          <TableRow 
-                            key={cycle.id} 
+                          <TableRow
+                            key={cycle.id}
                             hover
-                            sx={{ 
-                              bgcolor: cycle.status === 'ESCALATED' ? '#ffebee' : 
+                            sx={{
+                              bgcolor: cycle.status === 'ESCALATED' ? '#ffebee' :
                                       cycle.status === 'COMPLETED' ? '#e8f5e9' : 'inherit'
                             }}
                           >
@@ -2148,10 +1830,10 @@ const ProductionTracking = () => {
                             <TableCell>{cycle.rejectStage || '-'}</TableCell>
                             <TableCell>{cycle.rejectQuantity}</TableCell>
                             <TableCell>
-                              <Chip 
-                                label={cycle.status} 
+                              <Chip
+                                label={cycle.status}
                                 size="small"
-                                color={cycle.status === 'ESCALATED' ? 'error' : 
+                                color={cycle.status === 'ESCALATED' ? 'error' :
                                        cycle.status === 'COMPLETED' ? 'success' : 'default'}
                               />
                             </TableCell>
@@ -2179,7 +1861,7 @@ const ProductionTracking = () => {
           )}
         </>
       )}
- 
+
       {/* Discrepancy Alert Dialog */}
       <Dialog open={Boolean(discrepancyAlert)} onClose={handleAlertClose} maxWidth="sm" fullWidth>
         <DialogTitle>
@@ -2227,7 +1909,7 @@ const ProductionTracking = () => {
           </DialogActions>
         </DialogContent>
       </Dialog>
- 
+
       {/* Snackbar for messages */}
       <Snackbar open={snackbarOpen} autoHideDuration={6000} onClose={handleSnackbarClose}>
         <MuiAlert onClose={handleSnackbarClose} severity={snackbarSeverity as any} sx={{ width: '100%' }}>
@@ -2420,10 +2102,10 @@ const ProductionTracking = () => {
               {combineStage && (
                 <Grid item xs={12} sm={6}>
                   <Box sx={{ display: 'flex', alignItems: 'center', height: '100%' }}>
-                    <Chip 
-                      label={categoryLabels[combineCategory]} 
-                      sx={{ 
-                        bgcolor: categoryColors[combineCategory], 
+                    <Chip
+                      label={categoryLabels[combineCategory]}
+                      sx={{
+                        bgcolor: categoryColors[combineCategory],
                         color: 'white',
                         fontWeight: 'bold'
                       }}
@@ -2533,12 +2215,12 @@ const ProductionTracking = () => {
           </DialogContent>
           <DialogActions>
             <Button onClick={handleCloseCombineDialog}>Cancel</Button>
-            <Button 
-              onClick={handleCombineParts} 
-              variant="contained" 
+            <Button
+              onClick={handleCombineParts}
+              variant="contained"
               disabled={
                 combineLoading ||
-                !combineStage || 
+                !combineStage ||
                 Object.keys(selectedPartsForCombine).filter(id => selectedPartsForCombine[Number(id)] > 0).length < 2
               }
             >
