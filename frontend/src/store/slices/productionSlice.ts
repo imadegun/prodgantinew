@@ -40,6 +40,7 @@ interface TrackProductionRequest {
   rejectReasonId?: number;
   productionDate?: string;
   notes?: string;
+  escalationNotes?: string;
 }
 
 interface TrackProductionResponse {
@@ -92,6 +93,7 @@ const initialState: ProductionState = {
   isTracking: false,
   error: null,
   currentPolDetailId: null,
+  qtyToMake: 0,
 };
 
 export const fetchProductionStages = createAsyncThunk(

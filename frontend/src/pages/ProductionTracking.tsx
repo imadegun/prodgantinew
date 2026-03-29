@@ -28,6 +28,9 @@ import {
   InputLabel,
   Divider,
   Paper,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
@@ -201,6 +204,18 @@ const ProductionTracking = () => {
   const [partValidationError, setPartValidationError] = useState('');
   const [partStageRecords, setPartStageRecords] = useState<Record<string, any>>({});
   
+  // Remake Escalation Dialog state (for R4+ validation)
+  const [remakeEscalationDialogOpen, setRemakeEscalationDialogOpen] = useState(false);
+  const [remakeEscalationNotes, setRemakeEscalationNotes] = useState('');
+  const [pendingRemakeSubmit, setPendingRemakeSubmit] = useState<{
+    type: 'main' | 'part';
+    data?: any;
+  } | null>(null);
+  
+  // Active Remake Cycle Selection state
+  const [selectedActiveRemakeCycle, setSelectedActiveRemakeCycle] = useState<any>(null);
+  const [activeRemakeCycles, setActiveRemakeCycles] = useState<any[]>([]);
+  
   // Auto-dismiss validation error after 5 seconds
   useEffect(() => {
     if (partValidationError) {
@@ -372,10 +387,372 @@ const ProductionTracking = () => {
 
   const loadRemakeCycles = async () => {
     try {
-      const cyclesData = await productionService.getRemakeCycles(Number(selectedProduct));
-      setRemakeCycles(cyclesData || []);
+      console.log(`[loadRemakeCycles] Loading cycles for product ${selectedProduct}`);
+      // Get remake cycles from production records (which have remakeType field)
+      const stagesData = await productionService.getProductionStages(Number(selectedProduct));
+      
+      // Extract remake cycles from production records
+      const remakeRecords: any[] = [];
+      
+      if (stagesData?.stages) {
+        stagesData.stages.forEach((stageData: any) => {
+          if (stageData.records) {
+            stageData.records.forEach((record: any) => {
+              if (record.remakeType && (record.remakeType === 'RPR' || record.remakeType === 'RQC')) {
+                remakeRecords.push({
+                  id: record.id,
+                  remakeNumber: record.remakeCycle || 1,
+                  remakeType: record.remakeType,
+                  rejectStage: record.stage,
+                  rejectQuantity: record.quantity + (record.rejectQuantity || 0),
+                  status: record.remakeCycle >= 4 ? 'ESCALATED' : 'COMPLETED',
+                  createdAt: record.createdAt,
+                });
+              }
+            });
+          }
+        });
+      }
+      
+      console.log(`[loadRemakeCycles] Loaded cycles from records:`, remakeRecords);
+      setRemakeCycles(remakeRecords || []);
     } catch (error) {
       console.error('Error loading remake cycles:', error);
+      setRemakeCycles([]);
+    }
+  };
+
+  // Get the next remake number for a specific remake type (RPR or RQC)
+  const getNextRemakeNumberByType = (remakeType: string): number => {
+    if (remakeType !== 'RPR' && remakeType !== 'RQC') return 1;
+    
+    // Filter cycles by type and get max
+    const typeCycles = remakeCycles.filter(c => c.remakeType === remakeType);
+    if (typeCycles.length === 0) return 1;
+    
+    // Get max remake number for this type and add 1
+    const maxRemakeNumber = Math.max(...typeCycles.map(c => c.remakeNumber || 1));
+    return maxRemakeNumber + 1;
+  };
+
+  // Get total remade quantity for a specific remake type
+  const getTotalRemadeQtyByType = (remakeType: string): number => {
+    if (remakeType !== 'RPR' && remakeType !== 'RQC') return 0;
+    
+    const typeCycles = remakeCycles.filter(c => c.remakeType === remakeType);
+    return typeCycles.reduce((sum, c) => sum + (c.rejectQuantity || 0), 0);
+  };
+
+  // Check if this will be a R4+ remake (requires escalation)
+  const isR4PlusRemake = (remakeType: string): boolean => {
+    if (remakeType !== 'RPR' && remakeType !== 'RQC') return false;
+    const nextRemakeNumber = getNextRemakeNumberByType(remakeType);
+    console.log(`[R4+ Check] remakeType=${remakeType}, nextRemakeNumber=${nextRemakeNumber}, isR4Plus=${nextRemakeNumber >= 4}`);
+    console.log(`[R4+ Check] Current remakeCycles state:`, remakeCycles);
+    return nextRemakeNumber >= 4;
+  };
+
+  // Check if normal production exists for this part (required before remake can be done)
+  const hasNormalProduction = (): boolean => {
+    // Check if any production records exist without remakeType (normal production)
+    const stageData = partStageRecords['THROWING'];
+    if (stageData && stageData.records && stageData.records.length > 0) {
+      // Check if there's at least one record without remakeType
+      const normalRecords = stageData.records.filter((r: any) => !r.remakeType || r.remakeType === '');
+      return normalRecords.length > 0;
+    }
+    // Also check other stages for normal production
+    return Object.values(partStageRecords).some((stageData: any) => {
+      if (stageData && stageData.records && stageData.records.length > 0) {
+        const normalRecords = stageData.records.filter((r: any) => !r.remakeType || r.remakeType === '');
+        return normalRecords.length > 0;
+      }
+      return false;
+    });
+  };
+
+  // Get active (incomplete) remake cycles from production records
+  // Groups records by remakeType and remakeCycle to identify active cycles
+  const getActiveRemakeCycles = (): any[] => {
+    const cyclesMap: Record<string, any> = {};
+    
+    Object.values(partStageRecords).forEach((stageData: any) => {
+      if (stageData && stageData.records) {
+        stageData.records.forEach((record: any) => {
+          if (record.remakeType && (record.remakeType === 'RPR' || record.remakeType === 'RQC')) {
+            const cycleKey = `${record.remakeType}-${record.remakeCycle}`;
+            if (!cyclesMap[cycleKey]) {
+              cyclesMap[cycleKey] = {
+                key: cycleKey,
+                remakeType: record.remakeType,
+                remakeNumber: record.remakeCycle,
+                currentStage: record.stage,
+                totalQuantity: 0,
+                latestRecord: null,
+                latestDate: null,
+                stagesCompleted: [],
+              };
+            }
+            cyclesMap[cycleKey].totalQuantity += record.quantity + (record.rejectQuantity || 0);
+            cyclesMap[cycleKey].stagesCompleted.push(record.stage);
+            if (!cyclesMap[cycleKey].latestDate || new Date(record.createdAt) > new Date(cyclesMap[cycleKey].latestDate)) {
+              cyclesMap[cycleKey].latestDate = record.createdAt;
+              cyclesMap[cycleKey].latestRecord = record;
+              cyclesMap[cycleKey].currentStage = record.stage;
+            }
+          }
+        });
+      }
+    });
+    
+    return Object.values(cyclesMap).sort((a: any, b: any) => {
+      // Sort by remakeType first, then by remakeNumber
+      if (a.remakeType !== b.remakeType) {
+        return a.remakeType.localeCompare(b.remakeType);
+      }
+      return a.remakeNumber - b.remakeNumber;
+    });
+  };
+
+  // Get next available stage for a remake cycle
+  const getNextStageForCycle = (cycle: any): string => {
+    const rprStagesOrder = [
+      'THROWING', 'TRIMMING', 'DECORATION', 'DRYING',
+      'LOAD_BISQUE', 'OUT_BISQUE', 'LOAD_HIGH_FIRING', 'OUT_HIGH_FIRING'
+    ];
+    const rqcStagesOrder = [
+      'LOAD_RAKU_FIRING', 'OUT_RAKU_FIRING', 'LOAD_LUSTER_FIRING', 'OUT_LUSTER_FIRING',
+      'SANDING', 'WAXING', 'DIPPING', 'SPRAYING', 'COLOR_DECORATION'
+    ];
+    const stagesOrder = cycle.remakeType === 'RPR' ? rprStagesOrder : rqcStagesOrder;
+    const completedStages = new Set(cycle.stagesCompleted || []);
+    
+    for (const stage of stagesOrder) {
+      if (!completedStages.has(stage)) {
+        return stage;
+      }
+    }
+    return cycle.currentStage; // All stages complete
+  };
+
+  // Handle selecting an active remake cycle to continue
+  const handleSelectActiveRemakeCycle = (cycle: any) => {
+    setSelectedActiveRemakeCycle(cycle);
+    // Auto-set the remake type and number
+    setPartSelectedRemakeType(cycle.remakeType);
+    // The next stage would be determined by the cycle's current position
+  };
+
+  // Handle creating a new remake cycle
+  const handleCreateNewRemakeCycle = (remakeType: string) => {
+    setSelectedActiveRemakeCycle(null);
+    setPartSelectedRemakeType(remakeType);
+  };
+  
+  // Validate that remake follows proper stage sequence
+  // RPR (Pre-Firing Remake): Should follow stages in order from throwing through firing
+  // RQC (Post-Firing Remake): Should follow stages in order from sanding/glazing through QC
+  const validateRemakeStageSequence = (
+    stage: string, 
+    remakeType: string, 
+    stageRecords: Record<string, any>
+  ): { valid: boolean; error?: string } => {
+    if (!remakeType || (remakeType !== 'RPR' && remakeType !== 'RQC')) {
+      return { valid: true }; // Not a remake, skip this validation
+    }
+    
+    // Define stage order for each remake type
+    const rprStagesOrder = [
+      'THROWING', 'TRIMMING', 'DECORATION', 'DRYING',
+      'LOAD_BISQUE', 'OUT_BISQUE', 'LOAD_HIGH_FIRING', 'OUT_HIGH_FIRING'
+    ];
+    
+    const rqcStagesOrder = [
+      'LOAD_RAKU_FIRING', 'OUT_RAKU_FIRING', 'LOAD_LUSTER_FIRING', 'OUT_LUSTER_FIRING',
+      'SANDING', 'WAXING', 'DIPPING', 'SPRAYING', 'COLOR_DECORATION',
+      'QC_GOOD', 'QC_REJECT', 'QC_RE_FIRING', 'QC_SECOND'
+    ];
+    
+    const stagesOrder = remakeType === 'RPR' ? rprStagesOrder : rqcStagesOrder;
+    
+    // Find the index of the current stage being submitted
+    const currentStageIndex = stagesOrder.indexOf(stage);
+    if (currentStageIndex === -1) {
+      // Stage not in the expected order for this remake type
+      return { 
+        valid: false, 
+        error: `${stageNames[stage] || stage} is not a valid stage for ${remakeType} remake. ${remakeType === 'RPR' ? 'RPR' : 'RQC'} remakes should follow stages from ${stageNames[stagesOrder[0]] || stagesOrder[0]} through ${stageNames[stagesOrder[stagesOrder.length - 1]] || stagesOrder[stagesOrder.length - 1]}.` 
+      };
+    }
+    
+    // Check if all previous stages in the sequence have been completed for this remake cycle
+    // For the first remake (R1), check if previous stages in the overall flow have data
+    const nextRemakeNumber = getNextRemakeNumberByType(remakeType);
+    
+    for (let i = 0; i < currentStageIndex; i++) {
+      const prevStage = stagesOrder[i];
+      const stageData = stageRecords[prevStage];
+      const hasData = stageData && (stageData.totalQuantity > 0 || (stageData.records && stageData.records.length > 0));
+      
+      if (!hasData) {
+        // For R1, we allow starting from any stage (user may have done some stages already)
+        // For R2+, we should check if previous stages were completed in the same remake cycle
+        if (nextRemakeNumber > 1) {
+          return { 
+            valid: false, 
+            error: `${remakeType} R${nextRemakeNumber} must follow the stage sequence. Please complete ${stageNames[prevStage] || prevStage} before ${stageNames[stage] || stage}.` 
+          };
+        }
+      }
+    }
+    
+    return { valid: true };
+  };
+
+  // Get the display label for current remake cycle
+  const getRemakeCycleLabel = (remakeType: string): string => {
+    if (remakeType !== 'RPR' && remakeType !== 'RQC') return '';
+    const cycleNum = getNextRemakeNumberByType(remakeType);
+    return `${remakeType} R${cycleNum}`;
+  };
+
+  // Get next remake number (default: check RPR cycles)
+  const getNextRemakeNumber = (): number => {
+    // Default to checking RPR cycles
+    return getNextRemakeNumberByType('RPR');
+  };
+
+  // Handle opening the remake escalation dialog
+  const handleOpenRemakeEscalation = (submitType: 'main' | 'part', submitData?: any) => {
+    console.log(`[handleOpenRemakeEscalation] Opening dialog, type=${submitType}, data=`, submitData);
+    setPendingRemakeSubmit({ type: submitType, data: submitData });
+    setRemakeEscalationDialogOpen(true);
+    setRemakeEscalationNotes('');
+  };
+
+  // Handle closing the remake escalation dialog (Cancel button only)
+  const handleCloseRemakeEscalation = () => {
+    // Only close if notes are empty (user cancelled without entering notes)
+    // Don't clear pendingRemakeSubmit so user can retry with notes
+    setRemakeEscalationDialogOpen(false);
+    setRemakeEscalationNotes('');
+  };
+  
+  // Force close escalation dialog after successful submission
+  const forceCloseRemakeEscalation = () => {
+    setRemakeEscalationDialogOpen(false);
+    setRemakeEscalationNotes('');
+    setPendingRemakeSubmit(null);
+  };
+
+  // Handle confirming the remake escalation and proceed with submission
+  const handleConfirmRemakeEscalation = async () => {
+    if (!remakeEscalationNotes.trim()) {
+      showSnackbar('Investigation notes are required before proceeding with R4+ remake', 'error');
+      return;
+    }
+    
+    if (pendingRemakeSubmit) {
+      if (pendingRemakeSubmit.type === 'main') {
+        // Add escalation notes to the submission
+        const submitData = pendingRemakeSubmit.data;
+        // Re-trigger the main submit with escalation notes
+        await executeMainProductionSubmit({ ...submitData, escalationNotes: remakeEscalationNotes });
+      } else if (pendingRemakeSubmit.type === 'part') {
+        // Add escalation notes to the part submission
+        await executePartProductionSubmit({ ...pendingRemakeSubmit.data, escalationNotes: remakeEscalationNotes });
+      }
+    }
+    
+    forceCloseRemakeEscalation();
+  };
+
+  // Execute the main production submission
+  const executeMainProductionSubmit = async (submitData: any) => {
+    try {
+      const result = await dispatch(trackProduction({
+        polDetailId: Number(selectedProduct),
+        stage: currentStage,
+        quantity: submitData.quantity,
+        rejectQuantity: submitData.rejectQty,
+        category: currentCategory,
+        remakeType: selectedRemakeType || undefined,
+        remakeCycle: submitData.remakeNumber,
+        ovenId: selectedOven ? Number(selectedOven) : undefined,
+        operatorId: selectedOperator ? Number(selectedOperator) : undefined,
+        rejectReasonId: selectedDefectReason ? Number(selectedDefectReason) : undefined,
+        notes: notes,
+        productionDate: productionDate || undefined,
+        escalationNotes: submitData.escalationNotes,
+      }));
+
+      const payload = result.payload as any;
+      if (payload?.discrepancyDetected) {
+        setDiscrepancyAlert(payload);
+        showSnackbar('Quantity discrepancy detected', 'warning');
+      } else {
+        setQuantity('');
+        setRejectQuantity('');
+        setNotes('');
+        setProductionDate('');
+        setSelectedOperator('');
+        setSelectedOven('');
+        setSelectedDefectReason('');
+        setSelectedRemakeType('');
+        setValidationError('');
+        showSnackbar('Production data saved successfully', 'success');
+        loadProductionStages();
+        loadRemakeCycles();
+      }
+    } catch (error: any) {
+      console.error('Error tracking production:', error);
+      showSnackbar(error.message || 'Failed to track production', 'error');
+    }
+  };
+
+  // Execute the part production submission
+  const executePartProductionSubmit = async (submitData: any) => {
+    try {
+      const result = await productionService.trackPartProduction({
+        polDetailId: Number(selectedProduct),
+        partId: selectedPart.id,
+        stage: partCurrentStage,
+        quantity: submitData.quantity,
+        rejectQuantity: submitData.rejectQty,
+        category: partCurrentCategory,
+        remakeType: partSelectedRemakeType || undefined,
+        remakeCycle: submitData.remakeNumber,
+        ovenId: partSelectedOven ? Number(partSelectedOven) : undefined,
+        operatorId: partSelectedOperator ? Number(partSelectedOperator) : undefined,
+        rejectReasonId: partSelectedDefectReason ? Number(partSelectedDefectReason) : undefined,
+        notes: partNotes,
+        productionDate: partProductionDate || undefined,
+        escalationNotes: submitData.escalationNotes,
+      });
+
+      console.log('Production record created:', result);
+      const payload = result as any;
+      if (payload?.discrepancyDetected) {
+        setDiscrepancyAlert(payload);
+        showSnackbar('Quantity discrepancy detected', 'warning');
+      } else {
+        setPartQuantity('');
+        setPartRejectQuantity('');
+        setPartNotes('');
+        setPartProductionDate('');
+        setPartSelectedOperator('');
+        setPartSelectedOven('');
+        setPartSelectedDefectReason('');
+        setPartSelectedRemakeType('');
+        setPartValidationError('');
+        showSnackbar('Part production data saved successfully', 'success');
+        // First reload remake cycles, then reload part stages
+        await loadRemakeCycles();
+        await handlePartSelect(selectedPart);
+      }
+    } catch (error: any) {
+      console.error('Error tracking part production:', error);
+      showSnackbar(error.message || 'Failed to track part production', 'error');
     }
   };
 
@@ -484,7 +861,13 @@ const ProductionTracking = () => {
   };
 
   // Validate stage quantity based on production flow
-  const validateStageQuantity = (stage: string, qty: number, rejectQty: number): { valid: boolean; error?: string } => {
+  // remakeType: 'RPR' (Pre-Firing Remake) or 'RQC' (Post-Firing Remake) - bypasses normal validation
+  const validateStageQuantity = (stage: string, qty: number, rejectQty: number, remakeType?: string): { valid: boolean; error?: string } => {
+    // Bypass validation for remake types - remakes are allowed beyond normal limits
+    if (remakeType === 'RPR' || remakeType === 'RQC') {
+      return { valid: true };
+    }
+    
     const orderQty = polDetailsData?.quantity || 0;
     const extraBuffer = polDetailsData?.extraBuffer || 0;
     const qtyToMake = Math.round(orderQty + (orderQty * extraBuffer / 100));
@@ -591,11 +974,43 @@ const ProductionTracking = () => {
       const qty = parseInt(quantity);
       const rejectQty = parseInt(rejectQuantity) || 0;
       
-      // Get dynamic validation based on stage flow
-      const validationResult = validateStageQuantity(currentStage, qty, rejectQty);
+      // Get dynamic validation based on stage flow (pass remakeType to allow bypass for remakes)
+      const validationResult = validateStageQuantity(currentStage, qty, rejectQty, selectedRemakeType);
       if (!validationResult.valid) {
         const errorMessage = validationResult.error || 'Validation failed';
         setValidationError(errorMessage);
+        return;
+      }
+      
+      // Validate remake stage sequence (for R2+ remakes)
+      if (selectedRemakeType) {
+        // First validate that normal production exists before allowing remake
+        const hasNormalProd = Object.values(stageRecords).some((stageData: any) => {
+          if (stageData && stageData.records && stageData.records.length > 0) {
+            const normalRecords = stageData.records.filter((r: any) => !r.remakeType || r.remakeType === '');
+            return normalRecords.length > 0;
+          }
+          return false;
+        });
+        if (!hasNormalProd) {
+          setValidationError('Cannot create remake - no normal production records found. Please complete normal production first before creating remakes.');
+          return;
+        }
+        
+        const sequenceValidation = validateRemakeStageSequence(currentStage, selectedRemakeType, stageRecords);
+        if (!sequenceValidation.valid) {
+          setValidationError(sequenceValidation.error || 'Invalid stage sequence for remake');
+          return;
+        }
+      }
+      
+      // Calculate remake number for selected type
+      const remakeNumber = selectedRemakeType ? getNextRemakeNumberByType(selectedRemakeType) : undefined;
+      
+      // Check if this is a R4+ remake (requires escalation) - only for main production
+      if (isR4PlusRemake(selectedRemakeType)) {
+        // Show escalation dialog before proceeding
+        handleOpenRemakeEscalation('main', { quantity: qty, rejectQty: rejectQty, remakeNumber: remakeNumber });
         return;
       }
 
@@ -606,6 +1021,7 @@ const ProductionTracking = () => {
         rejectQuantity: rejectQty,
         category: currentCategory,
         remakeType: selectedRemakeType || undefined,
+        remakeCycle: remakeNumber,
         ovenId: selectedOven ? Number(selectedOven) : undefined,
         operatorId: selectedOperator ? Number(selectedOperator) : undefined,
         rejectReasonId: selectedDefectReason ? Number(selectedDefectReason) : undefined,
@@ -797,8 +1213,13 @@ const ProductionTracking = () => {
     setPartCurrentStage(stage);
   };
 
-  const validatePartStageQuantity = (stage: string, qty: number, rejectQty: number): { valid: boolean; error?: string } => {
+  const validatePartStageQuantity = (stage: string, qty: number, rejectQty: number, remakeType?: string): { valid: boolean; error?: string } => {
     if (!selectedPart) return { valid: false, error: 'No part selected' };
+    
+    // Bypass validation for remake types - remakes are allowed beyond normal limits
+    if (remakeType === 'RPR' || remakeType === 'RQC') {
+      return { valid: true };
+    }
     
     // Get the part's target quantity - use qtyToMake (order + extra buffer) like Input Production
     const orderQty = polDetailsData?.quantity || 0;
@@ -903,49 +1324,52 @@ const ProductionTracking = () => {
         return;
       }
 
+      if (!partSelectedOperator) {
+        showSnackbar('Please select operator', 'error');
+        return;
+      }
+
       const qty = parseInt(partQuantity);
       const rejectQty = parseInt(partRejectQuantity) || 0;
       
-      const validationResult = validatePartStageQuantity(partCurrentStage, qty, rejectQty);
+      // Validate (pass remakeType to allow bypass for remakes)
+      const validationResult = validatePartStageQuantity(partCurrentStage, qty, rejectQty, partSelectedRemakeType);
       if (!validationResult.valid) {
         const errorMessage = validationResult.error || 'Validation failed';
         setPartValidationError(errorMessage);
         return;
       }
-
-      const result = await productionService.trackPartProduction({
-        polDetailId: Number(selectedProduct),
-        partId: selectedPart.id,
-        stage: partCurrentStage,
-        quantity: qty,
-        rejectQuantity: rejectQty,
-        category: partCurrentCategory,
-        remakeType: partSelectedRemakeType || undefined,
-        ovenId: partSelectedOven ? Number(partSelectedOven) : undefined,
-        operatorId: partSelectedOperator ? Number(partSelectedOperator) : undefined,
-        rejectReasonId: partSelectedDefectReason ? Number(partSelectedDefectReason) : undefined,
-        notes: partNotes,
-        productionDate: partProductionDate || undefined,
-      });
-
-      console.log('Production record created:', result);
-      const payload = result as any;
-      if (payload?.discrepancyDetected) {
-        setDiscrepancyAlert(payload);
-        showSnackbar('Quantity discrepancy detected', 'warning');
-      } else {
-        setPartQuantity('');
-        setPartRejectQuantity('');
-        setPartNotes('');
-        setPartProductionDate('');
-        setPartSelectedOperator('');
-        setPartSelectedOven('');
-        setPartSelectedDefectReason('');
-        setPartSelectedRemakeType('');
-        setPartValidationError('');
-        showSnackbar('Part production data saved successfully', 'success');
-        handlePartSelect(selectedPart);
+      
+      // Validate remake stage sequence (for R2+ remakes)
+      if (partSelectedRemakeType) {
+        // First validate that normal production exists before allowing remake
+        if (!hasNormalProduction()) {
+          setPartValidationError('Cannot create remake - no normal production records found. Please complete normal production first before creating remakes.');
+          return;
+        }
+        
+        const sequenceValidation = validateRemakeStageSequence(partCurrentStage, partSelectedRemakeType, partStageRecords);
+        if (!sequenceValidation.valid) {
+          setPartValidationError(sequenceValidation.error || 'Invalid stage sequence for remake');
+          return;
+        }
       }
+
+      // Calculate remake number based on selected type
+      const remakeNumber = partSelectedRemakeType ? getNextRemakeNumberByType(partSelectedRemakeType) : undefined;
+      
+      console.log(`[handlePartSubmit] remakeType=${partSelectedRemakeType}, calculatedRemakeNumber=${remakeNumber}`);
+      
+      // Check if this is a R4+ remake (requires escalation)
+      if (isR4PlusRemake(partSelectedRemakeType)) {
+        console.log(`[handlePartSubmit] R4+ detected, opening escalation dialog`);
+        // Show escalation dialog before proceeding
+        handleOpenRemakeEscalation('part', { quantity: qty, rejectQty: rejectQty, remakeNumber: remakeNumber });
+        return;
+      }
+
+      // Proceed with submission
+      await executePartProductionSubmit({ quantity: qty, rejectQty: rejectQty, remakeNumber: remakeNumber });
     } catch (error: any) {
       console.error('Error tracking part production:', error);
       showSnackbar(error.message || 'Failed to track part production', 'error');
@@ -1318,7 +1742,7 @@ const ProductionTracking = () => {
             <Card>
               <CardContent>
                 <Typography variant="h6" sx={{ mb: 2 }}>Production Tracking</Typography>
-                {productParts.length > 0 ? (
+                {productParts.length > 0 && (
                   <>
                     {/* Part Selection */}
                     <Box sx={{ mb: 3 }}>
@@ -1351,7 +1775,7 @@ const ProductionTracking = () => {
                     ) : (
                       <Grid container spacing={3}>
                         {/* Left Side - Category Tabs */}
-                        <Grid item xs={12} md={7} sx={{ width: { md: '50%' }, flexBasis: { md: '50%' }, maxWidth: { md: '50%' } }}>
+                        <Grid item xs={12} md={7}>
                           <Card sx={{ height: '100%' }}>
                             <CardContent>
                               <Typography variant="h6" gutterBottom>Production Categories</Typography>
@@ -1535,23 +1959,24 @@ const ProductionTracking = () => {
                                 <Grid item xs={12} sm={6}>
                                   <TextField
                                     fullWidth
-                                    label="Production Date *"
+                                    label="Date *"
                                     type="date"
                                     value={partProductionDate}
                                     onChange={(e) => setPartProductionDate(e.target.value)}
                                     InputLabelProps={{ shrink: true }}
                                     required
                                     error={!partProductionDate}
-                                    helperText={!partProductionDate ? 'Production date is required' : ''}
+                                    helperText={!partProductionDate ? 'Date is required' : ''}
                                   />
                                 </Grid>
                                 <Grid item xs={12} sm={6}>
-                                  <FormControl fullWidth>
-                                    <InputLabel>Operator</InputLabel>
+                                  <FormControl fullWidth error={!partSelectedOperator && Boolean(partProductionDate)}>
+                                    <InputLabel>Operator *</InputLabel>
                                     <Select
                                       value={partSelectedOperator}
                                       onChange={(e) => setPartSelectedOperator(e.target.value)}
-                                      label="Operator"
+                                      label="Operator *"
+                                      required
                                     >
                                       <MenuItem value="">Select Operator...</MenuItem>
                                       {operators.map((op) => (
@@ -1560,6 +1985,11 @@ const ProductionTracking = () => {
                                         </MenuItem>
                                       ))}
                                     </Select>
+                                    {!partSelectedOperator && Boolean(partProductionDate) && (
+                                      <Typography variant="caption" color="error" sx={{ mt: 0.5, ml: 1.5 }}>
+                                        Operator is required
+                                      </Typography>
+                                    )}
                                   </FormControl>
                                 </Grid>
                                 
@@ -1567,7 +1997,7 @@ const ProductionTracking = () => {
                                 <Grid item xs={12}>
                                   <TextField
                                     fullWidth
-                                    label="Quantity Produced"
+                                    label="Quantity"
                                     type="number"
                                     value={partQuantity}
                                     onChange={(e) => setPartQuantity(e.target.value)}
@@ -1580,7 +2010,7 @@ const ProductionTracking = () => {
                                 <Grid item xs={12} sm={6}>
                                   <TextField
                                     fullWidth
-                                    label="Reject Quantity"
+                                    label="Reject"
                                     type="number"
                                     value={partRejectQuantity}
                                     onChange={(e) => setPartRejectQuantity(e.target.value)}
@@ -1610,16 +2040,54 @@ const ProductionTracking = () => {
                                 {/* Row 4: Product Type and Oven */}
                                 <Grid item xs={12} sm={6}>
                                   <FormControl fullWidth>
-                                    <InputLabel>Production Type</InputLabel>
+                                    <InputLabel>Remake</InputLabel>
                                     <Select
                                       value={partSelectedRemakeType}
                                       onChange={(e) => setPartSelectedRemakeType(e.target.value)}
                                       label="Production Type"
                                     >
-                                      <MenuItem value="">Normal Production</MenuItem>
-                                      <MenuItem value="RPR">RPR (Pre-Firing Remake)</MenuItem>
-                                      <MenuItem value="RQC">RQC (Post-Firing Remake)</MenuItem>
+                                      <MenuItem value="">
+                                        <em>Select Remake</em>
+                                      </MenuItem>
+                                      <MenuItem 
+                                        value="RPR"
+                                        disabled={getNextRemakeNumberByType('RPR') >= 4}
+                                      >
+                                        {(() => {
+                                          const rprCycle = getNextRemakeNumberByType('RPR');
+                                          const label = rprCycle > 1 ? `RPR → RM${rprCycle}` : 'RPR';
+                                          const isR4 = rprCycle >= 4;
+                                          return (
+                                            <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                              <span>{label}</span>
+                                              {isR4 && <WarningIcon sx={{ fontSize: 16, color: 'error.main' }} />}
+                                            </Box>
+                                          );
+                                        })()}
+                                      </MenuItem>
+                                      <MenuItem 
+                                        value="RQC"
+                                        disabled={getNextRemakeNumberByType('RQC') >= 4}
+                                      >
+                                        {(() => {
+                                          const rqcCycle = getNextRemakeNumberByType('RQC');
+                                          const label = rqcCycle > 1 ? `RQC → RM${rqcCycle}` : 'RQC';
+                                          const isR4 = rqcCycle >= 4;
+                                          return (
+                                            <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                              <span>{label}</span>
+                                              {isR4 && <WarningIcon sx={{ fontSize: 16, color: 'error.main' }} />}
+                                            </Box>
+                                          );
+                                        })()}
+                                      </MenuItem>
                                     </Select>
+                                    {(getNextRemakeNumberByType('RPR') >= 4 || getNextRemakeNumberByType('RQC') >= 4) && (
+                                      <Typography variant="caption" color="error" sx={{ mt: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                        <WarningIcon sx={{ fontSize: 14 }} />
+                                        R4+ requires investigation notes
+                                      </Typography>
+                                    )}
                                   </FormControl>
                                 </Grid>
                                 {firingStages.includes(partCurrentStage) && (
@@ -1671,7 +2139,7 @@ const ProductionTracking = () => {
                                     size="large"
                                     startIcon={<SaveIcon />}
                                     onClick={handlePartSubmit}
-                                    disabled={!partQuantity || parseInt(partQuantity) <= 0 || !partProductionDate}
+                                    disabled={!partQuantity || parseInt(partQuantity) <= 0 || !partProductionDate || !partSelectedOperator}
                                     sx={{ 
                                       py: 1.5,
                                       bgcolor: categoryColors[partCurrentCategory],
@@ -1683,15 +2151,21 @@ const ProductionTracking = () => {
                                   >
                                     Save Part Production Data
                                   </Button>
+                                  {!partSelectedOperator && Boolean(partProductionDate) && (
+                                    <Typography variant="caption" color="error" sx={{ mt: 0.5, display: 'block', textAlign: 'center' }}>
+                                      Operator is required
+                                    </Typography>
+                                  )}
                                 </Grid>
                               </Grid>
                             </CardContent>
                           </Card>
-                        </Grid>
                       </Grid>
-                    )}
-                  </>
-                ) : (
+                    </Grid>
+                  )}
+                </>
+                )}
+                {!selectedPart && productParts.length > 0 && (
                   <Box sx={{ p: 4, textAlign: 'center' }}>
                     <Typography variant="body1" color="textSecondary">
                       No product parts defined yet.
@@ -1705,7 +2179,7 @@ const ProductionTracking = () => {
             </Card>
           )}
 
-          {/* Combine Parts Tab */}
+            {/* Combine Parts Tab */}
           {tabValue === 'combine-parts' && (
             <Card>
               <CardContent>
@@ -1798,7 +2272,40 @@ const ProductionTracking = () => {
           {tabValue === 'remakes' && (
             <Card>
               <CardContent>
-                <Typography variant="h6" sx={{ mb: 2 }}>Remake Cycles History</Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Typography variant="h6">Remake Cycles History</Typography>
+                  {remakeCycles.length > 0 && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        RPR: 
+                        <Chip 
+                          label={`R${getNextRemakeNumberByType('RPR')}`} 
+                          size="small" 
+                          color={getNextRemakeNumberByType('RPR') >= 4 ? 'error' : 'primary'}
+                          sx={{ ml: 1 }}
+                        />
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        RQC: 
+                        <Chip 
+                          label={`R${getNextRemakeNumberByType('RQC')}`} 
+                          size="small" 
+                          color={getNextRemakeNumberByType('RQC') >= 4 ? 'error' : 'primary'}
+                          sx={{ ml: 1 }}
+                        />
+                      </Typography>
+                      {(getNextRemakeNumberByType('RPR') >= 4 || getNextRemakeNumberByType('RQC') >= 4) && (
+                        <Chip 
+                          icon={<WarningIcon />}
+                          label="Escalation Required"
+                          size="small"
+                          color="error"
+                        />
+                      )}
+                    </Box>
+                  )}
+                </Box>
+                
                 {remakeCycles.length > 0 ? (
                   <TableContainer>
                     <Table size="small">
@@ -1916,6 +2423,72 @@ const ProductionTracking = () => {
           {snackbarMessage}
         </MuiAlert>
       </Snackbar>
+
+      {/* Remake Escalation Dialog (for R4+ remakes) */}
+      <Dialog 
+        open={remakeEscalationDialogOpen} 
+        onClose={handleCloseRemakeEscalation} 
+        maxWidth="sm" 
+        fullWidth
+      >
+        <DialogTitle sx={{ bgcolor: '#d32f2f', color: 'white', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <WarningIcon />
+          <Typography variant="h6">
+            ESCALATION REQUIRED - Multiple Remakes Detected
+          </Typography>
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <MuiAlert severity="error" sx={{ mb: 2 }}>
+              <Typography variant="body1" fontWeight="bold">
+                This is Remake R{getNextRemakeNumber()} (R4+)
+              </Typography>
+              <Typography variant="body2">
+                The product has exceeded the normal remake limit (3 remakes). 
+                Production must pause and be investigated before continuing.
+              </Typography>
+            </MuiAlert>
+            
+            <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>
+              Investigation Notes (Required)
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              Please document the investigation findings before proceeding with this remake:
+            </Typography>
+            <TextField
+              fullWidth
+              multiline
+              rows={4}
+              value={remakeEscalationNotes}
+              onChange={(e) => setRemakeEscalationNotes(e.target.value)}
+              placeholder="Enter investigation notes explaining the cause of repeated remakes and corrective actions taken..."
+              error={remakeEscalationDialogOpen && !remakeEscalationNotes.trim()}
+              helperText={remakeEscalationDialogOpen && !remakeEscalationNotes.trim() ? 'Investigation notes are required' : ''}
+            />
+            
+            <Box sx={{ mt: 2, p: 2, bgcolor: '#fff3e0', borderRadius: 1 }}>
+              <Typography variant="body2" color="warning.dark">
+                <strong>Note:</strong> This remake will be logged with escalation status. 
+                A manager must review and approve before this production can continue to final QC.
+              </Typography>
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={handleCloseRemakeEscalation} color="inherit">
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleConfirmRemakeEscalation} 
+            variant="contained" 
+            color="error"
+            disabled={!remakeEscalationNotes.trim()}
+            startIcon={<WarningIcon />}
+          >
+            Confirm & Proceed with R{getNextRemakeNumber()}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
        {/* Add Part Dialog */}
        <Dialog open={addPartDialogOpen} onClose={handleCloseAddPartDialog} maxWidth="sm" fullWidth>

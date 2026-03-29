@@ -79,6 +79,7 @@ interface TrackProductionRequest {
   rejectReasonId?: number;
   notes?: string;
   productionDate?: string;
+  escalationNotes?: string;
 }
 
 interface TrackProductionResponse {
@@ -355,6 +356,7 @@ export const productionService = {
     rejectReasonId?: number;
     notes?: string;
     productionDate?: string;
+    escalationNotes?: string;
   }): Promise<any> {
     const response = await apiClient.post<any>('/production/track-part', data);
     return response;
