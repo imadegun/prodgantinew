@@ -44,6 +44,7 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   Add as AddIcon,
+  ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import { IconButton } from '@mui/material';
 import { useAppSelector, useAppDispatch } from '../hooks/useAppSelector';
@@ -1484,6 +1485,7 @@ const ProductionTracking = () => {
                 value={selectedPOL}
                 onChange={handlePOLChange}
                 SelectProps={{ native: true }}
+                InputLabelProps={{ shrink: true }}
               >
                 <option value="">Select a POL...</option>
                 {pols.map((pol) => (
@@ -1508,6 +1510,7 @@ const ProductionTracking = () => {
                 onChange={handleProductChange}
                 disabled={!selectedPOL}
                 SelectProps={{ native: true }}
+                InputLabelProps={{ shrink: true }}
               >
                 <option value="">Select a product...</option>
                 {polDetails.map((detail) => (
@@ -1774,159 +1777,168 @@ const ProductionTracking = () => {
                       </Box>
                     ) : (
                       <Grid container spacing={3}>
-                        {/* Left Side - Category Tabs */}
-                        <Grid item xs={12} md={7}>
-                          <Card sx={{ height: '100%' }}>
-                            <CardContent>
-                              <Typography variant="h6" gutterBottom>Production Categories</Typography>
-                              <Tabs
-                                orientation="vertical"
-                                value={categories.indexOf(partCurrentCategory)}
-                                onChange={handlePartCategoryTabChange}
-                                variant="scrollable"
-                                scrollButtons="auto"
-                                sx={{ 
-                                  minWidth: 280,
-                                  '& .MuiTabs-flexContainer': {
-                                    alignItems: 'stretch',
-                                  },
-                                  '& .MuiTab-root': { 
-                                    justifyContent: 'flex-start',
-                                    textAlign: 'left',
-                                    borderRadius: 1,
-                                    mb: 0.5,
-                                    minWidth: 260,
-                                    maxWidth: 'none',
-                                  }
-                                }}
-                              >
-                                {categories.map((category, index) => (
-                                  <Tab 
-                                    key={category} 
-                                    label={
-                                      <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%', gap: 0.5 }}>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                                          <Chip 
-                                            label={categoryLabels[category]} 
-                                            size="small"
-                                            sx={{ 
-                                              bgcolor: categoryColors[category], 
-                                              color: 'white',
-                                              fontWeight: 'bold',
-                                              minWidth: 70
-                                            }}
-                                          />
-                                        </Box>
-                                        <Box sx={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 0.5, mt: 0.5, width: '100%', overflow: 'visible' }}>
-                                          {getStagesForCategory(category)?.filter((stage: string) => getCategoryForStage(stage) === category)?.map((stage: string) => {
-                                            const stageData = partStageRecords[stage];
-                                            const totalRejects = stageData?.totalRejectQuantity || stageData?.records?.reduce((sum: number, r: any) => sum + (r.rejectQuantity || 0), 0) || 0;
-                                            if (stageData?.totalQuantity > 0 || totalRejects > 0) {
-                                              return (
-                                                <Box key={stage} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
-                                                  <Typography variant="caption" sx={{ fontSize: '0.75rem', minWidth: 'auto', color: 'text.secondary', whiteSpace: 'nowrap' }}>
-                                                    {stageNames[stage]?.split(' ')[0] || stage}:
-                                                  </Typography>
-                                                  <Box sx={{ display: 'flex', gap: 0.5 }}>
-                                                    <Chip
-                                                      label={stageData.totalQuantity}
-                                                      size="small"
-                                                      color="success"
-                                                      sx={{ height: 26, fontSize: '0.85rem', fontWeight: 'bold', minWidth: 35 }}
-                                                    />
-                                                    {totalRejects > 0 && (
-                                                      <Chip
-                                                        label={`-${totalRejects}`}
-                                                        size="small"
-                                                        color="error"
-                                                        sx={{ height: 26, fontSize: '0.85rem', fontWeight: 'bold', minWidth: 35 }}
-                                                      />
-                                                    )}
-                                                  </Box>
-                                                </Box>
-                                              );
-                                            }
-                                            return null;
-                                          })}
-                                        </Box>
-                                      </Box>
-                                    }
-                                    value={index}
-                                  />
-                                ))}
-                              </Tabs>
-                              
-                              {/* Stages in selected category */}
-                              <Box sx={{ mt: 2 }}>
-                                <Typography variant="subtitle2" gutterBottom>
-                                  Stages in {categoryLabels[partCurrentCategory]}:
+                          {/* Left Side - Category Stages Navigation */}
+                          <Grid item xs={12} md={4}>
+                            <Card sx={{ height: '100%', border: '1px solid', borderColor: 'divider' }}>
+                              <CardContent sx={{ p: 2 }}>
+                                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <BuildIcon fontSize="small" />
+                                  Production Stages
                                 </Typography>
-                                <Grid container spacing={1}>
-                                  {getStagesForCategory(partCurrentCategory).map(stage => {
-                                    const stageData = partStageRecords[stage];
-                                    const isActive = partCurrentStage === stage;
-                                    const hasData = stageData?.totalQuantity > 0;
-                                     
+                                
+                                {/* Category Accordion List */}
+                                <Box sx={{ mt: 1 }}>
+                                  {categories.map((category) => {
+                                    const categoryStages = getStagesForCategory(category);
+                                    const isActiveCategory = partCurrentCategory === category;
+                                    const categoryHasData = categoryStages.some(stage => {
+                                      const stageData = partStageRecords[stage];
+                                      return stageData?.totalQuantity > 0;
+                                    });
+                                    
                                     return (
-                                      <Grid item xs={6} key={stage}>
-                                        <Button
-                                          fullWidth
-                                          variant={isActive ? 'contained' : hasData ? 'outlined' : 'text'}
-                                          color={isActive ? 'primary' : hasData ? 'success' : 'inherit'}
-                                          onClick={() => handlePartStageSelect(stage)}
-                                          size="small"
-                                          sx={{ 
-                                            justifyContent: 'flex-start',
-                                            bgcolor: isActive ? categoryColors[partCurrentCategory] : undefined,
+                                      <Accordion
+                                        key={category}
+                                        expanded={isActiveCategory}
+                                        onChange={() => {
+                                          const index = categories.indexOf(category);
+                                          handlePartCategoryTabChange({} as React.SyntheticEvent, index);
+                                        }}
+                                        sx={{
+                                          mb: 1,
+                                          '&:before': { display: 'none' },
+                                          borderRadius: 1,
+                                          border: '1px solid',
+                                          borderColor: isActiveCategory ? categoryColors[category] : 'divider',
+                                          bgcolor: isActiveCategory ? `${categoryColors[category]}08` : 'background.paper',
+                                        }}
+                                      >
+                                        <AccordionSummary
+                                          expandIcon={<ExpandMoreIcon />}
+                                          sx={{
+                                            minHeight: 48,
+                                            '& .MuiAccordionSummary-content': {
+                                              alignItems: 'center',
+                                              gap: 1,
+                                            }
                                           }}
                                         >
-                                          {stageNames[stage] || stage}
-                                          {hasData && (
-                                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                              <Chip
-                                                label={stageData.totalQuantity}
-                                                size="small"
-                                                color="success"
-                                                sx={{ height: 20, fontSize: '0.7rem' }}
-                                              />
-                                              {(stageData.totalRejectQuantity || stageData.records?.reduce((sum: number, r: any) => sum + (r.rejectQuantity || 0), 0) > 0) && (
-                                                <Chip
-                                                  label={`-${stageData.totalRejectQuantity || stageData.records?.reduce((sum: number, r: any) => sum + (r.rejectQuantity || 0), 0)}`}
-                                                  size="small"
-                                                  color="error"
-                                                  sx={{ ml: 0.5, height: 20, fontSize: '0.7rem' }}
-                                                />
-                                              )}
-                                            </Box>
+                                          <Chip
+                                            label={categoryLabels[category]}
+                                            size="small"
+                                            sx={{
+                                              bgcolor: categoryColors[category],
+                                              color: 'white',
+                                              fontWeight: 'bold',
+                                              fontSize: '0.75rem',
+                                            }}
+                                          />
+                                          {categoryHasData && (
+                                            <Chip
+                                              label="Has Data"
+                                              size="small"
+                                              color="success"
+                                              variant="outlined"
+                                              sx={{ ml: 'auto', mr: 1, height: 20, fontSize: '0.7rem' }}
+                                            />
                                           )}
-                                        </Button>
-                                      </Grid>
+                                        </AccordionSummary>
+                                        <AccordionDetails sx={{ p: 1, pt: 0 }}>
+                                          <Grid container spacing={0.5}>
+                                            {categoryStages.map((stage) => {
+                                              const stageData = partStageRecords[stage];
+                                              const isActive = partCurrentStage === stage;
+                                              const hasData = stageData?.totalQuantity > 0;
+                                              const totalRejects = stageData?.totalRejectQuantity ||
+                                                stageData?.records?.reduce((sum: number, r: any) => sum + (r.rejectQuantity || 0), 0) || 0;
+                                              
+                                              return (
+                                                <Grid item xs={12} key={stage}>
+                                                  <Button
+                                                    fullWidth
+                                                    variant={isActive ? 'contained' : 'text'}
+                                                    color={isActive ? 'primary' : 'inherit'}
+                                                    onClick={() => handlePartStageSelect(stage)}
+                                                    size="small"
+                                                    sx={{
+                                                      justifyContent: 'space-between',
+                                                      textAlign: 'left',
+                                                      py: 0.75,
+                                                      px: 1.5,
+                                                      bgcolor: isActive ? categoryColors[category] : undefined,
+                                                      '&:hover': {
+                                                        bgcolor: isActive ? categoryColors[category] : 'action.hover',
+                                                      }
+                                                    }}
+                                                  >
+                                                    <Typography variant="body2" sx={{ fontWeight: isActive ? 600 : 400 }}>
+                                                      {stageNames[stage] || stage}
+                                                    </Typography>
+                                                    {hasData && (
+                                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                        <Chip
+                                                          label={stageData.totalQuantity}
+                                                          size="small"
+                                                          color="success"
+                                                          sx={{ height: 22, fontSize: '0.75rem', fontWeight: 'bold' }}
+                                                        />
+                                                        {totalRejects > 0 && (
+                                                          <Chip
+                                                            label={`-${totalRejects}`}
+                                                            size="small"
+                                                            color="error"
+                                                            sx={{ height: 22, fontSize: '0.75rem', fontWeight: 'bold' }}
+                                                          />
+                                                        )}
+                                                      </Box>
+                                                    )}
+                                                  </Button>
+                                                </Grid>
+                                              );
+                                            })}
+                                          </Grid>
+                                        </AccordionDetails>
+                                      </Accordion>
                                     );
                                   })}
-                                </Grid>
-                              </Box>
-                            </CardContent>
-                          </Card>
-                        </Grid>
-                        
-                        {/* Right Side - Input Form */}
-                        <Grid item xs={12} md={5} sx={{ width: { md: '50%' }, flexBasis: { md: '50%' }, maxWidth: { md: '50%' } }}>
-                          <Card sx={{ height: '100%' }}>
-                            <CardContent>
-                              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                                <Chip 
-                                  label={categoryLabels[partCurrentCategory]} 
-                                  sx={{ 
-                                    bgcolor: categoryColors[partCurrentCategory], 
-                                    color: 'white',
-                                    fontWeight: 'bold',
-                                    mr: 2
-                                  }}
-                                />
-                                <Typography variant="h6">
-                                  {stageNames[partCurrentStage] || partCurrentStage}
-                                </Typography>
-                              </Box>
+                                </Box>
+                              </CardContent>
+                            </Card>
+                          </Grid>
+                          
+                          {/* Right Side - Input Form */}
+                          <Grid item xs={12} md={8}>
+                            <Card sx={{ height: '100%', border: '1px solid', borderColor: 'divider' }}>
+                              <CardContent sx={{ p: 3 }}>
+                                {/* Current Stage Header */}
+                                <Box sx={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  mb: 3,
+                                  pb: 2,
+                                  borderBottom: '2px solid',
+                                  borderColor: categoryColors[partCurrentCategory],
+                                }}>
+                                  <Chip
+                                    label={categoryLabels[partCurrentCategory]}
+                                    sx={{
+                                      bgcolor: categoryColors[partCurrentCategory],
+                                      color: 'white',
+                                      fontWeight: 'bold',
+                                      mr: 2,
+                                      fontSize: '0.875rem',
+                                      height: 32,
+                                    }}
+                                  />
+                                  <Box>
+                                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                                      {stageNames[partCurrentStage] || partCurrentStage}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                      Enter production data for this stage
+                                    </Typography>
+                                  </Box>
+                                </Box>
                               
                               {/* Current Stage Info */}
                               {(() => {
@@ -1934,19 +1946,43 @@ const ProductionTracking = () => {
                                 const hasRejects = (stageData?.totalRejectQuantity || stageData?.records?.reduce((sum: number, r: any) => sum + (r.rejectQuantity || 0), 0) || 0) > 0;
                                 if (!stageData || (stageData.totalQuantity === 0 && !hasRejects)) return null;
                                 return (
-                                  <Box sx={{ mb: 3, p: 2, bgcolor: '#e8f5e9', borderRadius: 1 }}>
-                                    <Typography variant="subtitle2" color="success.main">
-                                      Already recorded: {stageData.totalQuantity} good
-                                      {hasRejects && (
-                                        <Typography variant="subtitle2" color="error.main" sx={{ ml: 1 }}>
-                                          + {stageData.totalRejectQuantity || stageData.records?.reduce((sum: number, r: any) => sum + (r.rejectQuantity || 0), 0)} reject
-                                        </Typography>
-                                      )}
-                                    </Typography>
+                                  <Box sx={{
+                                    mb: 3,
+                                    p: 2,
+                                    bgcolor: '#e8f5e9',
+                                    borderRadius: 2,
+                                    border: '1px solid',
+                                    borderColor: '#a5d6a7',
+                                  }}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                                      <Typography variant="subtitle2" color="success.main" sx={{ fontWeight: 600 }}>
+                                        📊 Already Recorded
+                                      </Typography>
+                                      <Box sx={{ display: 'flex', gap: 1 }}>
+                                        <Chip
+                                          label={`${stageData.totalQuantity} good`}
+                                          size="small"
+                                          color="success"
+                                          sx={{ fontWeight: 'bold' }}
+                                        />
+                                        {hasRejects && (
+                                          <Chip
+                                            label={`${stageData.totalRejectQuantity || stageData.records?.reduce((sum: number, r: any) => sum + (r.rejectQuantity || 0), 0)} reject`}
+                                            size="small"
+                                            color="error"
+                                            sx={{ fontWeight: 'bold' }}
+                                          />
+                                        )}
+                                      </Box>
+                                    </Box>
                                     {stageData.latestRecord && (
-                                      <Typography variant="body2" color="text.secondary">
-                                        Last entry: {format(new Date(stageData.latestRecord.createdAt), 'MMM dd, yyyy HH:mm')}
-                                        {stageData.latestRecord.notes && ` - ${stageData.latestRecord.notes}`}
+                                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                                        🕒 Last entry: {format(new Date(stageData.latestRecord.createdAt), 'MMM dd, yyyy HH:mm')}
+                                        {stageData.latestRecord.notes && (
+                                          <Typography component="span" variant="body2" sx={{ ml: 1, fontStyle: 'italic' }}>
+                                            — {stageData.latestRecord.notes}
+                                          </Typography>
+                                        )}
                                       </Typography>
                                     )}
                                   </Box>
@@ -1954,7 +1990,14 @@ const ProductionTracking = () => {
                               })()}
                               
                               {/* Input Form */}
-                              <Grid container spacing={2}>
+                              <Grid container spacing={2.5}>
+                                {/* Section: Basic Info */}
+                                <Grid item xs={12}>
+                                  <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, fontWeight: 600 }}>
+                                    📅 Basic Information
+                                  </Typography>
+                                </Grid>
+                                
                                 {/* Row 1: Date and Operator */}
                                 <Grid item xs={12} sm={6}>
                                   <TextField
@@ -1993,6 +2036,13 @@ const ProductionTracking = () => {
                                   </FormControl>
                                 </Grid>
                                 
+                                {/* Section: Quantity */}
+                                <Grid item xs={12}>
+                                  <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, mt: 1, fontWeight: 600 }}>
+                                    📦 Quantity
+                                  </Typography>
+                                </Grid>
+                                
                                 {/* Row 2: Quantity */}
                                 <Grid item xs={12}>
                                   <TextField
@@ -2004,6 +2054,13 @@ const ProductionTracking = () => {
                                     required
                                     size="medium"
                                   />
+                                </Grid>
+                                
+                                {/* Section: Reject & Remake */}
+                                <Grid item xs={12}>
+                                  <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, mt: 1, fontWeight: 600 }}>
+                                    ❌ Reject & Remake
+                                  </Typography>
                                 </Grid>
                                 
                                 {/* Row 3: Reject and Reason */}
@@ -2110,6 +2167,13 @@ const ProductionTracking = () => {
                                   </Grid>
                                 )}
                                 
+                                {/* Section: Notes */}
+                                <Grid item xs={12}>
+                                  <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, mt: 1, fontWeight: 600 }}>
+                                    📝 Notes
+                                  </Typography>
+                                </Grid>
+                                
                                 {/* Row 5: Notes */}
                                 <Grid item xs={12}>
                                   <TextField
@@ -2124,8 +2188,19 @@ const ProductionTracking = () => {
                                 
                                 {/* Validation Error Alert */}
                                 {partValidationError && (
-                                  <Box sx={{ mb: 2, p: 2, bgcolor: '#ffebee', borderRadius: 1 }}>
-                                    <Typography variant="body2" color="error">
+                                  <Box sx={{
+                                    mb: 2,
+                                    p: 2,
+                                    bgcolor: '#ffebee',
+                                    borderRadius: 2,
+                                    border: '1px solid',
+                                    borderColor: '#ef9a9a',
+                                    display: 'flex',
+                                    alignItems: 'flex-start',
+                                    gap: 1,
+                                  }}>
+                                    <WarningIcon color="error" fontSize="small" sx={{ mt: 0.25 }} />
+                                    <Typography variant="body2" color="error.main" sx={{ fontWeight: 500 }}>
                                       {partValidationError}
                                     </Typography>
                                   </Box>
@@ -2133,29 +2208,49 @@ const ProductionTracking = () => {
                                 
                                 {/* Submit Button */}
                                 <Grid item xs={12}>
-                                  <Button
-                                    variant="contained"
-                                    fullWidth
-                                    size="large"
-                                    startIcon={<SaveIcon />}
-                                    onClick={handlePartSubmit}
-                                    disabled={!partQuantity || parseInt(partQuantity) <= 0 || !partProductionDate || !partSelectedOperator}
-                                    sx={{ 
-                                      py: 1.5,
-                                      bgcolor: categoryColors[partCurrentCategory],
-                                      '&:hover': {
+                                  <Box sx={{
+                                    mt: 2,
+                                    pt: 2,
+                                    borderTop: '1px solid',
+                                    borderColor: 'divider',
+                                  }}>
+                                    <Button
+                                      variant="contained"
+                                      fullWidth
+                                      size="large"
+                                      startIcon={<SaveIcon />}
+                                      onClick={handlePartSubmit}
+                                      disabled={!partQuantity || parseInt(partQuantity) <= 0 || !partProductionDate || !partSelectedOperator}
+                                      sx={{
+                                        py: 1.75,
+                                        fontSize: '1rem',
+                                        fontWeight: 600,
                                         bgcolor: categoryColors[partCurrentCategory],
-                                        opacity: 0.9,
-                                      }
-                                    }}
-                                  >
-                                    Save Part Production Data
-                                  </Button>
-                                  {!partSelectedOperator && Boolean(partProductionDate) && (
-                                    <Typography variant="caption" color="error" sx={{ mt: 0.5, display: 'block', textAlign: 'center' }}>
-                                      Operator is required
-                                    </Typography>
-                                  )}
+                                        boxShadow: 2,
+                                        '&:hover': {
+                                          bgcolor: categoryColors[partCurrentCategory],
+                                          opacity: 0.9,
+                                          boxShadow: 4,
+                                        },
+                                        '&:disabled': {
+                                          bgcolor: 'action.disabledBackground',
+                                          color: 'action.disabled',
+                                        }
+                                      }}
+                                    >
+                                      Save Production Data
+                                    </Button>
+                                    {!partSelectedOperator && Boolean(partProductionDate) && (
+                                      <Typography variant="caption" color="error" sx={{ mt: 1, display: 'block', textAlign: 'center' }}>
+                                        ⚠️ Operator is required
+                                      </Typography>
+                                    )}
+                                    {(!partQuantity || parseInt(partQuantity) <= 0) && (
+                                      <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block', textAlign: 'center' }}>
+                                        Enter quantity to enable save
+                                      </Typography>
+                                    )}
+                                  </Box>
                                 </Grid>
                               </Grid>
                             </CardContent>
