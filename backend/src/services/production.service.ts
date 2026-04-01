@@ -1,6 +1,6 @@
 import { prisma } from '../config/database';
 import { AppError } from '../middleware/error.middleware';
-import { ProductionStage, ProductCategory, RemakeType, ProductType } from '@prisma/client';
+import { ProductionStage } from '@prisma/client';
 import { productService } from './product.service';
 
 interface TrackProductionData {
@@ -1077,7 +1077,7 @@ export class ProductionService {
     const users = await prisma.user.findMany({
       where: { 
         role: 'WORKER',
-        isActive: true,
+        is_active: true,
       },
       select: {
         id: true,

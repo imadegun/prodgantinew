@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Grid,
@@ -53,10 +53,11 @@ import { fetchPOLs } from '../store/slices/polSlice';
 import { fetchActiveProduction } from '../store/slices/productionSlice';
 import { productionService } from '../services/production.service';
 import { polService } from '../services/pol.service';
+import { stageService, StageCategory, ProductionStage } from '../services/stage.service';
 import { format } from 'date-fns';
 
-// Stage names mapping
-const stageNames: Record<string, string> = {
+// Default fallback data (used when API fails)
+const defaultStageNames: Record<string, string> = {
   THROWING: 'Throwing',
   TRIMMING: 'Trimming',
   DECORATION: 'Decoration',
@@ -76,12 +77,11 @@ const stageNames: Record<string, string> = {
   COLOR_DECORATION: 'Color Decoration',
   QC_GOOD: 'Good',
   QC_REJECT: 'Reject',
-  QC_RE_FIRING: 'BU',
+  QC_RE_FIRING: 'Re-Firing',
   QC_SECOND: 'Second',
 };
 
-// Category colors
-const categoryColors: Record<string, string> = {
+const defaultCategoryColors: Record<string, string> = {
   FORMING: '#4caf50',
   DECOR: '#ff9800',
   DRYING: '#9c27b0',
@@ -90,27 +90,7 @@ const categoryColors: Record<string, string> = {
   QC: '#607d8b',
 };
 
-// Stage to category mapping
-const getCategoryForStage = (stage: string): string => {
-  const formingStages = ['THROWING', 'TRIMMING'];
-  const decorStages = ['DECORATION'];
-  const dryingStages = ['DRYING'];
-  const firingStages = ['LOAD_BISQUE', 'OUT_BISQUE', 'LOAD_HIGH_FIRING', 'OUT_HIGH_FIRING', 'LOAD_RAKU_FIRING', 'OUT_RAKU_FIRING', 'LOAD_LUSTER_FIRING', 'OUT_LUSTER_FIRING'];
-  const glazingStages = ['SANDING', 'WAXING', 'DIPPING', 'SPRAYING', 'COLOR_DECORATION'];
-  const qcStages = ['QC_GOOD', 'QC_REJECT', 'QC_RE_FIRING', 'QC_SECOND'];
-
-  if (formingStages.includes(stage)) return 'FORMING';
-  if (decorStages.includes(stage)) return 'DECOR';
-  if (dryingStages.includes(stage)) return 'DRYING';
-  if (firingStages.includes(stage)) return 'FIRING';
-  if (glazingStages.includes(stage)) return 'GLAZING';
-  if (qcStages.includes(stage)) return 'QC';
-
-  return 'FORMING';
-};
-
-// Category labels
-const categoryLabels: Record<string, string> = {
+const defaultCategoryLabels: Record<string, string> = {
   FORMING: 'Forming',
   DECOR: 'Decoration',
   DRYING: 'Drying',
@@ -119,7 +99,6 @@ const categoryLabels: Record<string, string> = {
   QC: 'QC',
 };
 
-// Default stages grouped by category (used when workflow not available)
 const defaultCategoryStages: Record<string, string[]> = {
   FORMING: ['THROWING', 'TRIMMING'],
   DECOR: ['DECORATION'],
@@ -129,12 +108,16 @@ const defaultCategoryStages: Record<string, string[]> = {
   QC: ['QC_GOOD', 'QC_REJECT', 'QC_RE_FIRING', 'QC_SECOND'],
 };
 
-// Firing stages that require oven selection
-const firingStages = ['LOAD_BISQUE', 'OUT_BISQUE', 'LOAD_HIGH_FIRING', 'OUT_HIGH_FIRING', 'LOAD_RAKU_FIRING', 'OUT_RAKU_FIRING', 'LOAD_LUSTER_FIRING', 'OUT_LUSTER_FIRING'];
+const defaultFiringStages = ['LOAD_BISQUE', 'OUT_BISQUE', 'LOAD_HIGH_FIRING', 'OUT_HIGH_FIRING', 'LOAD_RAKU_FIRING', 'OUT_RAKU_FIRING', 'LOAD_LUSTER_FIRING', 'OUT_LUSTER_FIRING'];
 
 const ProductionTracking = () => {
   const dispatch = useAppDispatch();
   const { pols } = useAppSelector((state) => state.pol);
+  
+  // Dynamic stages state
+  const [stageCategories, setStageCategories] = useState<StageCategory[]>([]);
+  const [allStages, setAllStages] = useState<ProductionStage[]>([]);
+  const [stagesLoading, setStagesLoading] = useState(true);
   
   const [selectedPOL, setSelectedPOL] = useState('');
   const [selectedProduct, setSelectedProduct] = useState('');
@@ -236,7 +219,111 @@ const ProductionTracking = () => {
   const [combineLoading, setCombineLoading] = useState(false);
   const [partCombinations, setPartCombinations] = useState<any[]>([]);
   
-  const categories = ['FORMING', 'DECOR', 'DRYING', 'FIRING', 'GLAZING', 'QC'];
+  // Load stages from API
+  useEffect(() => {
+    const loadStages = async () => {
+      try {
+        setStagesLoading(true);
+        const categories = await stageService.getCategories();
+        setStageCategories(categories);
+        
+        // Flatten all stages from categories
+        const stages = categories.flatMap(cat => cat.stages || []);
+        setAllStages(stages);
+      } catch (error) {
+        console.error('Error loading stages:', error);
+        // Use default data on error
+        setStageCategories([]);
+        setAllStages([]);
+      } finally {
+        setStagesLoading(false);
+      }
+    };
+    
+    loadStages();
+  }, []);
+  
+  // Dynamic mappings from API data
+  const stageNames = useMemo(() => {
+    if (allStages.length > 0) {
+      return allStages.reduce((acc, stage) => {
+        acc[stage.code] = stage.name;
+        return acc;
+      }, {} as Record<string, string>);
+    }
+    return defaultStageNames;
+  }, [allStages]);
+  
+  const categoryColors = useMemo(() => {
+    if (stageCategories.length > 0) {
+      return stageCategories.reduce((acc, cat) => {
+        acc[cat.code] = cat.color;
+        return acc;
+      }, {} as Record<string, string>);
+    }
+    return defaultCategoryColors;
+  }, [stageCategories]);
+  
+  const categoryLabels = useMemo(() => {
+    if (stageCategories.length > 0) {
+      return stageCategories.reduce((acc, cat) => {
+        acc[cat.code] = cat.name;
+        return acc;
+      }, {} as Record<string, string>);
+    }
+    return defaultCategoryLabels;
+  }, [stageCategories]);
+  
+  const categories = useMemo(() => {
+    if (stageCategories.length > 0) {
+      return stageCategories.map(cat => cat.code);
+    }
+    return ['FORMING', 'DECOR', 'DRYING', 'FIRING', 'GLAZING', 'QC'];
+  }, [stageCategories]);
+  
+  const categoryStages = useMemo(() => {
+    if (stageCategories.length > 0) {
+      return stageCategories.reduce((acc, cat) => {
+        acc[cat.code] = (cat.stages || []).map(s => s.code);
+        return acc;
+      }, {} as Record<string, string[]>);
+    }
+    return defaultCategoryStages;
+  }, [stageCategories]);
+  
+  const firingStages = useMemo(() => {
+    if (allStages.length > 0) {
+      return allStages.filter(s => s.requiresOven).map(s => s.code);
+    }
+    return defaultFiringStages;
+  }, [allStages]);
+  
+  // Get category for a stage
+  const getCategoryForStage = (stageCode: string): string => {
+    if (stageCategories.length > 0) {
+      for (const cat of stageCategories) {
+        if (cat.stages?.some(s => s.code === stageCode)) {
+          return cat.code;
+        }
+      }
+    }
+    // Fallback to default mapping
+    const formingStages = ['THROWING', 'TRIMMING'];
+    const decorStages = ['DECORATION'];
+    const dryingStages = ['DRYING'];
+    const firingStagesList = ['LOAD_BISQUE', 'OUT_BISQUE', 'LOAD_HIGH_FIRING', 'OUT_HIGH_FIRING', 'LOAD_RAKU_FIRING', 'OUT_RAKU_FIRING', 'LOAD_LUSTER_FIRING', 'OUT_LUSTER_FIRING'];
+    const glazingStages = ['SANDING', 'WAXING', 'DIPPING', 'SPRAYING', 'COLOR_DECORATION'];
+    const qcStages = ['QC_GOOD', 'QC_REJECT', 'QC_RE_FIRING', 'QC_SECOND'];
+
+    if (formingStages.includes(stageCode)) return 'FORMING';
+    if (decorStages.includes(stageCode)) return 'DECOR';
+    if (dryingStages.includes(stageCode)) return 'DRYING';
+    if (firingStagesList.includes(stageCode)) return 'FIRING';
+    if (glazingStages.includes(stageCode)) return 'GLAZING';
+    if (qcStages.includes(stageCode)) return 'QC';
+
+    return 'FORMING';
+  };
   
   useEffect(() => {
     dispatch(fetchPOLs({ page: 1, limit: 50 }));
@@ -773,12 +860,12 @@ const ProductionTracking = () => {
     return null;
   };
 
-  // Fallback default stages if no workflow is loaded
+  // Get stages for a category (use dynamic data or fallback)
   const getStagesForCategory = (category: string): string[] => {
     if (productionWorkflow?.stages && productionWorkflow.stages.length > 0) {
       return productionWorkflow.stages.filter((stage: string) => getCategoryForStage(stage) === category);
     }
-    return defaultCategoryStages[category] || [];
+    return categoryStages[category] || [];
   };
 
   const loadProductionInfo = async (): Promise<void> => {

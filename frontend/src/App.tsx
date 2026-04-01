@@ -20,6 +20,7 @@ import Reports from './pages/Reports';
 import Logbook from './pages/Logbook';
 import Revisions from './pages/RevisionTickets';
 import Settings from './pages/Settings';
+import StageManagement from './pages/StageManagement';
 
 function App() {
   return (
@@ -42,6 +43,7 @@ function App() {
             <Route path="logbook" element={<Logbook />} />
             <Route path="revisions" element={<Revisions />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="stages" element={<StageManagement />} />
           </Route>
 
           {/* Fallback */}

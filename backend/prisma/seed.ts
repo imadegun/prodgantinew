@@ -14,12 +14,14 @@ async function main() {
   await prisma.productionRecord.deleteMany();
   await prisma.revisionTicket.deleteMany();
   await prisma.logbookEntry.deleteMany();
+  await prisma.productPart.deleteMany();
   await prisma.pOLDetail.deleteMany();
   await prisma.pOL.deleteMany();
   await prisma.user.deleteMany();
   await prisma.oven.deleteMany();
   await prisma.defectReason.deleteMany();
-  await prisma.productPart.deleteMany();
+  await prisma.productionStageConfig.deleteMany();
+  await prisma.stageCategory.deleteMany();
 
   console.log('✅ Existing data cleared');
 
@@ -30,23 +32,29 @@ async function main() {
   
   const manager = await prisma.user.create({
     data: {
+      id: 'user-manager-001',
       username: 'manager',
       email: 'manager@prodganti.com',
       passwordHash: hashedPassword,
       fullName: 'John Manager',
       role: 'MANAGER',
-      isActive: true,
+      is_active: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     },
   });
 
   const admin = await prisma.user.create({
     data: {
+      id: 'user-admin-001',
       username: 'admin',
       email: 'admin@prodganti.com',
       passwordHash: hashedPassword,
       fullName: 'Jane Admin',
       role: 'ADMIN',
-      isActive: true,
+      is_active: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     },
   });
 
@@ -59,15 +67,19 @@ async function main() {
     { username: 'worker5', fullName: 'Putu Antariksa' },
   ];
 
-  for (const worker of workerNames) {
+  for (let i = 0; i < workerNames.length; i++) {
+    const worker = workerNames[i];
     await prisma.user.create({
       data: {
+        id: `user-worker-${String(i + 1).padStart(3, '0')}`,
         username: worker.username,
         email: `${worker.username}@prodganti.com`,
         passwordHash: hashedPassword,
         fullName: worker.fullName,
         role: 'WORKER',
-        isActive: true,
+        is_active: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       },
     });
   }
@@ -81,6 +93,7 @@ async function main() {
   for (let i = 1; i <= 7; i++) {
     const oven = await prisma.oven.create({
       data: {
+        id: `oven-${String(i).padStart(3, '0')}`,
         ovenCode: `K${i}`,
         ovenName: `Kiln ${i}`,
         status: 'ACTIVE',
@@ -98,6 +111,7 @@ async function main() {
   const defectReasons = await Promise.all([
     prisma.defectReason.create({
       data: {
+        id: 'defect-001',
         category: 'Defect',
         description: 'General defect during production',
         isActive: true,
@@ -105,6 +119,7 @@ async function main() {
     }),
     prisma.defectReason.create({
       data: {
+        id: 'defect-002',
         category: 'Break',
         description: 'Item broken during handling or processing',
         isActive: true,
@@ -112,6 +127,7 @@ async function main() {
     }),
     prisma.defectReason.create({
       data: {
+        id: 'defect-003',
         category: 'Glaze Color',
         description: 'Glaze color does not match specification',
         isActive: true,
@@ -119,6 +135,7 @@ async function main() {
     }),
     prisma.defectReason.create({
       data: {
+        id: 'defect-004',
         category: 'Crack',
         description: 'Cracks in the ceramic piece',
         isActive: true,
@@ -126,6 +143,7 @@ async function main() {
     }),
     prisma.defectReason.create({
       data: {
+        id: 'defect-005',
         category: 'Warping',
         description: 'Piece warped during firing',
         isActive: true,
@@ -133,6 +151,7 @@ async function main() {
     }),
     prisma.defectReason.create({
       data: {
+        id: 'defect-006',
         category: 'Size Issue',
         description: 'Size does not meet specifications',
         isActive: true,
@@ -140,6 +159,7 @@ async function main() {
     }),
     prisma.defectReason.create({
       data: {
+        id: 'defect-007',
         category: 'Surface Defect',
         description: 'Surface imperfections',
         isActive: true,
@@ -147,6 +167,7 @@ async function main() {
     }),
     prisma.defectReason.create({
       data: {
+        id: 'defect-008',
         category: 'Firing Issue',
         description: 'Problems during firing process',
         isActive: true,
@@ -156,11 +177,225 @@ async function main() {
   
   console.log('✅ Defect Reasons created (8 reasons)');
 
+  // Create Stage Categories
+  console.log('📊 Creating Stage Categories...');
+  
+  const stageCategories = await Promise.all([
+    prisma.stageCategory.create({
+      data: {
+        id: 'cat-forming',
+        code: 'FORMING',
+        name: 'Forming',
+        color: '#4caf50',
+        sortOrder: 1,
+        isActive: true,
+      },
+    }),
+    prisma.stageCategory.create({
+      data: {
+        id: 'cat-decor',
+        code: 'DECOR',
+        name: 'Decoration',
+        color: '#ff9800',
+        sortOrder: 2,
+        isActive: true,
+      },
+    }),
+    prisma.stageCategory.create({
+      data: {
+        id: 'cat-drying',
+        code: 'DRYING',
+        name: 'Drying',
+        color: '#9c27b0',
+        sortOrder: 3,
+        isActive: true,
+      },
+    }),
+    prisma.stageCategory.create({
+      data: {
+        id: 'cat-firing',
+        code: 'FIRING',
+        name: 'Firing',
+        color: '#f44336',
+        sortOrder: 4,
+        isActive: true,
+      },
+    }),
+    prisma.stageCategory.create({
+      data: {
+        id: 'cat-glazing',
+        code: 'GLAZING',
+        name: 'Glazing',
+        color: '#2196f3',
+        sortOrder: 5,
+        isActive: true,
+      },
+    }),
+    prisma.stageCategory.create({
+      data: {
+        id: 'cat-qc',
+        code: 'QC',
+        name: 'Quality Control',
+        color: '#607d8b',
+        sortOrder: 6,
+        isActive: true,
+      },
+    }),
+  ]);
+  
+  console.log('✅ Stage Categories created (6 categories)');
+
+  // Create Production Stage Configs
+  console.log('⚙️ Creating Production Stage Configs...');
+  
+  const stageConfigs = await Promise.all([
+    // FORMING stages
+    prisma.productionStageConfig.create({
+      data: {
+        id: 'stage-throwing',
+        code: 'THROWING',
+        name: 'Throwing',
+        categoryId: 'cat-forming',
+        sortOrder: 1,
+        isActive: true,
+        requiresOven: false,
+        description: 'Initial shaping of clay on the wheel',
+      },
+    }),
+    prisma.productionStageConfig.create({
+      data: {
+        id: 'stage-trimming',
+        code: 'TRIMMING',
+        name: 'Trimming',
+        categoryId: 'cat-forming',
+        sortOrder: 2,
+        isActive: true,
+        requiresOven: false,
+        description: 'Trimming and refining the shape',
+      },
+    }),
+    prisma.productionStageConfig.create({
+      data: {
+        id: 'stage-decoration',
+        code: 'DECORATION',
+        name: 'Decoration',
+        categoryId: 'cat-forming',
+        sortOrder: 3,
+        isActive: true,
+        requiresOven: false,
+        description: 'Adding decorative elements',
+      },
+    }),
+    // DRYING stages
+    prisma.productionStageConfig.create({
+      data: {
+        id: 'stage-drying',
+        code: 'DRYING',
+        name: 'Drying',
+        categoryId: 'cat-drying',
+        sortOrder: 1,
+        isActive: true,
+        requiresOven: false,
+        description: 'Air drying before bisque firing',
+      },
+    }),
+    // FIRING stages
+    prisma.productionStageConfig.create({
+      data: {
+        id: 'stage-load-bisque',
+        code: 'LOAD_BISQUE',
+        name: 'Load Bisque',
+        categoryId: 'cat-firing',
+        sortOrder: 1,
+        isActive: true,
+        requiresOven: true,
+        description: 'Loading items into bisque kiln',
+      },
+    }),
+    prisma.productionStageConfig.create({
+      data: {
+        id: 'stage-out-bisque',
+        code: 'OUT_BISQUE',
+        name: 'Out Bisque',
+        categoryId: 'cat-firing',
+        sortOrder: 2,
+        isActive: true,
+        requiresOven: true,
+        description: 'Unloading items from bisque kiln',
+      },
+    }),
+    prisma.productionStageConfig.create({
+      data: {
+        id: 'stage-load-high-firing',
+        code: 'LOAD_HIGH_FIRING',
+        name: 'Load High Firing',
+        categoryId: 'cat-firing',
+        sortOrder: 3,
+        isActive: true,
+        requiresOven: true,
+        description: 'Loading items into high fire kiln',
+      },
+    }),
+    prisma.productionStageConfig.create({
+      data: {
+        id: 'stage-out-high-firing',
+        code: 'OUT_HIGH_FIRING',
+        name: 'Out High Firing',
+        categoryId: 'cat-firing',
+        sortOrder: 4,
+        isActive: true,
+        requiresOven: true,
+        description: 'Unloading items from high fire kiln',
+      },
+    }),
+    // GLAZING stages
+    prisma.productionStageConfig.create({
+      data: {
+        id: 'stage-sanding',
+        code: 'SANDING',
+        name: 'Sanding',
+        categoryId: 'cat-glazing',
+        sortOrder: 1,
+        isActive: true,
+        requiresOven: false,
+        description: 'Sanding the surface before glazing',
+      },
+    }),
+    prisma.productionStageConfig.create({
+      data: {
+        id: 'stage-dipping',
+        code: 'DIPPING',
+        name: 'Dipping',
+        categoryId: 'cat-glazing',
+        sortOrder: 2,
+        isActive: true,
+        requiresOven: false,
+        description: 'Dipping items in glaze',
+      },
+    }),
+    // QC stages
+    prisma.productionStageConfig.create({
+      data: {
+        id: 'stage-qc-good',
+        code: 'QC_GOOD',
+        name: 'QC Good',
+        categoryId: 'cat-qc',
+        sortOrder: 1,
+        isActive: true,
+        requiresOven: false,
+        description: 'Quality control - passed inspection',
+      },
+    }),
+  ]);
+  
+  console.log('✅ Production Stage Configs created (11 stages)');
+
   // Create POLs
   console.log('📋 Creating POLs...');
   
   const pol1 = await prisma.pOL.create({
     data: {
+      id: 'pol-001',
       poNumber: 'PO-2026-001',
       clientName: 'ABC Corporation',
       poDate: new Date('2026-01-15'),
@@ -173,6 +408,7 @@ async function main() {
 
   const pol2 = await prisma.pOL.create({
     data: {
+      id: 'pol-002',
       poNumber: 'PO-2026-002',
       clientName: 'XYZ Limited',
       poDate: new Date('2026-01-20'),
@@ -185,11 +421,12 @@ async function main() {
 
   const pol3 = await prisma.pOL.create({
     data: {
+      id: 'pol-003',
       poNumber: 'PO-2026-003',
       clientName: '123 Industries',
       poDate: new Date('2026-01-25'),
       deliveryDate: new Date('2026-03-01'),
-      status: 'DRAFT',
+      status: 'PENDING',
       notes: 'Large order pending approval',
       createdBy: manager.id,
     },
@@ -197,6 +434,7 @@ async function main() {
 
   const pol4 = await prisma.pOL.create({
     data: {
+      id: 'pol-004',
       poNumber: 'PO-2026-004',
       clientName: 'Sample Inc',
       poDate: new Date('2026-02-01'),
@@ -209,6 +447,7 @@ async function main() {
 
   const pol5 = await prisma.pOL.create({
     data: {
+      id: 'pol-005',
       poNumber: 'PO-2026-005',
       clientName: 'Test Client',
       poDate: new Date('2026-02-10'),
@@ -227,11 +466,11 @@ async function main() {
   // POL 1 - Teapot
   const detail1 = await prisma.pOLDetail.create({
     data: {
+      id: 'detail-001',
       polId: pol1.id,
       productCode: 'TP-MAIN',
       productName: 'Teapot (Main Body)',
       quantity: 50,
-      extraBuffer: 15,
       productType: 'PLAIN',
       color: 'Blue',
       texture: 'Smooth',
@@ -244,11 +483,11 @@ async function main() {
 
   const detail2 = await prisma.pOLDetail.create({
     data: {
+      id: 'detail-002',
       polId: pol1.id,
       productCode: 'TP-LID',
       productName: 'Teapot (Lid)',
       quantity: 50,
-      extraBuffer: 15,
       productType: 'PLAIN',
       color: 'Blue',
       texture: 'Smooth',
@@ -262,11 +501,11 @@ async function main() {
   // POL 2 - Cups
   const detail3 = await prisma.pOLDetail.create({
     data: {
+      id: 'detail-003',
       polId: pol2.id,
       productCode: 'CP-MAIN',
       productName: 'Cup (Main Body)',
       quantity: 100,
-      extraBuffer: 20,
       productType: 'DECOR',
       color: 'White',
       texture: 'Smooth',
@@ -280,11 +519,11 @@ async function main() {
   // POL 3 - Bowls
   const detail4 = await prisma.pOLDetail.create({
     data: {
+      id: 'detail-004',
       polId: pol3.id,
       productCode: 'BWL-MAIN',
       productName: 'Bowl (Main)',
       quantity: 75,
-      extraBuffer: 10,
       productType: 'HAND_BUILT',
       color: 'Red',
       texture: 'Textured',
@@ -297,11 +536,11 @@ async function main() {
 
   const detail5 = await prisma.pOLDetail.create({
     data: {
+      id: 'detail-005',
       polId: pol4.id,
       productCode: 'PLT-MAIN',
       productName: 'Plate (Main)',
       quantity: 50,
-      extraBuffer: 15,
       productType: 'SLAB_TRAY',
       color: 'Green',
       texture: 'Textured',
@@ -320,6 +559,7 @@ async function main() {
   // Teapot Body Parts
   await prisma.productPart.create({
     data: {
+      id: 'part-001',
       polDetailId: detail1.id,
       partName: 'Body',
       partType: 'MAIN',
@@ -330,6 +570,7 @@ async function main() {
   
   await prisma.productPart.create({
     data: {
+      id: 'part-002',
       polDetailId: detail1.id,
       partName: 'Lid',
       partType: 'SUB',
@@ -340,6 +581,7 @@ async function main() {
   
   await prisma.productPart.create({
     data: {
+      id: 'part-003',
       polDetailId: detail1.id,
       partName: 'Spout',
       partType: 'SUB',
@@ -350,6 +592,7 @@ async function main() {
   
   await prisma.productPart.create({
     data: {
+      id: 'part-004',
       polDetailId: detail1.id,
       partName: 'Handle',
       partType: 'SUB',
@@ -361,6 +604,7 @@ async function main() {
   // Teapot Lid Parts
   await prisma.productPart.create({
     data: {
+      id: 'part-005',
       polDetailId: detail2.id,
       partName: 'Lid Body',
       partType: 'MAIN',
@@ -371,6 +615,7 @@ async function main() {
   
   await prisma.productPart.create({
     data: {
+      id: 'part-006',
       polDetailId: detail2.id,
       partName: 'Knob',
       partType: 'SUB',
@@ -387,221 +632,201 @@ async function main() {
   // Forming stage for Teapot Main Body
   const productionRecord1 = await prisma.productionRecord.create({
     data: {
+      id: 'record-001',
       polDetailId: detail1.id,
       stage: 'THROWING',
       quantity: 50,
-      rejectQuantity: 0,
-      remakeCycle: 0,
       notes: 'Initial throwing completed',
-      createdBy: admin.id,
+      userId: admin.id,
     },
   });
 
   await prisma.productionRecord.create({
     data: {
+      id: 'record-002',
       polDetailId: detail1.id,
       stage: 'TRIMMING',
       quantity: 48,
-      rejectQuantity: 2,
-      remakeCycle: 0,
       notes: '2 pieces cracked during trimming',
-      createdBy: admin.id,
+      userId: admin.id,
     },
   });
 
   await prisma.productionRecord.create({
     data: {
+      id: 'record-003',
       polDetailId: detail1.id,
       stage: 'DRYING',
       quantity: 48,
-      rejectQuantity: 0,
-      remakeCycle: 0,
       notes: 'Drying completed',
-      createdBy: admin.id,
+      userId: admin.id,
     },
   });
 
   await prisma.productionRecord.create({
     data: {
+      id: 'record-004',
       polDetailId: detail1.id,
       stage: 'LOAD_BISQUE',
       quantity: 48,
-      rejectQuantity: 0,
-      remakeCycle: 0,
       notes: 'Loaded into bisque kiln',
-      createdBy: admin.id,
+      userId: admin.id,
     },
   });
 
   await prisma.productionRecord.create({
     data: {
+      id: 'record-005',
       polDetailId: detail1.id,
       stage: 'OUT_BISQUE',
       quantity: 48,
-      rejectQuantity: 0,
-      remakeCycle: 0,
       notes: 'Out of bisque kiln',
-      createdBy: admin.id,
+      userId: admin.id,
     },
   });
 
   // Firing stage
   await prisma.productionRecord.create({
     data: {
+      id: 'record-006',
       polDetailId: detail1.id,
       stage: 'LOAD_HIGH_FIRING',
       quantity: 48,
-      rejectQuantity: 0,
-      remakeCycle: 0,
       notes: 'Loaded into high fire kiln',
-      createdBy: admin.id,
+      userId: admin.id,
     },
   });
 
   await prisma.productionRecord.create({
     data: {
+      id: 'record-007',
       polDetailId: detail1.id,
       stage: 'OUT_HIGH_FIRING',
       quantity: 47,
-      rejectQuantity: 1,
-      remakeCycle: 0,
       notes: '1 piece cracked during firing',
-      createdBy: admin.id,
+      userId: admin.id,
     },
   });
 
   // Glazing stage
   await prisma.productionRecord.create({
     data: {
+      id: 'record-008',
       polDetailId: detail1.id,
       stage: 'SANDING',
       quantity: 46,
-      rejectQuantity: 0,
-      remakeCycle: 0,
       notes: 'Sanding completed',
-      createdBy: admin.id,
+      userId: admin.id,
     },
   });
 
   await prisma.productionRecord.create({
     data: {
+      id: 'record-009',
       polDetailId: detail1.id,
       stage: 'DIPPING',
       quantity: 46,
-      rejectQuantity: 0,
-      remakeCycle: 0,
       notes: 'Blue glaze dip completed',
-      createdBy: admin.id,
+      userId: admin.id,
     },
   });
 
   // QC stage
   await prisma.productionRecord.create({
     data: {
+      id: 'record-010',
       polDetailId: detail1.id,
       stage: 'QC_GOOD',
       quantity: 45,
-      rejectQuantity: 1,
-      remakeCycle: 0,
       notes: '1 piece rejected - crack in rim',
-      createdBy: admin.id,
+      userId: admin.id,
     },
   });
 
   // Forming stage for Teapot Lid
   await prisma.productionRecord.create({
     data: {
+      id: 'record-011',
       polDetailId: detail2.id,
       stage: 'THROWING',
       quantity: 50,
-      rejectQuantity: 0,
-      remakeCycle: 0,
       notes: 'Lid throwing completed',
-      createdBy: admin.id,
+      userId: admin.id,
     },
   });
 
   await prisma.productionRecord.create({
     data: {
+      id: 'record-012',
       polDetailId: detail2.id,
       stage: 'TRIMMING',
       quantity: 50,
-      rejectQuantity: 0,
-      remakeCycle: 0,
       notes: 'Lid trimming completed',
-      createdBy: admin.id,
+      userId: admin.id,
     },
   });
 
   // Forming stage for Cups
   await prisma.productionRecord.create({
     data: {
+      id: 'record-013',
       polDetailId: detail3.id,
       stage: 'THROWING',
       quantity: 100,
-      rejectQuantity: 0,
-      remakeCycle: 0,
       notes: 'Cup throwing completed',
-      createdBy: admin.id,
+      userId: admin.id,
     },
   });
 
   await prisma.productionRecord.create({
     data: {
+      id: 'record-014',
       polDetailId: detail3.id,
       stage: 'DECORATION',
       quantity: 100,
-      rejectQuantity: 0,
-      remakeCycle: 0,
       notes: 'Decoration in progress',
-      createdBy: admin.id,
+      userId: admin.id,
     },
   });
 
-  console.log('✅ Production Records created (10 records)');
+  console.log('✅ Production Records created (14 records)');
 
   // Create Decoration Tasks for Cups
   console.log('🎨 Creating Decoration Tasks...');
   
   await prisma.decorationTask.create({
     data: {
+      id: 'task-001',
       polDetailId: detail3.id,
       taskName: 'Carving Pattern',
-      taskDescription: 'Carve floral pattern on cup body',
-      quantityRequired: 100,
-      quantityCompleted: 50,
-      quantityRejected: 0,
-      status: 'IN_PROGRESS',
-      notes: 'Carving in progress',
-      createdBy: admin.id,
+      description: 'Carve floral pattern on cup body',
+      quantity: 100,
+      completed: false,
+      userId: admin.id,
     },
   });
 
   await prisma.decorationTask.create({
     data: {
+      id: 'task-002',
       polDetailId: detail3.id,
       taskName: 'Handle Installation',
-      taskDescription: 'Attach handles to cup body',
-      quantityRequired: 100,
-      quantityCompleted: 0,
-      quantityRejected: 0,
-      status: 'PENDING',
-      notes: 'Waiting for carving to complete',
-      createdBy: admin.id,
+      description: 'Attach handles to cup body',
+      quantity: 100,
+      completed: false,
+      userId: admin.id,
     },
   });
 
   await prisma.decorationTask.create({
     data: {
+      id: 'task-003',
       polDetailId: detail3.id,
       taskName: 'Color Decoration',
-      taskDescription: 'Apply color decoration to cups',
-      quantityRequired: 100,
-      quantityCompleted: 0,
-      quantityRejected: 0,
-      status: 'PENDING',
-      notes: 'Waiting for carving to complete',
-      createdBy: admin.id,
+      description: 'Apply color decoration to cups',
+      quantity: 100,
+      completed: false,
+      userId: admin.id,
     },
   });
 
@@ -612,15 +837,14 @@ async function main() {
   
   const alert1 = await prisma.discrepancyAlert.create({
     data: {
+      id: 'alert-001',
       polId: pol1.id,
       polDetailId: detail1.id,
       stage: 'TRIMMING',
       expectedQuantity: 50,
       actualQuantity: 48,
       difference: -2,
-      alertType: 'QUANTITY_DISCREPANCY',
-      alertMessage: 'Trimming quantity (48) is less than previous stage (50)',
-      priority: 'WARNING',
+      priority: 'MEDIUM',
       status: 'OPEN',
       reportedBy: admin.id,
     },
@@ -628,15 +852,14 @@ async function main() {
 
   const alert2 = await prisma.discrepancyAlert.create({
     data: {
+      id: 'alert-002',
       polId: pol1.id,
       polDetailId: detail1.id,
       stage: 'OUT_HIGH_FIRING',
       expectedQuantity: 48,
       actualQuantity: 47,
       difference: -1,
-      alertType: 'QUANTITY_DISCREPANCY',
-      alertMessage: 'Firing quantity (47) is less than previous stage (48)',
-      priority: 'WARNING',
+      priority: 'MEDIUM',
       status: 'OPEN',
       reportedBy: admin.id,
     },
@@ -644,15 +867,14 @@ async function main() {
 
   const alert3 = await prisma.discrepancyAlert.create({
     data: {
+      id: 'alert-003',
       polId: pol1.id,
       polDetailId: detail1.id,
       stage: 'QC_GOOD',
       expectedQuantity: 50,
       actualQuantity: 45,
       difference: -5,
-      alertType: 'QUANTITY_DISCREPANCY',
-      alertMessage: 'QC Good quantity (45) is less than order quantity (50). Remake required.',
-      priority: 'CRITICAL',
+      priority: 'HIGH',
       status: 'OPEN',
       reportedBy: admin.id,
     },
@@ -665,57 +887,57 @@ async function main() {
   
   await prisma.logbookEntry.create({
     data: {
+      id: 'log-001',
       polId: pol1.id,
       polDetailId: detail1.id,
-      stage: 'TRIMMING',
-      issueType: 'PROCESS_ISSUE',
-      description: '2 pieces cracked during trimming',
-      severity: 'MEDIUM',
-      resolution: 'Adjusted drying time and humidity control',
+      userId: admin.id,
+      entryDate: new Date(),
       status: 'RESOLVED',
-      createdBy: admin.id,
+      notes: '2 pieces cracked during trimming',
+      issues: 'Cracking during trimming',
+      actions: 'Adjusted drying time and humidity control',
     },
   });
 
   await prisma.logbookEntry.create({
     data: {
+      id: 'log-002',
       polId: pol1.id,
       polDetailId: detail1.id,
-      stage: 'OUT_HIGH_FIRING',
-      issueType: 'QUALITY_ISSUE',
-      description: '1 piece cracked in rim during firing',
-      severity: 'HIGH',
-      resolution: 'Adjust firing temperature profile',
-      status: 'OPEN',
-      createdBy: admin.id,
+      userId: admin.id,
+      entryDate: new Date(),
+      status: 'ISSUES',
+      notes: '1 piece cracked in rim during firing',
+      issues: 'Crack in rim during firing',
+      actions: 'Adjust firing temperature profile',
     },
   });
 
   await prisma.logbookEntry.create({
     data: {
+      id: 'log-003',
       polId: pol1.id,
       polDetailId: detail1.id,
-      stage: 'QC_GOOD',
-      issueType: 'QUALITY_ISSUE',
-      description: '1 piece rejected - crack in rim',
-      severity: 'MEDIUM',
-      resolution: 'Remake as QC Good',
+      userId: admin.id,
+      entryDate: new Date(),
       status: 'RESOLVED',
-      createdBy: admin.id,
+      notes: '1 piece rejected - crack in rim',
+      issues: 'Crack in rim',
+      actions: 'Remake as QC Good',
     },
   });
 
   await prisma.logbookEntry.create({
     data: {
+      id: 'log-004',
       polId: pol2.id,
       polDetailId: detail3.id,
-      stage: 'DECORATION',
-      issueType: 'PROCESS_ISSUE',
-      description: 'Decoration taking longer than expected',
-      severity: 'LOW',
-      resolution: 'Monitor progress and adjust timeline',
-      status: 'IN_PROGRESS',
-      createdBy: admin.id,
+      userId: admin.id,
+      entryDate: new Date(),
+      status: 'ISSUES',
+      notes: 'Decoration taking longer than expected',
+      issues: 'Decoration delay',
+      actions: 'Monitor progress and adjust timeline',
     },
   });
 
@@ -726,33 +948,31 @@ async function main() {
   
   const revision1 = await prisma.revisionTicket.create({
     data: {
+      id: 'rev-001',
       polId: pol1.id,
       polDetailId: detail1.id,
-      ticketNumber: 'REV-2026-001',
-      revisionType: 'DESIGN_CHANGE',
+      createdBy: manager.id,
+      type: 'DESIGN',
       issueType: 'DESIGN',
       severity: 'MEDIUM',
       description: 'Customer requested lid design change from flat to domed shape for better heat retention',
-      reason: 'Customer requested premium version with improved heat retention during product review meeting',
-      impactAssessment: 'Mold modification required: 2 days, Production delay: 3 days',
+      proposedSolution: 'Modify mold to create domed lid shape',
       status: 'DRAFT',
-      createdBy: manager.id,
     },
   });
 
   const revision2 = await prisma.revisionTicket.create({
     data: {
+      id: 'rev-002',
       polId: pol3.id,
       polDetailId: detail4.id,
-      ticketNumber: 'REV-2026-002',
-      revisionType: 'MATERIAL_CHANGE',
+      createdBy: manager.id,
+      type: 'MATERIAL',
       issueType: 'MATERIAL',
       severity: 'HIGH',
       description: 'Clay type needs to be changed from Stoneware to Porcelain for better durability',
-      reason: 'Current Stoneware clay causing cracking issues in hand-built bowls',
-      impactAssessment: 'Material change will improve durability by 40%',
+      proposedSolution: 'Switch to Porcelain clay body',
       status: 'DRAFT',
-      createdBy: manager.id,
     },
   });
 
@@ -762,6 +982,7 @@ async function main() {
   console.log('📊 Creating Activity Logs...');
   await prisma.activityLog.create({
     data: {
+      id: 'activity-001',
       userId: manager.id,
       action: 'CREATE_POL',
       entityType: 'POL',
@@ -772,6 +993,7 @@ async function main() {
 
   await prisma.activityLog.create({
     data: {
+      id: 'activity-002',
       userId: manager.id,
       action: 'ADD_POL_DETAIL',
       entityType: 'POL_DETAIL',
@@ -782,6 +1004,7 @@ async function main() {
 
   await prisma.activityLog.create({
     data: {
+      id: 'activity-003',
       userId: admin.id,
       action: 'TRACK_PRODUCTION',
       entityType: 'PRODUCTION_RECORD',
@@ -791,7 +1014,8 @@ async function main() {
   });
 
   await prisma.activityLog.create({
-      data: {
+    data: {
+      id: 'activity-004',
       userId: admin.id,
       action: 'CREATE_DISCREPANCY_ALERT',
       entityType: 'DISCREPANCY_ALERT',
@@ -817,10 +1041,16 @@ async function main() {
   console.log('🔍 Defect Reasons Created:');
   console.log('   - Defect, Break, Glaze Color, Crack, Warping, Size Issue, Surface Defect, Firing Issue (8 reasons)');
   console.log('');
+  console.log('📊 Stage Categories Created:');
+  console.log('   - Forming, Decoration, Drying, Firing, Glazing, Quality Control (6 categories)');
+  console.log('');
+  console.log('⚙️ Production Stage Configs Created:');
+  console.log('   - 11 stages across all categories');
+  console.log('');
   console.log('📋 POLs Created:');
   console.log('   - PO-2026-001: ABC Corporation (IN_PROGRESS)');
   console.log('   - PO-2026-002: XYZ Limited (IN_PROGRESS)');
-  console.log('   - PO-2026-003: 123 Industries (DRAFT)');
+  console.log('   - PO-2026-003: 123 Industries (PENDING)');
   console.log('   - PO-2026-004: Sample Inc (COMPLETED)');
   console.log('   - PO-2026-005: Test Client (CANCELLED)');
   console.log('');
@@ -841,20 +1071,20 @@ async function main() {
   console.log('   - Cup (Main Body): 2 records (Throwing, Decoration)');
   console.log('');
   console.log('🎨 Decoration Tasks Created:');
-  console.log('   - Carving Pattern: 50/100 completed (IN_PROGRESS)');
-  console.log('   - Handle Installation: 0/100 pending (PENDING)');
-  console.log('   - Color Decoration: 0/100 pending (PENDING)');
+  console.log('   - Carving Pattern: 0/100 pending');
+  console.log('   - Handle Installation: 0/100 pending');
+  console.log('   - Color Decoration: 0/100 pending');
   console.log('');
   console.log('🚨 Discrepancy Alerts Created:');
-  console.log('   - TRIMMING: 48 vs 50 (WARNING)');
-  console.log('   - Firing: 47 vs 48 (WARNING)');
-  console.log('   - QC Good: 45 vs 50 (CRITICAL)');
+  console.log('   - TRIMMING: 48 vs 50 (MEDIUM)');
+  console.log('   - Firing: 47 vs 48 (MEDIUM)');
+  console.log('   - QC Good: 45 vs 50 (HIGH)');
   console.log('');
   console.log('📝 Logbook Entries Created:');
   console.log('   - TRIMMING issue: Resolved');
-  console.log('   - Firing issue: Open');
+  console.log('   - Firing issue: Issues');
   console.log('   - QC issue: Resolved');
-  console.log('   - Decoration issue: In Progress');
+  console.log('   - Decoration issue: Issues');
   console.log('');
   console.log('📋 Revision Tickets Created:');
   console.log('   - Lid design change: Draft');
@@ -863,7 +1093,7 @@ async function main() {
   console.log('📊 Activity Logs Created:');
   console.log('   - 4 activity logs recorded');
   console.log('');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('✅ Database seed completed successfully!');
   console.log('');
   console.log('🔐 Test Credentials:');
@@ -874,10 +1104,12 @@ async function main() {
   console.log('   - Users: 7 (1 manager, 1 admin, 5 workers)');
   console.log('   - Ovens: 7');
   console.log('   - Defect Reasons: 8');
+  console.log('   - Stage Categories: 6');
+  console.log('   - Production Stage Configs: 11');
   console.log('   - Product Parts: 6');
   console.log('   - POLs: 5');
   console.log('   - POL Details: 5');
-  console.log('   - Production Records: 12');
+  console.log('   - Production Records: 14');
   console.log('   - Decoration Tasks: 3');
   console.log('   - Discrepancy Alerts: 3');
   console.log('   - Logbook Entries: 4');

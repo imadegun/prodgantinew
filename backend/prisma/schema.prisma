@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,7 +7,260 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Enums
+model User {
+  id                                                          String             @id
+  username                                                    String             @unique
+  passwordHash                                                String?            @map("password")
+  fullName                                                    String?            @map("fullName")
+  role                                                        UserRole
+  createdAt                                                   DateTime           @default(now()) @map("createdAt")
+  updatedAt                                                   DateTime           @map("updatedAt")
+  lastLogin                                                   DateTime?          @map("lastLogin")
+  email                                                       String?            @unique @map("email")
+  is_active                                                   Boolean            @default(true)
+  activity_logs                                               ActivityLog[]
+  discrepancy_alerts_discrepancy_alerts_acknowledgedByTousers DiscrepancyAlert[] @relation("discrepancy_alerts_acknowledgedByTousers")
+  discrepancy_alerts_discrepancy_alerts_reportedByTousers     DiscrepancyAlert[] @relation("discrepancy_alerts_reportedByTousers")
+  discrepancy_alerts_discrepancy_alerts_resolvedByTousers     DiscrepancyAlert[] @relation("discrepancy_alerts_resolvedByTousers")
+  logbook_entries                                             LogbookEntry[]
+  pols                                                        POL[]              @relation("POLCreatedBy")
+  production_records                                          ProductionRecord[]
+  revision_tickets_revision_tickets_approvedByTousers         RevisionTicket[]   @relation("revision_tickets_approvedByTousers")
+  revision_tickets_revision_tickets_createdByTousers          RevisionTicket[]   @relation("revision_tickets_createdByTousers")
+
+  @@map("users")
+}
+
+model POL {
+  id                 String             @id
+  poNumber           String             @unique @map("polNumber")
+  clientName         String             @map("customerName")
+  poDate             DateTime           @default(now()) @map("orderDate")
+  deliveryDate       DateTime           @map("deliveryDate")
+  status             POLStatus          @default(PENDING)
+  notes              String?            @map("notes")
+  createdBy          String             @map("createdBy")
+  createdAt          DateTime           @default(now()) @map("createdAt")
+  updatedAt          DateTime           @updatedAt @map("updatedAt")
+  discrepancy_alerts DiscrepancyAlert[]
+  logbook_entries    LogbookEntry[]
+  polDetails         POLDetail[]
+  creator            User               @relation("POLCreatedBy", fields: [createdBy], references: [id])
+  revision_tickets   RevisionTicket[]
+
+  @@map("pols")
+}
+
+model POLDetail {
+  id                 String             @id
+  polId              String             @map("polId")
+  productCode        String             @map("productCode")
+  productName        String             @map("productName")
+  quantity           Int
+  productType        String             @default("PLAIN") @map("productType")
+  color              String?
+  texture            String?
+  material           String?
+  size               String?
+  finalSize          String?            @map("finalSize")
+  notes              String?
+  createdAt          DateTime           @default(now()) @map("createdAt")
+  updatedAt          DateTime           @updatedAt @map("updatedAt")
+  decoration_tasks   DecorationTask[]
+  discrepancy_alerts DiscrepancyAlert[]
+  logbook_entries    LogbookEntry[]
+  pol                POL                @relation(fields: [polId], references: [id], onDelete: Cascade)
+  production_records ProductionRecord[]
+  revision_tickets   RevisionTicket[]
+  product_parts      ProductPart[]
+
+  @@map("pol_details")
+}
+
+model ProductionRecord {
+  id          String          @id
+  polDetailId String
+  stage       ProductionStage
+  quantity    Int
+  userId      String
+  notes       String?
+  createdAt   DateTime        @default(now()) @map("createdAt")
+  updatedAt   DateTime        @updatedAt @map("updatedAt")
+  pol_details POLDetail       @relation(fields: [polDetailId], references: [id], onDelete: Cascade)
+  users       User            @relation(fields: [userId], references: [id])
+
+  @@map("production_records")
+}
+
+model DecorationTask {
+  id          String    @id
+  polDetailId String
+  taskName    String
+  description String?
+  quantity    Int       @default(0)
+  completed   Boolean   @default(false)
+  userId      String?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now()) @map("createdAt")
+  updatedAt   DateTime  @updatedAt @map("updatedAt")
+  pol_details POLDetail @relation(fields: [polDetailId], references: [id], onDelete: Cascade)
+
+  @@map("decoration_tasks")
+}
+
+model DiscrepancyAlert {
+  id                                             String          @id
+  polId                                          String
+  polDetailId                                    String
+  stage                                          ProductionStage
+  expectedQuantity                               Int
+  actualQuantity                                 Int
+  difference                                     Int
+  priority                                       AlertPriority   @default(MEDIUM)
+  status                                         AlertStatus     @default(OPEN)
+  reportedBy                                     String
+  acknowledgedBy                                 String?
+  acknowledgedAt                                 DateTime?
+  resolvedBy                                     String?
+  resolvedAt                                     DateTime?
+  resolutionNotes                                String?
+  createdAt                                      DateTime        @default(now()) @map("createdAt")
+  updatedAt                                      DateTime        @updatedAt @map("updatedAt")
+  users_discrepancy_alerts_acknowledgedByTousers User?           @relation("discrepancy_alerts_acknowledgedByTousers", fields: [acknowledgedBy], references: [id])
+  pol_details                                    POLDetail       @relation(fields: [polDetailId], references: [id], onDelete: Cascade)
+  pols                                           POL             @relation(fields: [polId], references: [id], onDelete: Cascade)
+  users_discrepancy_alerts_reportedByTousers     User            @relation("discrepancy_alerts_reportedByTousers", fields: [reportedBy], references: [id])
+  users_discrepancy_alerts_resolvedByTousers     User?           @relation("discrepancy_alerts_resolvedByTousers", fields: [resolvedBy], references: [id])
+
+  @@map("discrepancy_alerts")
+}
+
+model LogbookEntry {
+  id          String     @id
+  polId       String?
+  polDetailId String?
+  userId      String
+  entryDate   DateTime
+  status      LogStatus  @default(NORMAL)
+  notes       String
+  issues      String?
+  actions     String?
+  createdAt   DateTime   @default(now()) @map("createdAt")
+  updatedAt   DateTime   @updatedAt @map("updatedAt")
+  pol_details POLDetail? @relation(fields: [polDetailId], references: [id])
+  pols        POL?       @relation(fields: [polId], references: [id])
+  users       User       @relation(fields: [userId], references: [id])
+
+  @@map("logbook_entries")
+}
+
+model RevisionTicket {
+  id                                       String         @id
+  polId                                    String
+  polDetailId                              String?
+  createdBy                                String
+  type                                     RevisionType
+  issueType                                String
+  severity                                 Severity
+  description                              String
+  proposedSolution                         String?
+  status                                   RevisionStatus @default(DRAFT)
+  submittedAt                              DateTime?
+  approvedBy                               String?
+  approvedAt                               DateTime?
+  managerNotes                             String?
+  createdAt                                DateTime       @default(now()) @map("createdAt")
+  updatedAt                                DateTime       @updatedAt @map("updatedAt")
+  users_revision_tickets_approvedByTousers User?          @relation("revision_tickets_approvedByTousers", fields: [approvedBy], references: [id])
+  users_revision_tickets_createdByTousers  User           @relation("revision_tickets_createdByTousers", fields: [createdBy], references: [id])
+  pol_details                              POLDetail?     @relation(fields: [polDetailId], references: [id])
+  pols                                     POL            @relation(fields: [polId], references: [id])
+
+  @@map("revision_tickets")
+}
+
+model ActivityLog {
+  id         String   @id
+  userId     String
+  action     String
+  entityType String
+  entityId   String?
+  details    String?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now()) @map("createdAt")
+  users      User     @relation(fields: [userId], references: [id])
+
+  @@map("activity_logs")
+}
+
+model ProductPart {
+  id              String   @id
+  polDetailId     String
+  partName        String
+  partType        String   @default("MAIN")
+  throwingRequired Boolean  @default(true)
+  throwingOrder   Int?
+  createdAt       DateTime @default(now()) @map("createdAt")
+  updatedAt       DateTime @updatedAt @map("updatedAt")
+  pol_details     POLDetail @relation(fields: [polDetailId], references: [id], onDelete: Cascade)
+
+  @@map("product_parts")
+}
+
+model Oven {
+  id          String   @id
+  ovenCode    String   @unique
+  ovenName    String?
+  status      String   @default("ACTIVE")
+  capacity    Int?
+  createdAt   DateTime @default(now()) @map("createdAt")
+  updatedAt   DateTime @updatedAt @map("updatedAt")
+
+  @@map("ovens")
+}
+
+model DefectReason {
+  id          String   @id
+  category    String
+  description String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("createdAt")
+  updatedAt   DateTime @updatedAt @map("updatedAt")
+
+  @@map("defect_reasons")
+}
+
+model StageCategory {
+  id        String   @id
+  code      String   @unique
+  name      String
+  color     String   @default("#4caf50")
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  stages    ProductionStageConfig[]
+
+  @@map("stage_categories")
+}
+
+model ProductionStageConfig {
+  id            String        @id
+  code          String        @unique
+  name          String
+  categoryId    String
+  sortOrder     Int           @default(0)
+  isActive      Boolean       @default(true)
+  requiresOven  Boolean       @default(false)
+  description   String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  category      StageCategory @relation(fields: [categoryId], references: [id])
+
+  @@map("production_stage_configs")
+}
+
 enum UserRole {
   MANAGER
   ADMIN
@@ -18,66 +268,24 @@ enum UserRole {
 }
 
 enum POLStatus {
-  DRAFT
+  PENDING
   IN_PROGRESS
   COMPLETED
   CANCELLED
-  PENDING
-}
-
-enum ProductType {
-  NORMAL
-  DECOR
-  RAKU
-  LUSTER
-  HANDBUILD
-  SLAB
-  // Legacy values (for backward compatibility)
-  PLAIN
-  HAND_BUILT
-  SLAB_TRAY
-}
-
-enum ProductCategory {
-  FORMING
-  DECOR
-  DRYING
-  FIRING
-  GLAZING
-  QC
 }
 
 enum ProductionStage {
-  // Forming stages
   THROWING
   TRIMMING
   DECORATION
   DRYING
   LOAD_BISQUE
-  
-  // Firing stages
   OUT_BISQUE
   LOAD_HIGH_FIRING
   OUT_HIGH_FIRING
-  LOAD_RAKU_FIRING
-  OUT_RAKU_FIRING
-  LOAD_LUSTER_FIRING
-  OUT_LUSTER_FIRING
-  
-  // Glazing stages
   SANDING
-  WAXING
   DIPPING
-  SPRAYING
-  COLOR_DECORATION
-  
-  // QC stages
   QC_GOOD
-  QC_REJECT
-  QC_RE_FIRING
-  QC_SECOND
-  
-  // Additional stages from database
   FORMING
   FIRING
   GLAZING
@@ -86,9 +294,6 @@ enum ProductionStage {
 }
 
 enum AlertPriority {
-  CRITICAL
-  WARNING
-  INFORMATIONAL
   LOW
   MEDIUM
   HIGH
@@ -112,412 +317,24 @@ enum Severity {
   LOW
   MEDIUM
   HIGH
-  CRITICAL
 }
 
 enum LogStatus {
-  OPEN
-  IN_PROGRESS
-  RESOLVED
   NORMAL
   ISSUES
+  RESOLVED
 }
 
 enum RevisionStatus {
   DRAFT
-  SUBMITTED
+  PENDING_APPROVAL
   APPROVED
   REJECTED
-  IMPLEMENTED
-  PENDING_APPROVAL
 }
 
 enum RevisionType {
-  DESIGN_CHANGE
-  MATERIAL_CHANGE
-  PROCESS_CHANGE
-  OTHER
   DESIGN
   PRODUCTION
   MATERIAL
-}
-
-enum RemakeType {
-  RPR  // Remake Pre-Firing (before high firing)
-  RQC  // Remake Post-Firing (after high firing)
-}
-
-enum RemakeStatus {
-  IN_PROGRESS
-  COMPLETED
-  ESCALATED
-}
-
-enum PartType {
-  MAIN      // Primary component
-  SUB       // Additional component
-  ASSEMBLY  // Joined part
-}
-
-enum OvenStatus {
-  ACTIVE
-  MAINTENANCE
-  INACTIVE
-}
-
-// User table
-model User {
-  id            Int       @id @default(autoincrement())
-  username      String    @unique
-  email         String?   @unique @map("email")
-  passwordHash  String?   @map("password")
-  fullName      String?   @map("fullName")
-  role          UserRole  @default(WORKER)
-  createdAt     DateTime  @default(now()) @map("createdAt")
-  updatedAt     DateTime? @map("updatedAt")
-  lastLogin     DateTime? @map("lastLogin")
-  isActive      Boolean   @default(true) @map("isActive")
-  
-  // Relationships
-  pols                  POL[]              @relation("POLCreatedBy")
-  productionRecords    ProductionRecord[]
-  operatorRecords      ProductionRecord[] @relation("OperatorRecords")
-  logbookEntries       LogbookEntry[]
-  revisionTickets      RevisionTicket[]     @relation("RevisionCreatedBy")
-  approvedRevisions    RevisionTicket[]     @relation("RevisionApprovedBy")
-  activityLogs         ActivityLog[]
-  reportedAlerts       DiscrepancyAlert[] @relation("AlertReportedBy")
-  acknowledgedAlerts   DiscrepancyAlert[] @relation("AlertAcknowledgedBy")
-  resolvedAlerts       DiscrepancyAlert[] @relation("AlertResolvedBy")
-  partCombinations    ProductPartCombination[]
-  
-  @@map("users")
-}
-
-// POL (Purchase Order List) table
-model POL {
-  id            Int       @id @default(autoincrement())
-  poNumber      String    @unique @map("polNumber")
-  clientName    String    @map("customerName")
-  poDate        DateTime  @default(now()) @map("orderDate")
-  deliveryDate  DateTime  @map("deliveryDate")
-  status        POLStatus @default(DRAFT)
-  notes         String?   @map("notes")
-  createdBy     Int       @map("createdBy")
-  createdAt     DateTime  @default(now()) @map("createdAt")
-  updatedAt     DateTime? @default(now()) @updatedAt @map("updatedAt")
-  
-  // Relationships
-  creator               User?              @relation("POLCreatedBy", fields: [createdBy], references: [id])
-  polDetails           POLDetail[]
-  logbookEntries       LogbookEntry[]
-  revisionTickets      RevisionTicket[]
-  discrepancyAlerts   DiscrepancyAlert[]
-  
-  @@map("pols")
-}
-
-// POL Detail table (products within a POL)
-model POLDetail {
-  id             Int         @id @default(autoincrement())
-  polId          Int         @map("polId")
-  productCode    String      @map("productCode")
-  productName    String      @map("productName")
-  quantity       Int
-  extraBuffer    Int         @default(15) @map("extraBuffer") // Percentage
-  qtyToMake      Int         @default(0) @map("qtyToMake") // Calculated quantity to make (order + extra buffer)
-  productType    ProductType @default(NORMAL) @map("productType")
-  color          String?
-  texture        String?
-  material       String?
-  size           String?
-  finalSize      String?     @map("finalSize")
-  notes          String?
-  createdAt      DateTime    @default(now()) @map("createdAt")
-  updatedAt      DateTime    @updatedAt @map("updatedAt")
-  
-  // Relationships
-  pol                   POL                 @relation(fields: [polId], references: [id], onDelete: Cascade)
-  productionRecords    ProductionRecord[]
-  decorationTasks      DecorationTask[]
-  discrepancyAlerts   DiscrepancyAlert[]
-  logbookEntries       LogbookEntry[]
-  revisionTickets      RevisionTicket[]
-  productParts         ProductPart[]
-  remakeCycles        RemakeCycle[]
-  partCombinations    ProductPartCombination[]
-  
-  @@map("pol_details")
-}
-
-// Production Record table
-model ProductionRecord {
-  id              Int             @id @default(autoincrement())
-  polDetailId     Int             @map("pol_detail_id")
-  partId          Int?            @map("part_id") // Optional: link to specific product part
-  stage           ProductionStage
-  category        ProductCategory @default(FORMING) @map("category")
-  quantity        Int
-  rejectQuantity  Int             @default(0) @map("reject_quantity")
-  remakeCycle     Int             @default(0) @map("remake_cycle")
-  remakeType      RemakeType?     @map("remake_type")
-  ovenId          Int?            @map("oven_id")
-  operatorId      Int?            @map("operator_id")
-  rejectReasonId  Int?            @map("reject_reason_id")
-  notes           String?
-  productionDate  DateTime?       @map("production_date")
-  createdBy       Int             @map("created_by")
-  createdAt       DateTime        @default(now()) @map("createdAt")
-  updatedAt       DateTime        @updatedAt @map("updatedAt")
-  
-  // Relationships
-  polDetail       POLDetail       @relation(fields: [polDetailId], references: [id], onDelete: Cascade)
-  part            ProductPart?    @relation(fields: [partId], references: [id])
-  oven            Oven?           @relation(fields: [ovenId], references: [id])
-  operator        User?           @relation("OperatorRecords", fields: [operatorId], references: [id])
-  rejectReason    DefectReason?   @relation(fields: [rejectReasonId], references: [id])
-  user            User            @relation(fields: [createdBy], references: [id])
-  
-  @@map("production_records")
-}
-
-// Decoration Task table
-model DecorationTask {
-  id                Int       @id @default(autoincrement())
-  polDetailId       Int       @map("pol_detail_id")
-  taskName          String    @map("task_name")
-  taskDescription   String?   @map("task_description")
-  quantityRequired  Int       @default(0) @map("quantity_required")
-  quantityCompleted Int       @default(0) @map("quantity_completed")
-  quantityRejected  Int       @default(0) @map("quantity_rejected")
-  status            String    @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED
-  notes             String?
-  createdBy         Int?      @map("created_by")
-  completedAt       DateTime? @map("completed_at")
-  createdAt         DateTime  @default(now()) @map("createdAt")
-  updatedAt         DateTime  @updatedAt @map("updatedAt")
-  
-  // Relationships
-  polDetail POLDetail @relation(fields: [polDetailId], references: [id], onDelete: Cascade)
-  
-  @@map("decoration_tasks")
-}
-
-// Discrepancy Alert table
-model DiscrepancyAlert {
-  id               Int            @id @default(autoincrement())
-  polId            Int            @map("pol_id")
-  polDetailId      Int            @map("pol_detail_id")
-  stage            ProductionStage
-  expectedQuantity  Int           @map("expected_quantity")
-  actualQuantity   Int            @map("actual_quantity")
-  difference       Int
-  alertType        String         @map("alert_type")
-  alertMessage     String         @map("alert_message")
-  priority         AlertPriority  @default(WARNING)
-  status           AlertStatus    @default(OPEN)
-  reportedBy       Int            @map("reported_by")
-  acknowledgedBy   Int?           @map("acknowledged_by")
-  acknowledgedAt   DateTime?      @map("acknowledged_at")
-  resolvedBy       Int?           @map("resolved_by")
-  resolvedAt       DateTime?      @map("resolved_at")
-  resolutionNotes  String?        @map("resolution_notes")
-  createdAt        DateTime       @default(now()) @map("createdAt")
-  updatedAt        DateTime       @updatedAt @map("updatedAt")
-  
-  // Relationships
-  pol               POL         @relation(fields: [polId], references: [id], onDelete: Cascade)
-  polDetail          POLDetail  @relation(fields: [polDetailId], references: [id], onDelete: Cascade)
-  reportedByUser     User        @relation("AlertReportedBy", fields: [reportedBy], references: [id])
-  acknowledgedByUser User?       @relation("AlertAcknowledgedBy", fields: [acknowledgedBy], references: [id])
-  resolvedByUser     User?       @relation("AlertResolvedBy", fields: [resolvedBy], references: [id])
-  
-  @@map("discrepancy_alerts")
-}
-
-// Logbook Entry table
-model LogbookEntry {
-  id            Int        @id @default(autoincrement())
-  polId         Int?       @map("pol_id")
-  polDetailId   Int?       @map("pol_detail_id")
-  stage         String?
-  issueType     IssueType  @map("issue_type")
-  description   String
-  severity      Severity
-  resolution    String?
-  status        LogStatus  @default(OPEN)
-  createdBy     Int        @map("created_by")
-  createdAt     DateTime   @default(now()) @map("createdAt")
-  updatedAt     DateTime   @updatedAt @map("updatedAt")
-  
-  // Relationships
-  pol           POL?        @relation(fields: [polId], references: [id])
-  polDetail      POLDetail?  @relation(fields: [polDetailId], references: [id])
-  user          User        @relation(fields: [createdBy], references: [id])
-  
-  @@map("logbook_entries")
-}
-
-// Revision Ticket table
-model RevisionTicket {
-  id                Int             @id @default(autoincrement())
-  ticketNumber      String          @unique @map("ticket_number")
-  polId             Int             @map("pol_id")
-  polDetailId       Int?            @map("pol_detail_id")
-  createdBy         Int             @map("created_by")
-  revisionType      RevisionType    @map("revision_type")
-  issueType         String          @map("issue_type")
-  severity          Severity
-  description       String
-  reason            String
-  impactAssessment  String?         @map("impact_assessment")
-  status            RevisionStatus  @default(DRAFT)
-  submittedAt       DateTime?       @map("submitted_at")
-  approvedBy        Int?            @map("approved_by")
-  approvedAt        DateTime?       @map("approved_at")
-  managerNotes      String?         @map("manager_notes")
-  createdAt         DateTime        @default(now()) @map("createdAt")
-  updatedAt         DateTime        @updatedAt @map("updatedAt")
-  
-  // Relationships
-  pol               POL         @relation(fields: [polId], references: [id])
-  polDetail         POLDetail?  @relation(fields: [polDetailId], references: [id])
-  creator           User        @relation("RevisionCreatedBy", fields: [createdBy], references: [id])
-  approvedByUser    User?       @relation("RevisionApprovedBy", fields: [approvedBy], references: [id])
-  
-  @@map("revision_tickets")
-}
-
-// Activity Log table (for audit)
-model ActivityLog {
-  id          Int      @id @default(autoincrement())
-  userId      Int      @map("user_id")
-  action      String
-  entityType  String   @map("entity_type")
-  entityId    Int?     @map("entity_id")
-  details     String?
-  ipAddress   String?  @map("ip_address")
-  userAgent   String?  @map("user_agent")
-  createdAt   DateTime @default(now()) @map("createdAt")
-  
-  // Relationships
-  user User @relation(fields: [userId], references: [id])
-  
-  @@map("activity_logs")
-}
-
-// Product Parts table - tracks components of a product
-model ProductPart {
-  id              Int       @id @default(autoincrement())
-  polDetailId     Int       @map("pol_detail_id")
-  partName        String    @map("part_name") // Body, Lid, Spout, Handle, Base, etc.
-  partType        PartType  @default(MAIN) @map("part_type") // MAIN, SUB, ASSEMBLY
-  linkedToPartId  Int?      @map("linked_to_part_id") // For assembly connections
-  throwingRequired Boolean   @default(true) @map("throwing_required")
-  throwingOrder   Int?      @map("throwing_order") // For multi-part throwing sequence
-  createdAt       DateTime  @default(now()) @map("createdAt")
-  updatedAt       DateTime  @updatedAt @map("updatedAt")
-  
-  // Relationships
-  polDetail       POLDetail  @relation(fields: [polDetailId], references: [id], onDelete: Cascade)
-  linkedToPart    ProductPart? @relation("PartConnections", fields: [linkedToPartId], references: [id])
-  connectedParts  ProductPart[] @relation("PartConnections")
-  productionRecords ProductionRecord[]
-  combinationItems ProductPartCombinationItem[]
-  
-  @@map("product_parts")
-}
-
-// Ovens table - tracks kilns/ovens for firing
-model Oven {
-  id          Int         @id @default(autoincrement())
-  ovenCode    String      @unique @map("oven_code") // K1, K2, K3, K4, K5, K6, K7
-  ovenName    String?     @map("oven_name")
-  status      OvenStatus  @default(ACTIVE)
-  capacity    Int?        // Number of items capacity
-  createdAt   DateTime    @default(now()) @map("createdAt")
-  updatedAt   DateTime    @updatedAt @map("updatedAt")
-  
-  // Relationships
-  productionRecords ProductionRecord[]
-  
-  @@map("ovens")
-}
-
-// Defect Reasons table - tracks reject reasons
-model DefectReason {
-  id          Int       @id @default(autoincrement())
-  category    String    // Defect, Break, Glaze Color, Crack, Warping, etc.
-  description String
-  isActive    Boolean   @default(true) @map("is_active")
-  createdAt   DateTime  @default(now()) @map("createdAt")
-  updatedAt   DateTime  @updatedAt @map("updatedAt")
-  
-  // Relationships
-  productionRecords ProductionRecord[]
-  remakeCycles     RemakeCycle[]
-  
-  @@map("defect_reasons")
-}
-
-// Remake Cycles table - tracks remake/rework production
-model RemakeCycle {
-  id                Int            @id @default(autoincrement())
-  polDetailId       Int            @map("pol_detail_id")
-  originalRecordId  Int?           @map("original_record_id")
-  remakeNumber     Int            @map("remake_number") // 1, 2, 3, 4+
-  remakeType       RemakeType     @map("remake_type") // RPR or RQC
-  rejectStage      String?        @map("reject_stage")
-  rejectCategory   String?        @map("reject_category")
-  rejectReasonId   Int?           @map("reject_reason_id")
-  rejectQuantity   Int            @default(0) @map("reject_quantity")
-  status           RemakeStatus   @default(IN_PROGRESS)
-  escalatedTo      Int?           @map("escalated_to")
-  escalationNotes  String?        @map("escalation_notes")
-  createdBy        Int            @map("created_by")
-  createdAt        DateTime       @default(now()) @map("createdAt")
-  updatedAt        DateTime       @updatedAt @map("updatedAt")
-  
-  // Relationships
-  polDetail       POLDetail      @relation(fields: [polDetailId], references: [id], onDelete: Cascade)
-  rejectReason    DefectReason?  @relation(fields: [rejectReasonId], references: [id])
-  
-  @@map("remake_cycles")
-}
-
-// Product Part Combinations table - tracks combination events
-model ProductPartCombination {
-  id                Int             @id @default(autoincrement())
-  polDetailId       Int             @map("pol_detail_id")
-  combinedAtStage   ProductionStage @map("combined_at_stage")
-  combinedQuantity  Int             @map("combined_quantity")
-  combinedBy        Int             @map("combined_by")
-  combinedAt        DateTime        @default(now()) @map("combined_at")
-  notes             String?
-  createdAt         DateTime        @default(now()) @map("createdAt")
-  updatedAt         DateTime        @updatedAt @map("updatedAt")
-  
-  // Relationships
-  polDetail         POLDetail                    @relation(fields: [polDetailId], references: [id], onDelete: Cascade)
-  combinedByUser    User                         @relation(fields: [combinedBy], references: [id])
-  combinationItems  ProductPartCombinationItem[]
-  
-  @@map("product_part_combinations")
-}
-
-// Product Part Combination Items table - tracks which parts are in each combination
-model ProductPartCombinationItem {
-  id              Int                  @id @default(autoincrement())
-  combinationId   Int                  @map("combination_id")
-  partId          Int                  @map("part_id")
-  quantityUsed    Int                  @map("quantity_used")
-  createdAt       DateTime             @default(now()) @map("createdAt")
-  updatedAt       DateTime             @updatedAt @map("updatedAt")
-  
-  // Relationships
-  combination     ProductPartCombination @relation(fields: [combinationId], references: [id], onDelete: Cascade)
-  part            ProductPart           @relation(fields: [partId], references: [id])
-  
-  @@unique([combinationId, partId])
-  @@map("product_part_combination_items")
+  OTHER
 }
