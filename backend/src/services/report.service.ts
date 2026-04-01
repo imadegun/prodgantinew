@@ -4,7 +4,7 @@ import { AppError } from '../middleware/error.middleware';
 interface ReportFilters {
   startDate?: Date;
   endDate?: Date;
-  polId?: number;
+  polId?: string;
   productCode?: string;
   fromDate?: string;
   toDate?: string;
@@ -39,7 +39,7 @@ export class ReportService {
       include: {
         polDetails: {
           include: {
-            productionRecords: true,
+            production_records: true,
           },
         },
       },
@@ -49,7 +49,7 @@ export class ReportService {
     const summary = pols.map((pol: any) => {
       const totalQuantity = pol.polDetails.reduce((sum: number, d: any) => sum + d.quantity, 0);
       const completedQuantity = pol.polDetails.reduce((sum: number, d: any) => {
-        const qcRecords = d.productionRecords.filter((r: any) => r.stage === 'QC_GOOD');
+        const qcRecords = d.production_records.filter((r: any) => r.stage === 'QC_GOOD');
         return sum + qcRecords.reduce((s: number, r: any) => s + r.quantity, 0);
       }, 0);
 
@@ -95,12 +95,12 @@ export class ReportService {
     const records = await prisma.productionRecord.findMany({
       where,
       include: {
-        polDetail: {
+        pol_details: {
           include: {
             pol: true,
           },
         },
-        user: {
+        users: {
           select: {
             id: true,
             username: true,
@@ -114,10 +114,10 @@ export class ReportService {
     // Group by user
     const byUser: Record<string, any> = {};
     records.forEach((record: any) => {
-      const userId = record.createdBy;
+      const userId = record.userId;
       if (!byUser[userId]) {
         byUser[userId] = {
-          user: record.user,
+          user: record.users,
           totalQuantity: 0,
           recordCount: 0,
         };
@@ -129,11 +129,11 @@ export class ReportService {
     // Group by product
     const byProduct: Record<string, any> = {};
     records.forEach((record: any) => {
-      const productCode = record.polDetail.productCode;
+      const productCode = record.pol_details.productCode;
       if (!byProduct[productCode]) {
         byProduct[productCode] = {
           productCode,
-          productName: record.polDetail.productName,
+          productName: record.pol_details.productName,
           totalQuantity: 0,
           recordCount: 0,
         };
@@ -172,12 +172,12 @@ export class ReportService {
     const records = await prisma.productionRecord.findMany({
       where,
       include: {
-        polDetail: {
+        pol_details: {
           include: {
             pol: true,
           },
         },
-        user: {
+        users: {
           select: {
             id: true,
             username: true,
@@ -191,10 +191,10 @@ export class ReportService {
     // Group by user
     const byUser: Record<string, any> = {};
     records.forEach((record: any) => {
-      const userId = record.createdBy;
+      const userId = record.userId;
       if (!byUser[userId]) {
         byUser[userId] = {
-          user: record.user,
+          user: record.users,
           totalQuantity: 0,
           recordCount: 0,
         };
@@ -206,11 +206,11 @@ export class ReportService {
     // Group by product
     const byProduct: Record<string, any> = {};
     records.forEach((record: any) => {
-      const productCode = record.polDetail.productCode;
+      const productCode = record.pol_details.productCode;
       if (!byProduct[productCode]) {
         byProduct[productCode] = {
           productCode,
-          productName: record.polDetail.productName,
+          productName: record.pol_details.productName,
           totalQuantity: 0,
           recordCount: 0,
         };
@@ -253,20 +253,20 @@ export class ReportService {
       include: {
         polDetails: {
           include: {
-            productionRecords: true,
+            production_records: true,
           },
         },
       },
       orderBy: { poDate: 'desc' },
     }) as any;
 
-    const stages = ['THROWING', 'TRIMMING', 'DECORATION', 'DRYING', 'LOAD_BISQUE', 'OUT_BISQUE', 'LOAD_HIGH_FIRING', 'OUT_HIGH_FIRING', 'LOAD_RAKU_FIRING', 'OUT_RAKU_FIRING', 'LOAD_LUSTER_FIRING', 'OUT_LUSTER_FIRING', 'SANDING', 'WAXING', 'DIPPING', 'SPRAYING', 'COLOR_DECORATION', 'QC_GOOD', 'QC_REJECT', 'QC_RE_FIRING', 'QC_SECOND'];
+    const stages = ['THROWING', 'TRIMMING', 'DECORATION', 'DRYING', 'LOAD_BISQUE', 'OUT_BISQUE', 'LOAD_HIGH_FIRING', 'OUT_HIGH_FIRING', 'SANDING', 'DIPPING', 'QC_GOOD'];
 
     const progress = pols.map((pol: any) => {
       const detailProgress = pol.polDetails.map((detail: any) => {
         const stageProgress: Record<string, any> = {};
         stages.forEach((stage) => {
-          const records = detail.productionRecords.filter((r: any) => r.stage === stage);
+          const records = detail.production_records.filter((r: any) => r.stage === stage);
           stageProgress[stage] = {
             quantity: records.reduce((sum: number, r: any) => sum + r.quantity, 0),
             records: records.length,
@@ -320,8 +320,8 @@ export class ReportService {
     const alerts = await prisma.discrepancyAlert.findMany({
       where,
       include: {
-        pol: true,
-        polDetail: true,
+        pols: true,
+        pol_details: true,
       },
       orderBy: { createdAt: 'desc' },
     });

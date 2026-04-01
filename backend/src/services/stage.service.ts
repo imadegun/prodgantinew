@@ -4,7 +4,7 @@ import { AppError } from '../middleware/error.middleware';
 const prisma = new PrismaClient();
 
 export interface StageCategory {
-  id: number;
+  id: string;
   code: string;
   name: string;
   color: string;
@@ -14,16 +14,18 @@ export interface StageCategory {
 }
 
 export interface ProductionStageConfig {
-  id: number;
+  id: string;
   code: string;
   name: string;
-  categoryId: number;
+  categoryId: string;
   sortOrder: number;
   isActive: boolean;
   requiresOven: boolean;
   description: string | null;
+  createdAt: Date;
+  updatedAt: Date;
   category?: {
-    id: number;
+    id: string;
     code: string;
     name: string;
     color: string;
@@ -47,7 +49,7 @@ export interface UpdateCategoryDTO {
 export interface CreateStageDTO {
   code: string;
   name: string;
-  categoryId: number;
+  categoryId: string;
   sortOrder?: number;
   requiresOven?: boolean;
   description?: string;
@@ -55,7 +57,7 @@ export interface CreateStageDTO {
 
 export interface UpdateStageDTO {
   name?: string;
-  categoryId?: number;
+  categoryId?: string;
   sortOrder?: number;
   isActive?: boolean;
   requiresOven?: boolean;
@@ -110,7 +112,7 @@ export class StageService {
   /**
    * Get category by ID
    */
-  async getCategoryById(id: number): Promise<StageCategory | null> {
+  async getCategoryById(id: string): Promise<StageCategory | null> {
     try {
       const category = await prisma.stageCategory.findUnique({
         where: { id },
@@ -135,10 +137,14 @@ export class StageService {
     try {
       const category = await prisma.stageCategory.create({
         data: {
+          id: `cat-${Date.now()}`,
           code: data.code.toUpperCase(),
           name: data.name,
           color: data.color || '#4caf50',
           sortOrder: data.sortOrder || 0,
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
         },
         include: {
           stages: true,
@@ -158,7 +164,7 @@ export class StageService {
   /**
    * Update a category
    */
-  async updateCategory(id: number, data: UpdateCategoryDTO): Promise<StageCategory> {
+  async updateCategory(id: string, data: UpdateCategoryDTO): Promise<StageCategory> {
     try {
       const category = await prisma.stageCategory.update({
         where: { id },
@@ -184,7 +190,7 @@ export class StageService {
   /**
    * Delete a category (soft delete by setting isActive to false)
    */
-  async deleteCategory(id: number): Promise<void> {
+  async deleteCategory(id: string): Promise<void> {
     try {
       await prisma.stageCategory.update({
         where: { id },
@@ -232,7 +238,7 @@ export class StageService {
   /**
    * Get stages by category ID
    */
-  async getStagesByCategory(categoryId: number): Promise<ProductionStageConfig[]> {
+  async getStagesByCategory(categoryId: string): Promise<ProductionStageConfig[]> {
     try {
       const stages = await prisma.productionStageConfig.findMany({
         where: {
@@ -262,7 +268,7 @@ export class StageService {
   /**
    * Get stage by ID
    */
-  async getStageById(id: number): Promise<ProductionStageConfig | null> {
+  async getStageById(id: string): Promise<ProductionStageConfig | null> {
     try {
       const stage = await prisma.productionStageConfig.findUnique({
         where: { id },
@@ -292,12 +298,16 @@ export class StageService {
     try {
       const stage = await prisma.productionStageConfig.create({
         data: {
+          id: `stage-${Date.now()}`,
           code: data.code.toUpperCase(),
           name: data.name,
           categoryId: data.categoryId,
           sortOrder: data.sortOrder || 0,
           requiresOven: data.requiresOven || false,
           description: data.description,
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
         },
         include: {
           category: {
@@ -327,7 +337,7 @@ export class StageService {
   /**
    * Update a stage
    */
-  async updateStage(id: number, data: UpdateStageDTO): Promise<ProductionStageConfig> {
+  async updateStage(id: string, data: UpdateStageDTO): Promise<ProductionStageConfig> {
     try {
       const stage = await prisma.productionStageConfig.update({
         where: { id },
@@ -360,7 +370,7 @@ export class StageService {
   /**
    * Delete a stage (soft delete by setting isActive to false)
    */
-  async deleteStage(id: number): Promise<void> {
+  async deleteStage(id: string): Promise<void> {
     try {
       await prisma.productionStageConfig.update({
         where: { id },

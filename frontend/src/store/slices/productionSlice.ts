@@ -18,7 +18,7 @@ interface ProductionStage {
 }
 
 interface ProductionStagesResponse {
-  polDetailId: number;
+  polDetailId: string;
   productCode: string;
   productName: string;
   orderQuantity: number;
@@ -28,7 +28,7 @@ interface ProductionStagesResponse {
 }
 
 interface TrackProductionRequest {
-  polDetailId: number;
+  polDetailId: string;
   stage: string;
   quantity: number;
   rejectQuantity?: number;
@@ -82,7 +82,7 @@ interface ProductionState {
   isLoading: boolean;
   isTracking: boolean;
   error: string | null;
-  currentPolDetailId: number | null;
+  currentPolDetailId: string | null;
   qtyToMake: number | 0;
 }
 
@@ -98,7 +98,7 @@ const initialState: ProductionState = {
 
 export const fetchProductionStages = createAsyncThunk(
   'production/fetchStages',
-  async (polDetailId: number, { rejectWithValue }) => {
+  async (polDetailId: string, { rejectWithValue }) => {
     try {
       const response = await apiClient.get<ProductionStagesResponse>(
         `/production/${polDetailId}/stages`
@@ -152,7 +152,7 @@ const productionSlice = createSlice({
     clearError: (state) => {
       state.error = null;
     },
-    setCurrentPolDetailId: (state, action: PayloadAction<number>) => {
+    setCurrentPolDetailId: (state, action: PayloadAction<string>) => {
       state.currentPolDetailId = action.payload;
     },
     clearProductionStages: (state) => {

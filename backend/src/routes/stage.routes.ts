@@ -30,7 +30,7 @@ router.get('/categories/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     
-    const category = await stageService.getCategoryById(Number(id));
+    const category = await stageService.getCategoryById(id);
     
     if (!category) {
       return res.status(404).json({
@@ -102,7 +102,7 @@ router.put('/categories/:id', authenticate, async (req, res) => {
     const { id } = req.params;
     const { name, color, sortOrder, isActive } = req.body;
     
-    const category = await stageService.updateCategory(Number(id), {
+    const category = await stageService.updateCategory(id, {
       name,
       color,
       sortOrder,
@@ -130,7 +130,7 @@ router.delete('/categories/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     
-    await stageService.deleteCategory(Number(id));
+    await stageService.deleteCategory(id);
     
     res.json({
       success: true,
@@ -174,7 +174,7 @@ router.get('/by-category/:categoryId', authenticate, async (req, res) => {
   try {
     const { categoryId } = req.params;
     
-    const stages = await stageService.getStagesByCategory(Number(categoryId));
+    const stages = await stageService.getStagesByCategory(categoryId);
     
     res.json({
       success: true,
@@ -197,7 +197,7 @@ router.get('/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     
-    const stage = await stageService.getStageById(Number(id));
+    const stage = await stageService.getStageById(id);
     
     if (!stage) {
       return res.status(404).json({
@@ -243,7 +243,7 @@ router.post('/', authenticate, async (req, res) => {
     const stage = await stageService.createStage({
       code,
       name,
-      categoryId: Number(categoryId),
+      categoryId,
       sortOrder,
       requiresOven,
       description,
@@ -271,9 +271,9 @@ router.put('/:id', authenticate, async (req, res) => {
     const { id } = req.params;
     const { name, categoryId, sortOrder, isActive, requiresOven, description } = req.body;
     
-    const stage = await stageService.updateStage(Number(id), {
+    const stage = await stageService.updateStage(id, {
       name,
-      categoryId: categoryId ? Number(categoryId) : undefined,
+      categoryId,
       sortOrder,
       isActive,
       requiresOven,
@@ -301,7 +301,7 @@ router.delete('/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     
-    await stageService.deleteStage(Number(id));
+    await stageService.deleteStage(id);
     
     res.json({
       success: true,

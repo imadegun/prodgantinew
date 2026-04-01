@@ -7,10 +7,31 @@ const router = Router();
 // Get production stages for a product
 router.get('/:polDetailId/stages', authenticate, async (req, res) => {
   try {
-    const { polDetailId } = req.params;
-    const detailId = parseInt(polDetailId, 10);
+    let { polDetailId } = req.params;
     
-    const result = await productionService.getProductionStages(detailId);
+    // Handle invalid IDs (like NaN)
+    if (polDetailId === 'NaN' || !polDetailId) {
+      const referer = req.headers.referer || req.headers.referrer;
+      if (referer) {
+        const refererStr = Array.isArray(referer) ? referer[0] : referer;
+        const match = refererStr.match(/\/stages\/([^/?]+)/);
+        if (match && match[1] && match[1] !== 'NaN') {
+          polDetailId = match[1];
+        }
+      }
+    }
+    
+    if (!polDetailId || polDetailId === 'NaN') {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_ID',
+          message: 'Invalid POL detail ID',
+        },
+      });
+    }
+    
+    const result = await productionService.getProductionStages(polDetailId);
     
     res.json({
       success: true,
@@ -31,21 +52,13 @@ router.get('/:polDetailId/stages', authenticate, async (req, res) => {
 // Track production quantity
 router.post('/track', authenticate, async (req, res) => {
   try {
-    const { polDetailId, stage, quantity, rejectQuantity, remakeCycle, category, remakeType, ovenId, operatorId, rejectReasonId, productionDate, notes } = req.body;
+    const { polDetailId, stage, quantity, notes } = req.body;
     const authReq = req as any;
     
     const result = await productionService.trackProduction({
       polDetailId,
       stage,
       quantity,
-      rejectQuantity: rejectQuantity || 0,
-      remakeCycle: remakeCycle || 0,
-      category,
-      remakeType,
-      ovenId,
-      operatorId,
-      rejectReasonId,
-      productionDate: productionDate ? new Date(productionDate) : undefined,
       userId: authReq.user.userId,
       notes,
     });
@@ -91,10 +104,31 @@ router.get('/active', authenticate, async (req, res) => {
 // Get decoration tasks for a POL detail
 router.get('/decorations/:polDetailId', authenticate, async (req, res) => {
   try {
-    const { polDetailId } = req.params;
-    const detailId = parseInt(polDetailId, 10);
+    let { polDetailId } = req.params;
     
-    const result = await productionService.getDecorationTasks(detailId);
+    // Handle invalid IDs (like NaN)
+    if (polDetailId === 'NaN' || !polDetailId) {
+      const referer = req.headers.referer || req.headers.referrer;
+      if (referer) {
+        const refererStr = Array.isArray(referer) ? referer[0] : referer;
+        const match = refererStr.match(/\/decorations\/([^/?]+)/);
+        if (match && match[1] && match[1] !== 'NaN') {
+          polDetailId = match[1];
+        }
+      }
+    }
+    
+    if (!polDetailId || polDetailId === 'NaN') {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_ID',
+          message: 'Invalid POL detail ID',
+        },
+      });
+    }
+    
+    const result = await productionService.getDecorationTasks(polDetailId);
     
     res.json({
       success: true,
@@ -115,16 +149,14 @@ router.get('/decorations/:polDetailId', authenticate, async (req, res) => {
 // Create a new decoration task
 router.post('/decorations', authenticate, async (req, res) => {
   try {
-    const { polDetailId, taskName, taskDescription, quantityRequired, notes } = req.body;
-    const authReq = req as any;
+    const { polDetailId, taskName, description, quantity, userId } = req.body;
     
     const result = await productionService.createDecorationTask({
       polDetailId,
       taskName,
-      taskDescription,
-      quantityRequired,
-      notes,
-      createdBy: authReq.user.userId,
+      description,
+      quantity,
+      userId,
     });
     
     res.status(201).json({
@@ -147,14 +179,12 @@ router.post('/decorations', authenticate, async (req, res) => {
 router.put('/decorations/:taskId', authenticate, async (req, res) => {
   try {
     const { taskId } = req.params;
-    const taskIdNum = parseInt(taskId, 10);
-    const { quantityCompleted, quantityRejected, notes, status } = req.body;
+    const { quantity, completed, completedAt } = req.body;
     
-    const result = await productionService.updateDecorationTask(taskIdNum, {
-      quantityCompleted,
-      quantityRejected,
-      notes,
-      status,
+    const result = await productionService.updateDecorationTask(taskId, {
+      quantity,
+      completed,
+      completedAt: completedAt ? new Date(completedAt) : undefined,
     });
     
     res.json({
@@ -177,9 +207,8 @@ router.put('/decorations/:taskId', authenticate, async (req, res) => {
 router.delete('/decorations/:taskId', authenticate, async (req, res) => {
   try {
     const { taskId } = req.params;
-    const taskIdNum = parseInt(taskId, 10);
     
-    const result = await productionService.deleteDecorationTask(taskIdNum);
+    const result = await productionService.deleteDecorationTask(taskId);
     
     res.json({
       success: true,
@@ -213,6 +242,67 @@ router.get('/ovens', authenticate, async (req, res) => {
       error: {
         code: error.code || 'FETCH_OVENS_FAILED',
         message: error.message || 'Failed to fetch ovens',
+      },
+    });
+  }
+});
+
+// Get products for a POL (for dropdown selection)
+router.get('/products/:polId', authenticate, async (req, res) => {
+  try {
+    let { polId } = req.params;
+    
+    // Handle invalid IDs (like NaN)
+    if (polId === 'NaN' || !polId) {
+      const referer = req.headers.referer || req.headers.referrer;
+      if (referer) {
+        const refererStr = Array.isArray(referer) ? referer[0] : referer;
+        const match = refererStr.match(/\/products\/([^/?]+)/);
+        if (match && match[1] && match[1] !== 'NaN') {
+          polId = match[1];
+        }
+      }
+    }
+    
+    if (!polId || polId === 'NaN') {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_ID',
+          message: 'Invalid POL ID',
+        },
+      });
+    }
+    
+    const { polService } = await import('../services/pol.service');
+    
+    const pol = await polService.getPOLById(polId);
+    
+    // Transform polDetails to a format suitable for dropdown
+    const products = (pol.polDetails || []).map((detail: any) => ({
+      id: detail.id,
+      polDetailId: detail.id,
+      productCode: detail.productCode,
+      productName: detail.productName,
+      quantity: detail.quantity,
+      color: detail.color,
+      texture: detail.texture,
+      material: detail.material,
+      size: detail.size,
+      currentStage: detail.currentStage,
+    }));
+    
+    res.json({
+      success: true,
+      data: products,
+    });
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
+      success: false,
+      error: {
+        code: error.code || 'FETCH_PRODUCTS_FAILED',
+        message: error.message || 'Failed to fetch products for POL',
       },
     });
   }
@@ -263,7 +353,6 @@ router.get('/defect-reasons/all', authenticate, async (req, res) => {
 // Create a new defect reason
 router.post('/defect-reasons', authenticate, async (req, res) => {
   try {
-    const authReq = req as any;
     const { category, description } = req.body;
     
     if (!category || !description) {
@@ -301,10 +390,9 @@ router.post('/defect-reasons', authenticate, async (req, res) => {
 router.put('/defect-reasons/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
-    const reasonId = parseInt(id, 10);
     const { category, description, isActive } = req.body;
     
-    const result = await productionService.updateDefectReason(reasonId, {
+    const result = await productionService.updateDefectReason(id, {
       category,
       description,
       isActive,
@@ -330,9 +418,8 @@ router.put('/defect-reasons/:id', authenticate, async (req, res) => {
 router.delete('/defect-reasons/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
-    const reasonId = parseInt(id, 10);
     
-    const result = await productionService.deleteDefectReason(reasonId);
+    const result = await productionService.deleteDefectReason(id);
     
     res.json({
       success: true,
@@ -353,10 +440,31 @@ router.delete('/defect-reasons/:id', authenticate, async (req, res) => {
 // Get product parts for a POL detail
 router.get('/product-parts/:polDetailId', authenticate, async (req, res) => {
   try {
-    const { polDetailId } = req.params;
-    const detailId = parseInt(polDetailId, 10);
+    let { polDetailId } = req.params;
     
-    const result = await productionService.getProductParts(detailId);
+    // Handle invalid IDs (like NaN)
+    if (polDetailId === 'NaN' || !polDetailId) {
+      const referer = req.headers.referer || req.headers.referrer;
+      if (referer) {
+        const refererStr = Array.isArray(referer) ? referer[0] : referer;
+        const match = refererStr.match(/\/product-parts\/([^/?]+)/);
+        if (match && match[1] && match[1] !== 'NaN') {
+          polDetailId = match[1];
+        }
+      }
+    }
+    
+    if (!polDetailId || polDetailId === 'NaN') {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_ID',
+          message: 'Invalid POL detail ID',
+        },
+      });
+    }
+    
+    const result = await productionService.getProductParts(polDetailId);
     
     res.json({
       success: true,
@@ -377,13 +485,12 @@ router.get('/product-parts/:polDetailId', authenticate, async (req, res) => {
 // Create a product part
 router.post('/product-parts', authenticate, async (req, res) => {
   try {
-    const { polDetailId, partName, partType, linkedToPartId, throwingRequired, throwingOrder } = req.body;
+    const { polDetailId, partName, partType, throwingRequired, throwingOrder } = req.body;
     
     const result = await productionService.createProductPart({
       polDetailId,
       partName,
       partType,
-      linkedToPartId,
       throwingRequired,
       throwingOrder,
     });
@@ -408,13 +515,11 @@ router.post('/product-parts', authenticate, async (req, res) => {
 router.put('/product-parts/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
-    const partId = parseInt(id, 10);
-    const { partName, partType, linkedToPartId, throwingRequired, throwingOrder } = req.body;
+    const { partName, partType, throwingRequired, throwingOrder } = req.body;
     
-    const result = await productionService.updateProductPart(partId, {
+    const result = await productionService.updateProductPart(id, {
       partName,
       partType,
-      linkedToPartId,
       throwingRequired,
       throwingOrder,
     });
@@ -439,9 +544,8 @@ router.put('/product-parts/:id', authenticate, async (req, res) => {
 router.delete('/product-parts/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
-    const partId = parseInt(id, 10);
     
-    const result = await productionService.deleteProductPart(partId);
+    const result = await productionService.deleteProductPart(id);
     
     res.json({
       success: true,
@@ -459,133 +563,12 @@ router.delete('/product-parts/:id', authenticate, async (req, res) => {
   }
 });
 
-// Get production stages for a specific product part
-router.get('/product-parts/:partId/stages', authenticate, async (req, res) => {
-  try {
-    const { partId } = req.params;
-    const partIdNum = parseInt(partId, 10);
-    
-    const result = await productionService.getPartProductionStages(partIdNum);
-    
-    res.json({
-      success: true,
-      data: result,
-    });
-  } catch (error: any) {
-    const statusCode = error.statusCode || 500;
-    res.status(statusCode).json({
-      success: false,
-      error: {
-        code: error.code || 'FETCH_PART_STAGES_FAILED',
-        message: error.message || 'Failed to fetch part production stages',
-      },
-    });
-  }
-});
-
-// Track production for a specific product part
-router.post('/track-part', authenticate, async (req, res) => {
-  try {
-    const { polDetailId, partId, stage, quantity, rejectQuantity, remakeCycle, category, remakeType, ovenId, operatorId, rejectReasonId, productionDate, notes } = req.body;
-    const authReq = req as any;
-    
-    const result = await productionService.trackPartProduction({
-      polDetailId,
-      partId,
-      stage,
-      quantity,
-      rejectQuantity: rejectQuantity || 0,
-      remakeCycle: remakeCycle || 0,
-      category,
-      remakeType,
-      ovenId,
-      operatorId,
-      rejectReasonId,
-      productionDate: productionDate ? new Date(productionDate) : undefined,
-      userId: authReq.user.userId,
-      notes,
-    });
-    
-    res.status(201).json({
-      success: true,
-      data: result,
-    });
-  } catch (error: any) {
-    const statusCode = error.statusCode || 500;
-    res.status(statusCode).json({
-      success: false,
-      error: {
-        code: error.code || 'TRACK_PART_PRODUCTION_FAILED',
-        message: error.message || 'Failed to track part production',
-      },
-    });
-  }
-});
-
-// Get remake cycles for a POL detail
-router.get('/remake-cycles/:polDetailId', authenticate, async (req, res) => {
-  try {
-    const { polDetailId } = req.params;
-    const detailId = parseInt(polDetailId, 10);
-    
-    const result = await productionService.getRemakeCycles(detailId);
-    
-    res.json({
-      success: true,
-      data: result,
-    });
-  } catch (error: any) {
-    const statusCode = error.statusCode || 500;
-    res.status(statusCode).json({
-      success: false,
-      error: {
-        code: error.code || 'FETCH_REMAKE_CYCLES_FAILED',
-        message: error.message || 'Failed to fetch remake cycles',
-      },
-    });
-  }
-});
-
-// Create a remake cycle
-router.post('/remake-cycles', authenticate, async (req, res) => {
-  try {
-    const { polDetailId, originalRecordId, remakeNumber, remakeType, rejectStage, rejectCategory, rejectReasonId, rejectQuantity } = req.body;
-    const authReq = req as any;
-    
-    const result = await productionService.createRemakeCycle({
-      polDetailId,
-      originalRecordId,
-      remakeNumber,
-      remakeType,
-      rejectStage,
-      rejectCategory,
-      rejectReasonId,
-      rejectQuantity,
-      createdBy: authReq.user.userId,
-    });
-    
-    res.status(201).json({
-      success: true,
-      data: result,
-    });
-  } catch (error: any) {
-    const statusCode = error.statusCode || 500;
-    res.status(statusCode).json({
-      success: false,
-      error: {
-        code: error.code || 'CREATE_REMAKE_CYCLE_FAILED',
-        message: error.message || 'Failed to create remake cycle',
-      },
-    });
-  }
-});
-
 // Get stages by product type
 router.get('/stages-by-product-type/:productType', authenticate, async (req, res) => {
   try {
     const { productType } = req.params;
     
-    const result = productionService.getStagesByProductType(productType as any);
+    const result = productionService.getStagesByProductType(productType);
     
     res.json({
       success: true,
@@ -619,70 +602,6 @@ router.get('/operators', authenticate, async (req, res) => {
       error: {
         code: error.code || 'FETCH_OPERATORS_FAILED',
         message: error.message || 'Failed to fetch operators',
-      },
-    });
-  }
-});
-
-// Combine product parts at any stage
-router.post('/combine-parts', authenticate, async (req, res) => {
-  try {
-    const { polDetailId, stage, parts, notes } = req.body;
-    const authReq = req as any;
-    
-    if (!polDetailId || !stage || !parts || !Array.isArray(parts) || parts.length < 2) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          code: 'INVALID_REQUEST',
-          message: 'polDetailId, stage, and at least 2 parts are required',
-        },
-      });
-    }
-    
-    const result = await productionService.combineParts({
-      polDetailId,
-      stage,
-      parts,
-      notes,
-      userId: authReq.user.userId,
-    });
-    
-    res.status(201).json({
-      success: true,
-      data: result,
-    });
-  } catch (error: any) {
-    const statusCode = error.statusCode || 500;
-    res.status(statusCode).json({
-      success: false,
-      error: {
-        code: error.code || 'COMBINE_PARTS_FAILED',
-        message: error.message || 'Failed to combine parts',
-      },
-    });
-  }
-});
-
-// Get part combinations for a POL detail
-router.get('/part-combinations/:polDetailId', authenticate, async (req, res) => {
-  try {
-    const { polDetailId } = req.params;
-    const detailId = parseInt(polDetailId, 10);
-    
-    const result = await productionService.getPartCombinations(detailId);
-    
-    res.json({
-      success: true,
-      data: result,
-    });
-  } catch (error: any) {
-    const statusCode = error.statusCode || 500;
-    res.status(statusCode).json({
-      success: false,
-      error: {
-        code: error.code || 'FETCH_PART_COMBINATIONS_FAILED',
-        message: error.message || 'Failed to fetch part combinations',
       },
     });
   }

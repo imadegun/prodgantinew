@@ -2,27 +2,26 @@ import { prisma } from '../config/database';
 import { AppError } from '../middleware/error.middleware';
 
 interface CreateDecorationTaskData {
-  polDetailId: number;
+  polDetailId: string;
   taskName: string;
   description?: string;
-  quantityRequired: number;
-  userId?: number;
+  quantity: number;
+  userId?: string;
 }
 
 interface UpdateDecorationTaskData {
   taskName?: string;
   description?: string;
-  quantityCompleted?: number;
-  quantityRejected?: number;
+  quantity?: number;
   completed?: boolean;
-  notes?: string;
+  completedAt?: Date;
 }
 
 export class DecorationService {
   /**
    * Get decoration tasks for a POL detail
    */
-  async getDecorationTasks(polDetailId: number) {
+  async getDecorationTasks(polDetailId: string) {
     const tasks = await prisma.decorationTask.findMany({
       where: { polDetailId },
       orderBy: { createdAt: 'desc' },
@@ -31,15 +30,15 @@ export class DecorationService {
     return {
       tasks,
       total: tasks.length,
-      completed: tasks.filter((t) => t.completedAt).length,
-      pending: tasks.filter((t) => !t.completedAt).length,
+      completed: tasks.filter((t) => t.completed).length,
+      pending: tasks.filter((t) => !t.completed).length,
     };
   }
 
   /**
    * Get decoration task by ID
    */
-  async getDecorationTaskById(id: number) {
+  async getDecorationTaskById(id: string) {
     const task = await prisma.decorationTask.findUnique({
       where: { id },
     });
@@ -67,16 +66,16 @@ export class DecorationService {
 
     const task = await prisma.decorationTask.create({
       data: {
+        id: `task-${Date.now()}`,
         polDetailId: data.polDetailId,
         taskName: data.taskName,
-        taskDescription: data.description,
-        quantityRequired: data.quantityRequired,
-        quantityCompleted: 0,
-        quantityRejected: 0,
-        status: 'PENDING',
-        completedAt: null,
-        createdBy: data.userId,
-      } as any,
+        description: data.description,
+        quantity: data.quantity,
+        completed: false,
+        userId: data.userId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
     });
 
     return task;
@@ -85,7 +84,7 @@ export class DecorationService {
   /**
    * Update decoration task
    */
-  async updateDecorationTask(id: number, data: UpdateDecorationTaskData) {
+  async updateDecorationTask(id: string, data: UpdateDecorationTaskData) {
     const task = await prisma.decorationTask.findUnique({
       where: { id },
     });
@@ -94,16 +93,24 @@ export class DecorationService {
       throw new AppError('Decoration task not found', 404, 'TASK_NOT_FOUND');
     }
 
+    const updateData: any = {
+      updatedAt: new Date(),
+    };
+
+    if (data.taskName !== undefined) updateData.taskName = data.taskName;
+    if (data.description !== undefined) updateData.description = data.description;
+    if (data.quantity !== undefined) updateData.quantity = data.quantity;
+    if (data.completed !== undefined) {
+      updateData.completed = data.completed;
+      if (data.completed) {
+        updateData.completedAt = new Date();
+      }
+    }
+    if (data.completedAt !== undefined) updateData.completedAt = data.completedAt;
+
     const updatedTask = await prisma.decorationTask.update({
       where: { id },
-      data: {
-        taskName: data.taskName,
-        taskDescription: data.description,
-        quantityCompleted: data.quantityCompleted,
-        quantityRejected: data.quantityRejected,
-        completedAt: data.completed ? new Date() : null,
-        notes: data.notes,
-      } as any,
+      data: updateData,
     });
 
     return updatedTask;
@@ -112,10 +119,10 @@ export class DecorationService {
   /**
    * Track decoration task progress
    */
-  async trackDecorationTask(id: number, userId: number, data: {
-    quantityCompleted?: number;
-    quantityRejected?: number;
-    notes?: string;
+  async trackDecorationTask(id: string, userId: string, data: {
+    quantity?: number;
+    completed?: boolean;
+    description?: string;
   }) {
     const task = await prisma.decorationTask.findUnique({
       where: { id },
@@ -127,15 +134,17 @@ export class DecorationService {
 
     // Update quantities
     const updateData: any = {
-      quantityCompleted: data.quantityCompleted !== undefined ? data.quantityCompleted : task.quantityCompleted,
-      quantityRejected: data.quantityRejected !== undefined ? data.quantityRejected : task.quantityRejected,
-      notes: data.notes,
+      updatedAt: new Date(),
     };
 
-    // Check if task is complete
-    if (data.quantityCompleted !== undefined && data.quantityCompleted >= task.quantityRequired) {
-      updateData.completedAt = new Date();
+    if (data.quantity !== undefined) updateData.quantity = data.quantity;
+    if (data.completed !== undefined) {
+      updateData.completed = data.completed;
+      if (data.completed) {
+        updateData.completedAt = new Date();
+      }
     }
+    if (data.description !== undefined) updateData.description = data.description;
 
     const updatedTask = await prisma.decorationTask.update({
       where: { id },
@@ -148,7 +157,7 @@ export class DecorationService {
   /**
    * Delete decoration task
    */
-  async deleteDecorationTask(id: number) {
+  async deleteDecorationTask(id: string) {
     const task = await prisma.decorationTask.findUnique({
       where: { id },
     });
@@ -158,7 +167,7 @@ export class DecorationService {
     }
 
     // Check if task is completed
-    if (task.completedAt) {
+    if (task.completed) {
       throw new AppError('Cannot delete completed decoration task', 400, 'TASK_COMPLETED');
     }
 
@@ -172,25 +181,21 @@ export class DecorationService {
   /**
    * Get decoration task statistics
    */
-  async getDecorationStatistics(polDetailId?: number) {
+  async getDecorationStatistics(polDetailId?: string) {
     const where: any = polDetailId ? { polDetailId } : {};
 
-    const [total, completed, pending, totalQuantity, completedQuantity, rejectedQuantity] =
+    const [total, completed, pending, totalQuantity, completedQuantity] =
       await Promise.all([
         prisma.decorationTask.count({ where }),
-        prisma.decorationTask.count({ where: { ...where, completedAt: { not: null } } }),
-        prisma.decorationTask.count({ where: { ...where, completedAt: null } }),
+        prisma.decorationTask.count({ where: { ...where, completed: true } }),
+        prisma.decorationTask.count({ where: { ...where, completed: false } }),
         prisma.decorationTask.aggregate({
           where,
-          _sum: { quantityRequired: true },
+          _sum: { quantity: true },
         }),
         prisma.decorationTask.aggregate({
-          where: { completedAt: { not: null } },
-          _sum: { quantityCompleted: true },
-        }),
-        prisma.decorationTask.aggregate({
-          where,
-          _sum: { quantityRejected: true },
+          where: { ...where, completed: true },
+          _sum: { quantity: true },
         }),
       ]);
 
@@ -201,9 +206,8 @@ export class DecorationService {
         pending,
       },
       quantities: {
-        totalRequired: totalQuantity._sum.quantityRequired || 0,
-        totalCompleted: completedQuantity._sum.quantityCompleted || 0,
-        totalRejected: rejectedQuantity._sum.quantityRejected || 0,
+        totalRequired: totalQuantity._sum.quantity || 0,
+        totalCompleted: completedQuantity._sum.quantity || 0,
       },
     };
   }

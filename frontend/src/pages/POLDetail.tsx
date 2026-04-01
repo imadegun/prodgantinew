@@ -106,13 +106,14 @@ const POLDetail = (): JSX.Element => {
       if (id) {
         setLocalLoading(true);
         try {
-          const polId = parseInt(id, 10);
-          await dispatch(fetchPOLById(polId));
+          await dispatch(fetchPOLById(id));
         } catch (err) {
           console.error('Failed to fetch POL details:', err);
         } finally {
           setLocalLoading(false);
         }
+      } else {
+        console.error('Invalid POL ID:', id);
       }
     };
     fetchData();
@@ -194,7 +195,7 @@ const POLDetail = (): JSX.Element => {
 
       // Refresh POL data
       if (id) {
-        await dispatch(fetchPOLById(parseInt(id, 10)));
+        await dispatch(fetchPOLById(id));
       }
       
       handleCloseEditDialog();
@@ -214,7 +215,7 @@ const POLDetail = (): JSX.Element => {
       
       // Refresh POL data
       if (id) {
-        await dispatch(fetchPOLById(parseInt(id, 10)));
+        await dispatch(fetchPOLById(id));
       }
       
       setSuccessMessage('Product deleted successfully');
@@ -309,11 +310,14 @@ const POLDetail = (): JSX.Element => {
       }
 
       if (!id) {
-        setAddError('POL ID not found');
+        console.error('Invalid POL ID:', id);
+        setAddError('Invalid POL ID');
         return;
       }
 
-      await polService.addProductToPOL(parseInt(id, 10), {
+      console.log('Adding product to POL:', id, selectedProduct);
+
+      await polService.addProductToPOL(id, {
         productCode: selectedProduct.clientCode || selectedProduct.productCode,
         productName: selectedProduct.categoryName || selectedProduct.productName,
         color: selectedProduct.colorName,
@@ -323,7 +327,7 @@ const POLDetail = (): JSX.Element => {
       });
 
       // Refresh POL data
-      await dispatch(fetchPOLById(parseInt(id, 10)));
+      await dispatch(fetchPOLById(id));
       
       handleCloseAddDialog();
       setSuccessMessage('Product added successfully');

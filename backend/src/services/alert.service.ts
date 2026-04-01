@@ -5,7 +5,7 @@ import { AlertPriority, AlertStatus } from '@prisma/client';
 interface AlertFilters {
   status?: AlertStatus;
   priority?: AlertPriority;
-  polId?: number;
+  polId?: string;
   startDate?: Date;
   endDate?: Date;
 }
@@ -51,23 +51,23 @@ export class AlertService {
           { createdAt: 'desc' },
         ],
         include: {
-          pol: true,
-          polDetail: true,
-          reportedByUser: {
+          pols: true,
+          pol_details: true,
+          users_discrepancy_alerts_reportedByTousers: {
             select: {
               id: true,
               username: true,
               fullName: true,
             },
           },
-          acknowledgedByUser: {
+          users_discrepancy_alerts_acknowledgedByTousers: {
             select: {
               id: true,
               username: true,
               fullName: true,
             },
           },
-          resolvedByUser: {
+          users_discrepancy_alerts_resolvedByTousers: {
             select: {
               id: true,
               username: true,
@@ -93,27 +93,27 @@ export class AlertService {
   /**
    * Get alert by ID
    */
-  async getAlertById(id: number) {
+  async getAlertById(id: string) {
     const alert = await prisma.discrepancyAlert.findUnique({
       where: { id },
       include: {
-        pol: true,
-        polDetail: true,
-        reportedByUser: {
+        pols: true,
+        pol_details: true,
+        users_discrepancy_alerts_reportedByTousers: {
           select: {
             id: true,
             username: true,
             fullName: true,
           },
         },
-        acknowledgedByUser: {
+        users_discrepancy_alerts_acknowledgedByTousers: {
           select: {
             id: true,
             username: true,
             fullName: true,
           },
         },
-        resolvedByUser: {
+        users_discrepancy_alerts_resolvedByTousers: {
           select: {
             id: true,
             username: true,
@@ -133,7 +133,7 @@ export class AlertService {
   /**
    * Acknowledge alert
    */
-  async acknowledgeAlert(id: number, userId: number) {
+  async acknowledgeAlert(id: string, userId: string) {
     const alert = await prisma.discrepancyAlert.findUnique({
       where: { id },
     });
@@ -161,7 +161,7 @@ export class AlertService {
   /**
    * Resolve alert
    */
-  async resolveAlert(id: number, userId: number, resolutionNotes?: string) {
+  async resolveAlert(id: string, userId: string, resolutionNotes?: string) {
     const alert = await prisma.discrepancyAlert.findUnique({
       where: { id },
     });
@@ -197,9 +197,9 @@ export class AlertService {
         prisma.discrepancyAlert.count({ where: { status: 'OPEN' } }),
         prisma.discrepancyAlert.count({ where: { status: 'ACKNOWLEDGED' } }),
         prisma.discrepancyAlert.count({ where: { status: 'RESOLVED' } }),
-        prisma.discrepancyAlert.count({ where: { priority: 'CRITICAL' } }),
-        prisma.discrepancyAlert.count({ where: { priority: 'WARNING' } }),
-        prisma.discrepancyAlert.count({ where: { priority: 'INFORMATIONAL' } }),
+        prisma.discrepancyAlert.count({ where: { priority: 'HIGH' } }),
+        prisma.discrepancyAlert.count({ where: { priority: 'MEDIUM' } }),
+        prisma.discrepancyAlert.count({ where: { priority: 'LOW' } }),
       ]);
 
     return {
@@ -230,8 +230,8 @@ export class AlertService {
         },
       },
       include: {
-        pol: true,
-        polDetail: true,
+        pols: true,
+        pol_details: true,
       },
     });
 

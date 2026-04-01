@@ -1,34 +1,34 @@
 import { prisma } from '../config/database';
 import { AppError } from '../middleware/error.middleware';
-import { LogStatus } from '@prisma/client';
+import { LogStatus, ProductionStage } from '@prisma/client';
 
 interface CreateLogEntryData {
-  polId?: number;
-  polDetailId?: number;
-  userId: number;
-  stage?: string;
-  issueType?: any;
+  polId?: string;
+  polDetailId?: string;
+  userId: string;
+  stage?: ProductionStage;
+  issueType?: string;
   description: string;
-  severity?: any;
-  resolution?: string;
+  severity?: string;
+  actions?: string;
   status?: LogStatus;
 }
 
 interface UpdateLogEntryData {
-  polId?: number;
-  polDetailId?: number;
-  stage?: string;
+  polId?: string;
+  polDetailId?: string;
+  stage?: ProductionStage;
   issueType?: string;
   description?: string;
   severity?: string;
-  resolution?: string;
+  actions?: string;
   status?: LogStatus;
   notes?: string;
 }
 
 interface LogFilters {
-  polId?: number;
-  userId?: number;
+  polId?: string;
+  userId?: string;
   status?: LogStatus;
   startDate?: Date;
   endDate?: Date;
@@ -72,8 +72,8 @@ export class LogbookService {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          pol: true,
-          user: {
+          pols: true,
+          users: {
             select: {
               id: true,
               username: true,
@@ -99,12 +99,12 @@ export class LogbookService {
   /**
    * Get log entry by ID
    */
-  async getLogEntryById(id: number) {
+  async getLogEntryById(id: string) {
     const entry = await prisma.logbookEntry.findUnique({
       where: { id },
       include: {
-        pol: true,
-        user: {
+        pols: true,
+        users: {
           select: {
             id: true,
             username: true,
@@ -138,19 +138,21 @@ export class LogbookService {
 
     const entry = await prisma.logbookEntry.create({
       data: {
+        id: `log-${Date.now()}`,
         polId: data.polId,
         polDetailId: data.polDetailId,
-        stage: data.stage,
-        issueType: data.issueType,
-        description: data.description,
-        severity: data.severity,
-        resolution: data.resolution,
-        status: data.status || 'OPEN',
-        createdBy: data.userId,
+        userId: data.userId,
+        entryDate: new Date(),
+        status: data.status || 'NORMAL',
+        notes: data.description,
+        issues: data.issueType,
+        actions: data.actions,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       },
       include: {
-        pol: true,
-        user: {
+        pols: true,
+        users: {
           select: {
             id: true,
             username: true,
@@ -166,7 +168,7 @@ export class LogbookService {
   /**
    * Update log entry
    */
-  async updateLogEntry(id: number, data: UpdateLogEntryData) {
+  async updateLogEntry(id: string, data: UpdateLogEntryData) {
     const entry = await prisma.logbookEntry.findUnique({
       where: { id },
     });
@@ -186,12 +188,25 @@ export class LogbookService {
       }
     }
 
+    const updateData: any = {
+      updatedAt: new Date(),
+    };
+
+    if (data.polId !== undefined) updateData.polId = data.polId;
+    if (data.polDetailId !== undefined) updateData.polDetailId = data.polDetailId;
+    if (data.stage !== undefined) updateData.stage = data.stage;
+    if (data.issueType !== undefined) updateData.issues = data.issueType;
+    if (data.description !== undefined) updateData.notes = data.description;
+    if (data.severity !== undefined) updateData.severity = data.severity;
+    if (data.actions !== undefined) updateData.actions = data.actions;
+    if (data.status !== undefined) updateData.status = data.status;
+
     const updatedEntry = await prisma.logbookEntry.update({
       where: { id },
-      data: data as any,
+      data: updateData,
       include: {
-        pol: true,
-        user: {
+        pols: true,
+        users: {
           select: {
             id: true,
             username: true,
@@ -207,7 +222,7 @@ export class LogbookService {
   /**
    * Delete log entry
    */
-  async deleteLogEntry(id: number) {
+  async deleteLogEntry(id: string) {
     const entry = await prisma.logbookEntry.findUnique({
       where: { id },
     });
@@ -229,8 +244,8 @@ export class LogbookService {
   async getLogbookStatistics() {
     const [total, normal, issues, resolved, todayEntries] = await Promise.all([
       prisma.logbookEntry.count(),
-      prisma.logbookEntry.count({ where: { status: 'OPEN' } }),
-      prisma.logbookEntry.count({ where: { status: 'IN_PROGRESS' } }),
+      prisma.logbookEntry.count({ where: { status: 'NORMAL' } }),
+      prisma.logbookEntry.count({ where: { status: 'ISSUES' } }),
       prisma.logbookEntry.count({ where: { status: 'RESOLVED' } }),
       prisma.logbookEntry.count({
         where: {
@@ -244,8 +259,8 @@ export class LogbookService {
     return {
       total,
       byStatus: {
-        open: normal,
-        inProgress: issues,
+        normal,
+        issues,
         resolved,
       },
       todayEntries,
@@ -260,8 +275,8 @@ export class LogbookService {
       take: limit,
       orderBy: { createdAt: 'desc' },
       include: {
-        pol: true,
-        user: {
+        pols: true,
+        users: {
           select: {
             id: true,
             username: true,

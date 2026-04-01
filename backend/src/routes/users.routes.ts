@@ -25,7 +25,7 @@ router.get('/', authenticate, async (req, res) => {
     }
 
     if (isActive !== undefined) {
-      where.isActive = isActive === 'true';
+      where.is_active = isActive === 'true';
     }
 
     if (search) {
@@ -47,7 +47,7 @@ router.get('/', authenticate, async (req, res) => {
           email: true,
           fullName: true,
           role: true,
-          isActive: true,
+          is_active: true,
           lastLogin: true,
           createdAt: true,
           updatedAt: true,
@@ -83,17 +83,16 @@ router.get('/', authenticate, async (req, res) => {
 router.get('/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = parseInt(id, 10);
 
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { id },
       select: {
         id: true,
         username: true,
         email: true,
         fullName: true,
         role: true,
-        isActive: true,
+        is_active: true,
         lastLogin: true,
         createdAt: true,
         updatedAt: true,
@@ -155,11 +154,15 @@ router.post('/', authenticate, async (req, res) => {
 
     const user = await prisma.user.create({
       data: {
+        id: `user-${Date.now()}`,
         username,
         email,
         passwordHash,
         fullName,
         role: role || 'WORKER',
+        is_active: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       },
       select: {
         id: true,
@@ -167,7 +170,7 @@ router.post('/', authenticate, async (req, res) => {
         email: true,
         fullName: true,
         role: true,
-        isActive: true,
+        is_active: true,
         createdAt: true,
       },
     });
@@ -194,30 +197,31 @@ router.put('/:id', authenticate, async (req, res) => {
   try {
     const authReq = req as any;
     const { id } = req.params;
-    const userId = parseInt(id, 10);
     const { email, fullName, role, isActive } = req.body;
 
     // Only managers can update other users, or users can update themselves
     const isManager = authReq.user.role === 'MANAGER';
-    const isSelf = authReq.user.userId === userId;
+    const isSelf = authReq.user.userId === id;
 
     if (!isManager && !isSelf) {
       throw new AppError('Unauthorized', 403, 'UNAUTHORIZED');
     }
 
     // Managers can update role and isActive, regular users can only update their own profile
-    const updateData: any = {};
+    const updateData: any = {
+      updatedAt: new Date(),
+    };
 
     if (email) updateData.email = email;
     if (fullName) updateData.fullName = fullName;
     
     if (isManager) {
       if (role) updateData.role = role;
-      if (isActive !== undefined) updateData.isActive = isActive;
+      if (isActive !== undefined) updateData.is_active = isActive;
     }
 
     const user = await prisma.user.update({
-      where: { id: userId },
+      where: { id },
       data: updateData,
       select: {
         id: true,
@@ -225,7 +229,7 @@ router.put('/:id', authenticate, async (req, res) => {
         email: true,
         fullName: true,
         role: true,
-        isActive: true,
+        is_active: true,
         updatedAt: true,
       },
     });
@@ -252,7 +256,6 @@ router.delete('/:id', authenticate, async (req, res) => {
   try {
     const authReq = req as any;
     const { id } = req.params;
-    const userId = parseInt(id, 10);
 
     // Only managers can deactivate users
     if (authReq.user.role !== 'MANAGER') {
@@ -260,13 +263,13 @@ router.delete('/:id', authenticate, async (req, res) => {
     }
 
     // Cannot deactivate yourself
-    if (authReq.user.userId === userId) {
+    if (authReq.user.userId === id) {
       throw new AppError('Cannot deactivate your own account', 400, 'CANNOT_DEACTIVATE_SELF');
     }
 
     await prisma.user.update({
-      where: { id: userId },
-      data: { isActive: false },
+      where: { id },
+      data: { is_active: false, updatedAt: new Date() },
     });
 
     res.json({
@@ -314,7 +317,7 @@ router.post('/change-password', authenticate, async (req, res) => {
 
     await prisma.user.update({
       where: { id: authReq.user.userId },
-      data: { passwordHash: newPasswordHash },
+      data: { passwordHash: newPasswordHash, updatedAt: new Date() },
     });
 
     res.json({

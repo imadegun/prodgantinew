@@ -3,9 +3,9 @@ import { AppError } from '../middleware/error.middleware';
 import { RevisionStatus, RevisionType, Severity } from '@prisma/client';
 
 interface CreateRevisionData {
-  polId: number;
-  polDetailId?: number;
-  userId: number;
+  polId: string;
+  polDetailId?: string;
+  userId: string;
   type: RevisionType;
   issueType: string;
   severity: Severity;
@@ -23,7 +23,7 @@ interface RevisionFilters {
   status?: RevisionStatus;
   type?: RevisionType;
   severity?: Severity;
-  polId?: number;
+  polId?: string;
   startDate?: Date;
   endDate?: Date;
 }
@@ -73,20 +73,20 @@ export class RevisionService {
           { createdAt: 'desc' },
         ],
         include: {
-          pol: {
+          pols: {
             include: {
               polDetails: true,
             },
           },
-          polDetail: true,
-          creator: {
+          pol_details: true,
+          users_revision_tickets_createdByTousers: {
             select: {
               id: true,
               username: true,
               fullName: true,
             },
           },
-          approvedByUser: {
+          users_revision_tickets_approvedByTousers: {
             select: {
               id: true,
               username: true,
@@ -112,31 +112,31 @@ export class RevisionService {
   /**
    * Get revision ticket by ID
    */
-  async getRevisionById(id: number) {
+  async getRevisionById(id: string) {
     const revision = await prisma.revisionTicket.findUnique({
       where: { id },
-        include: {
-          pol: {
-            include: {
-              polDetails: true,
-            },
-          },
-          polDetail: true,
-          creator: {
-            select: {
-              id: true,
-              username: true,
-              fullName: true,
-            },
-          },
-          approvedByUser: {
-            select: {
-              id: true,
-              username: true,
-              fullName: true,
-            },
+      include: {
+        pols: {
+          include: {
+            polDetails: true,
           },
         },
+        pol_details: true,
+        users_revision_tickets_createdByTousers: {
+          select: {
+            id: true,
+            username: true,
+            fullName: true,
+          },
+        },
+        users_revision_tickets_approvedByTousers: {
+          select: {
+            id: true,
+            username: true,
+            fullName: true,
+          },
+        },
+      },
     });
 
     if (!revision) {
@@ -172,19 +172,22 @@ export class RevisionService {
 
     const revision = await prisma.revisionTicket.create({
       data: {
+        id: `rev-${Date.now()}`,
         polId: data.polId,
         polDetailId: data.polDetailId,
         createdBy: data.userId,
-        revisionType: data.type,
+        type: data.type,
         issueType: data.issueType,
         severity: data.severity,
         description: data.description,
         proposedSolution: data.proposedSolution,
         status: 'DRAFT',
-      } as any,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
       include: {
-        pol: true,
-          creator: {
+        pols: true,
+        users_revision_tickets_createdByTousers: {
           select: {
             id: true,
             username: true,
@@ -200,7 +203,7 @@ export class RevisionService {
   /**
    * Update revision ticket
    */
-  async updateRevision(id: number, data: UpdateRevisionData) {
+  async updateRevision(id: string, data: UpdateRevisionData) {
     const revision = await prisma.revisionTicket.findUnique({
       where: { id },
     });
@@ -216,10 +219,13 @@ export class RevisionService {
 
     const updatedRevision = await prisma.revisionTicket.update({
       where: { id },
-      data,
+      data: {
+        ...data,
+        updatedAt: new Date(),
+      },
       include: {
-        pol: true,
-          creator: {
+        pols: true,
+        users_revision_tickets_createdByTousers: {
           select: {
             id: true,
             username: true,
@@ -235,7 +241,7 @@ export class RevisionService {
   /**
    * Submit revision for approval
    */
-  async submitRevision(id: number) {
+  async submitRevision(id: string) {
     const revision = await prisma.revisionTicket.findUnique({
       where: { id },
     });
@@ -251,8 +257,9 @@ export class RevisionService {
     const updatedRevision = await prisma.revisionTicket.update({
       where: { id },
       data: {
-        status: 'SUBMITTED',
+        status: 'PENDING_APPROVAL',
         submittedAt: new Date(),
+        updatedAt: new Date(),
       },
     });
 
@@ -262,7 +269,7 @@ export class RevisionService {
   /**
    * Approve or reject revision
    */
-  async approveRevision(id: number, userId: number, approved: boolean, managerNotes?: string) {
+  async approveRevision(id: string, userId: string, approved: boolean, managerNotes?: string) {
     const revision = await prisma.revisionTicket.findUnique({
       where: { id },
     });
@@ -271,8 +278,8 @@ export class RevisionService {
       throw new AppError('Revision ticket not found', 404, 'REVISION_NOT_FOUND');
     }
 
-    if (revision.status !== 'SUBMITTED') {
-      throw new AppError('Only SUBMITTED revisions can be approved/rejected', 400, 'INVALID_STATUS');
+    if (revision.status !== 'PENDING_APPROVAL') {
+      throw new AppError('Only PENDING_APPROVAL revisions can be approved/rejected', 400, 'INVALID_STATUS');
     }
 
     const updatedRevision = await prisma.revisionTicket.update({
@@ -282,6 +289,7 @@ export class RevisionService {
         approvedBy: userId,
         approvedAt: new Date(),
         managerNotes,
+        updatedAt: new Date(),
       },
     });
 
@@ -291,7 +299,7 @@ export class RevisionService {
   /**
    * Delete revision ticket
    */
-  async deleteRevision(id: number) {
+  async deleteRevision(id: string) {
     const revision = await prisma.revisionTicket.findUnique({
       where: { id },
     });
@@ -320,7 +328,7 @@ export class RevisionService {
       await Promise.all([
         prisma.revisionTicket.count(),
         prisma.revisionTicket.count({ where: { status: 'DRAFT' } }),
-        prisma.revisionTicket.count({ where: { status: 'SUBMITTED' } }),
+        prisma.revisionTicket.count({ where: { status: 'PENDING_APPROVAL' } }),
         prisma.revisionTicket.count({ where: { status: 'APPROVED' } }),
         prisma.revisionTicket.count({ where: { status: 'REJECTED' } }),
         prisma.revisionTicket.count({ where: { severity: 'HIGH' } }),
@@ -353,12 +361,12 @@ export class RevisionService {
       orderBy: { createdAt: 'desc' },
       where: {
         status: {
-          in: ['DRAFT', 'SUBMITTED'],
+          in: ['DRAFT', 'PENDING_APPROVAL'],
         },
       },
       include: {
-        pol: true,
-          creator: {
+        pols: true,
+        users_revision_tickets_createdByTousers: {
           select: {
             id: true,
             username: true,

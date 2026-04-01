@@ -48,13 +48,36 @@ router.get('/', authenticate, async (req, res) => {
 // Get POL by ID
 router.get('/:id', authenticate, async (req, res) => {
   try {
-    const { id } = req.params;
-    const polId = parseInt(id, 10);
+    let { id } = req.params;
     
-    const result = await polService.getPOLById(polId);
+    // If ID looks like it was parsed incorrectly (e.g., "NaN" from parseInt("pol-123")),
+    // try to extract the actual ID from the referer URL
+    if (id === 'NaN' || !id) {
+      // Check if there's a valid ID in the referer URL
+      const referer = req.headers.referer || req.headers.referrer;
+      if (referer) {
+        const refererStr = Array.isArray(referer) ? referer[0] : referer;
+        const match = refererStr.match(/\/pols\/([^/?]+)/);
+        if (match && match[1] && match[1] !== 'NaN') {
+          id = match[1];
+        }
+      }
+    }
+    
+    // Final validation - only reject if truly invalid
+    if (!id || id === 'NaN' || id === 'undefined' || id === 'null') {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_ID',
+          message: 'Invalid POL ID - could not extract valid ID',
+        },
+      });
+    }
+    
+    const result = await polService.getPOLById(id);
     
     // Transform response to match frontend expectations
-    // Frontend expects { pol, details } but backend returns POL with polDetails
     res.json({
       success: true,
       data: {
@@ -107,7 +130,7 @@ router.get('/:id', authenticate, async (req, res) => {
 router.post('/', authenticate, authorize('MANAGER'), async (req: AuthenticatedRequest, res) => {
   try {
     const { poNumber, clientName, poDate, deliveryDate, products } = req.body;
-    const userId = req.user?.userId;
+    const userId = String(req.user?.userId);
     
     if (!userId) {
       res.status(401).json({
@@ -162,7 +185,6 @@ router.post('/', authenticate, authorize('MANAGER'), async (req: AuthenticatedRe
 router.put('/:id', authenticate, authorize('MANAGER'), async (req, res) => {
   try {
     const { id } = req.params;
-    const polId = parseInt(id, 10);
     const { clientName, deliveryDate, status } = req.body;
     
     const updateData: any = {};
@@ -176,7 +198,7 @@ router.put('/:id', authenticate, authorize('MANAGER'), async (req, res) => {
       updateData.status = status;
     }
     
-    const result = await polService.updatePOL(polId, updateData);
+    const result = await polService.updatePOL(id, updateData);
     
     res.json({
       success: true,
@@ -199,9 +221,8 @@ router.put('/:id', authenticate, authorize('MANAGER'), async (req, res) => {
 router.delete('/:id', authenticate, authorize('MANAGER'), async (req, res) => {
   try {
     const { id } = req.params;
-    const polId = parseInt(id, 10);
     
-    await polService.deletePOL(polId);
+    await polService.deletePOL(id);
     
     res.json({
       success: true,
@@ -233,7 +254,7 @@ router.put('/details/:detailId', authenticate, authorize('MANAGER'), async (req,
     if (size !== undefined) updateData.size = size;
     if (quantity !== undefined) updateData.quantity = quantity;
     
-    const result = await polService.updatePOLDetail(parseInt(detailId, 10), updateData);
+    const result = await polService.updatePOLDetail(detailId, updateData);
     
     res.json({
       success: true,
@@ -257,7 +278,7 @@ router.delete('/details/:detailId', authenticate, authorize('MANAGER'), async (r
   try {
     const { detailId } = req.params;
     
-    await polService.deletePOLDetail(parseInt(detailId, 10));
+    await polService.deletePOLDetail(detailId);
     
     res.json({
       success: true,
@@ -275,11 +296,33 @@ router.delete('/details/:detailId', authenticate, authorize('MANAGER'), async (r
   }
 });
 
+// Get products (details) for a POL - helpful for dropdown
+router.get('/:id/products', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const pol = await polService.getPOLById(id);
+    
+    res.json({
+      success: true,
+      data: pol.polDetails || [],
+    });
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
+      success: false,
+      error: {
+        code: error.code || 'FETCH_PRODUCTS_FAILED',
+        message: error.message || 'Failed to fetch products for POL',
+      },
+    });
+  }
+});
+
 // Add product to POL
 router.post('/:id/products', authenticate, authorize('MANAGER'), async (req, res) => {
   try {
     const { id } = req.params;
-    const polId = parseInt(id, 10);
     const { productCode, productName, quantity, color, texture, material, size, finalSize, notes } = req.body;
     
     if (!productCode || !productName || !quantity) {
@@ -293,7 +336,7 @@ router.post('/:id/products', authenticate, authorize('MANAGER'), async (req, res
       return;
     }
     
-    const result = await polService.addProductToPOL(polId, {
+    const result = await polService.addProductToPOL(id, {
       productCode,
       productName,
       quantity,

@@ -364,7 +364,7 @@ const ProductionTracking = () => {
 
   const loadProductionStages = async () => {
     try {
-      const result = await dispatch(fetchProductionStages(Number(selectedProduct)));
+      const result = await dispatch(fetchProductionStages(selectedProduct));
       const payload = result.payload as any;
       if (payload) {
         // Find current stage from records
@@ -433,13 +433,13 @@ const ProductionTracking = () => {
 
   const loadProductParts = async () => {
     try {
-      const partsData = await productionService.getProductParts(Number(selectedProduct));
+      const partsData = await productionService.getProductParts(selectedProduct);
       
       // Auto-create default MAIN part if no parts exist
       if (!partsData || partsData.length === 0) {
         try {
           const defaultPart = await productionService.createProductPart({
-            polDetailId: Number(selectedProduct),
+            polDetailId: selectedProduct,
             partName: 'Main',
             partType: 'MAIN',
             throwingRequired: true,
@@ -447,7 +447,7 @@ const ProductionTracking = () => {
           });
           
           // Reload parts after creating default
-          const refreshedParts = await productionService.getProductParts(Number(selectedProduct));
+          const refreshedParts = await productionService.getProductParts(selectedProduct);
           setProductParts(refreshedParts || []);
           
           // Auto-select the default part and load its stage data
@@ -477,7 +477,7 @@ const ProductionTracking = () => {
     try {
       console.log(`[loadRemakeCycles] Loading cycles for product ${selectedProduct}`);
       // Get remake cycles from production records (which have remakeType field)
-      const stagesData = await productionService.getProductionStages(Number(selectedProduct));
+      const stagesData = await productionService.getProductionStages(selectedProduct);
       
       // Extract remake cycles from production records
       const remakeRecords: any[] = [];
@@ -913,7 +913,7 @@ const ProductionTracking = () => {
     
     if (polId) {
       try {
-        const polData = await polService.getPOLById(Number(polId));
+        const polData = await polService.getPOLById(polId);
         setPolDetails(polData.details || []);
       } catch (error) {
         console.error('Error loading POL details:', error);

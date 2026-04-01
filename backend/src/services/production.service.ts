@@ -4,18 +4,10 @@ import { ProductionStage } from '@prisma/client';
 import { productService } from './product.service';
 
 interface TrackProductionData {
-  polDetailId: number;
+  polDetailId: string;
   stage: ProductionStage;
-  category?: ProductCategory;
   quantity: number;
-  rejectQuantity?: number;
-  remakeCycle?: number;
-  remakeType?: RemakeType;
-  ovenId?: number;
-  operatorId?: number;
-  rejectReasonId?: number;
-  productionDate?: Date;
-  userId: number;
+  userId: string;
   notes?: string;
 }
 
@@ -30,11 +22,11 @@ export class ProductionService {
   /**
      * Get production stages for a POL detail
      */
-  async getProductionStages(polDetailId: number) {
+  async getProductionStages(polDetailId: string) {
     const detail = await prisma.pOLDetail.findUnique({
       where: { id: polDetailId },
       include: {
-        productionRecords: {
+        production_records: {
           orderBy: { createdAt: 'desc' },
         },
       },
@@ -65,7 +57,7 @@ export class ProductionService {
 
     // Group records by stage
     const stageRecords: Record<string, any[]> = {};
-    detail.productionRecords.forEach((record) => {
+    detail.production_records.forEach((record) => {
       if (!stageRecords[record.stage]) {
         stageRecords[record.stage] = [];
       }
@@ -77,12 +69,10 @@ export class ProductionService {
       const records = stageRecords[stage] || [];
       const latestRecord = records[0];
       const totalQuantity = records.reduce((sum, r) => sum + r.quantity, 0);
-      const totalRejectQuantity = records.reduce((sum, r) => sum + (r.rejectQuantity || 0), 0);
 
       return {
         stage,
         totalQuantity,
-        totalRejectQuantity,
         latestRecord,
         records,
       };
@@ -90,7 +80,6 @@ export class ProductionService {
 
     return {
       detail,
-      qtyToMake: detail.qtyToMake,
       workflow,
       stages: stageData,
     };
@@ -100,7 +89,7 @@ export class ProductionService {
    * Track production quantity at a stage
    */
   async trackProduction(data: TrackProductionData) {
-    const { polDetailId, stage, quantity, rejectQuantity, remakeCycle, category, remakeType, ovenId, operatorId, rejectReasonId, productionDate, userId, notes } = data;
+    const { polDetailId, stage, quantity, userId, notes } = data;
 
     // Validate POL detail exists
     const detail = await prisma.pOLDetail.findUnique({
@@ -120,27 +109,19 @@ export class ProductionService {
     }
 
     // Check for discrepancies
-    const discrepancy = await this.checkForDiscrepancy(polDetailId, stage, quantity, rejectQuantity);
+    const discrepancy = await this.checkForDiscrepancy(polDetailId, stage, quantity);
 
-    // Auto-determine category if not provided
-    const productionCategory = category || this.getCategoryForStage(stage);
-
-    // Create production record with all fields
+    // Create production record
     const record = await prisma.productionRecord.create({
       data: {
+        id: `prod-${Date.now()}`,
         polDetailId,
         stage,
         quantity,
-        rejectQuantity: rejectQuantity || 0,
-        remakeCycle: remakeCycle || 0,
-        category: productionCategory,
-        remakeType,
-        ovenId,
-        operatorId,
-        rejectReasonId,
-        productionDate: productionDate || undefined,
-        createdBy: userId,
+        userId,
         notes,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       },
     });
 
@@ -171,13 +152,13 @@ export class ProductionService {
       where: {
         pol: {
           status: {
-            in: ['IN_PROGRESS', 'DRAFT'],
+            in: ['IN_PROGRESS'],
           },
         },
       },
       include: {
         pol: true,
-        productionRecords: {
+        production_records: {
           orderBy: { createdAt: 'desc' },
         },
       },
@@ -192,14 +173,14 @@ export class ProductionService {
     const activeTasks = tasks
       .filter((detail) => {
         // Check if there are incomplete stages
-        const stages: ProductionStage[] = ['THROWING', 'TRIMMING', 'DECORATION', 'DRYING', 'LOAD_BISQUE', 'OUT_BISQUE', 'LOAD_HIGH_FIRING', 'OUT_HIGH_FIRING', 'LOAD_RAKU_FIRING', 'OUT_RAKU_FIRING', 'LOAD_LUSTER_FIRING', 'OUT_LUSTER_FIRING', 'SANDING', 'WAXING', 'DIPPING', 'SPRAYING', 'COLOR_DECORATION', 'QC_GOOD', 'QC_REJECT', 'QC_RE_FIRING', 'QC_SECOND'];
+        const stages: ProductionStage[] = ['THROWING', 'TRIMMING', 'DECORATION', 'DRYING', 'LOAD_BISQUE', 'OUT_BISQUE', 'LOAD_HIGH_FIRING', 'OUT_HIGH_FIRING', 'SANDING', 'DIPPING', 'QC_GOOD'];
         const completedStages = new Set(
-          detail.productionRecords.map((r) => r.stage)
+          detail.production_records.map((r: any) => r.stage)
         );
         return stages.some((stage: ProductionStage) => !completedStages.has(stage));
       })
       .map((detail) => {
-        const latestRecord = detail.productionRecords[0];
+        const latestRecord = detail.production_records[0];
         const nextStage = this.getNextStage(latestRecord?.stage);
 
         return {
@@ -221,12 +202,11 @@ export class ProductionService {
    * Check for quantity discrepancies
    */
   private async checkForDiscrepancy(
-    polDetailId: number,
+    polDetailId: string,
     stage: ProductionStage,
-    quantity: number,
-    rejectQuantity?: number
+    quantity: number
   ): Promise<DiscrepancyData | null> {
-    const stageOrder = ['THROWING', 'TRIMMING', 'DECORATION', 'DRYING', 'LOAD_BISQUE', 'OUT_BISQUE', 'LOAD_HIGH_FIRING', 'OUT_HIGH_FIRING', 'LOAD_RAKU_FIRING', 'OUT_RAKU_FIRING', 'LOAD_LUSTER_FIRING', 'OUT_LUSTER_FIRING', 'SANDING', 'WAXING', 'DIPPING', 'SPRAYING', 'COLOR_DECORATION', 'QC_GOOD', 'QC_REJECT', 'QC_RE_FIRING', 'QC_SECOND'];
+    const stageOrder = ['THROWING', 'TRIMMING', 'DECORATION', 'DRYING', 'LOAD_BISQUE', 'OUT_BISQUE', 'LOAD_HIGH_FIRING', 'OUT_HIGH_FIRING', 'SANDING', 'DIPPING', 'QC_GOOD'];
     const currentIndex = stageOrder.indexOf(stage);
 
     if (currentIndex === 0) {
@@ -250,7 +230,7 @@ export class ProductionService {
       return null;
     }
 
-    // Get already recorded quantity for current stage (including rejects)
+    // Get already recorded quantity for current stage
     const currentRecords = await prisma.productionRecord.findMany({
       where: {
         polDetailId,
@@ -258,12 +238,10 @@ export class ProductionService {
       },
     });
 
-    const alreadyRecordedGood = currentRecords.reduce((sum, r) => sum + r.quantity, 0);
-    const alreadyRecordedRejects = currentRecords.reduce((sum, r) => sum + (r.rejectQuantity || 0), 0);
-    const newRejectQuantity = rejectQuantity || 0;
+    const alreadyRecorded = currentRecords.reduce((sum, r) => sum + r.quantity, 0);
 
-    // Calculate total after adding new entry (good + rejects)
-    const totalAfterNewEntry = alreadyRecordedGood + quantity + alreadyRecordedRejects + newRejectQuantity;
+    // Calculate total after adding new entry
+    const totalAfterNewEntry = alreadyRecorded + quantity;
 
     const difference = totalAfterNewEntry - expectedQuantity;
 
@@ -285,29 +263,30 @@ export class ProductionService {
    * Create discrepancy alert
    */
   private async createDiscrepancyAlert(data: {
-    polId: number;
-    polDetailId: number;
+    polId: string;
+    polDetailId: string;
     stage: ProductionStage;
     expected: number;
     actual: number;
     difference: number;
-    userId: number;
+    userId: string;
   }) {
-    const priority = Math.abs(data.difference) > data.expected * 0.2 ? 'CRITICAL' : 'WARNING';
+    const priority = Math.abs(data.difference) > data.expected * 0.2 ? 'HIGH' : 'MEDIUM';
 
     await prisma.discrepancyAlert.create({
       data: {
+        id: `disc-${Date.now()}`,
         polId: data.polId,
         polDetailId: data.polDetailId,
         stage: data.stage,
         expectedQuantity: data.expected,
         actualQuantity: data.actual,
         difference: data.difference,
-        alertType: 'QUANTITY_DISCREPANCY',
-        alertMessage: `Quantity discrepancy detected: expected ${data.expected}, actual ${data.actual}, difference ${data.difference}`,
         priority,
         status: 'OPEN',
         reportedBy: data.userId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       },
     });
   }
@@ -316,7 +295,7 @@ export class ProductionService {
    * Get next production stage
    */
   private getNextStage(currentStage?: ProductionStage): ProductionStage | null {
-    const stageOrder = ['THROWING', 'TRIMMING', 'DECORATION', 'DRYING', 'LOAD_BISQUE', 'OUT_BISQUE', 'LOAD_HIGH_FIRING', 'OUT_HIGH_FIRING', 'LOAD_RAKU_FIRING', 'OUT_RAKU_FIRING', 'LOAD_LUSTER_FIRING', 'OUT_LUSTER_FIRING', 'SANDING', 'WAXING', 'DIPPING', 'SPRAYING', 'COLOR_DECORATION', 'QC_GOOD', 'QC_REJECT', 'QC_RE_FIRING', 'QC_SECOND'];
+    const stageOrder = ['THROWING', 'TRIMMING', 'DECORATION', 'DRYING', 'LOAD_BISQUE', 'OUT_BISQUE', 'LOAD_HIGH_FIRING', 'OUT_HIGH_FIRING', 'SANDING', 'DIPPING', 'QC_GOOD'];
     
     if (!currentStage) {
       return 'THROWING' as ProductionStage;
@@ -333,11 +312,11 @@ export class ProductionService {
   /**
    * Update POL status based on production progress
    */
-  private async updatePOLStatus(polId: number) {
+  private async updatePOLStatus(polId: string) {
     const details = await prisma.pOLDetail.findMany({
       where: { polId },
       include: {
-        productionRecords: true,
+        production_records: true,
       },
     });
 
@@ -345,9 +324,9 @@ export class ProductionService {
     let anyInProgress = false;
 
     for (const detail of details) {
-      const stages = ['THROWING', 'TRIMMING', 'DECORATION', 'DRYING', 'LOAD_BISQUE', 'OUT_BISQUE', 'LOAD_HIGH_FIRING', 'OUT_HIGH_FIRING', 'LOAD_RAKU_FIRING', 'OUT_RAKU_FIRING', 'LOAD_LUSTER_FIRING', 'OUT_LUSTER_FIRING', 'SANDING', 'WAXING', 'DIPPING', 'SPRAYING', 'COLOR_DECORATION', 'QC_GOOD', 'QC_REJECT', 'QC_RE_FIRING', 'QC_SECOND'];
+      const stages = ['THROWING', 'TRIMMING', 'DECORATION', 'DRYING', 'LOAD_BISQUE', 'OUT_BISQUE', 'LOAD_HIGH_FIRING', 'OUT_HIGH_FIRING', 'SANDING', 'DIPPING', 'QC_GOOD'];
       const completedStages = new Set(
-        detail.productionRecords.map((r) => r.stage)
+        detail.production_records.map((r) => r.stage)
       );
 
       if (completedStages.size < stages.length) {
@@ -359,14 +338,14 @@ export class ProductionService {
       }
     }
 
-    let status: 'DRAFT' | 'IN_PROGRESS' | 'COMPLETED';
+    let status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
 
     if (allComplete) {
       status = 'COMPLETED';
     } else if (anyInProgress) {
       status = 'IN_PROGRESS';
     } else {
-      status = 'DRAFT';
+      status = 'PENDING';
     }
 
     await prisma.pOL.update({
@@ -378,7 +357,7 @@ export class ProductionService {
   /**
    * Get decoration tasks for a POL detail
    */
-  async getDecorationTasks(polDetailId: number) {
+  async getDecorationTasks(polDetailId: string) {
     const tasks = await prisma.decorationTask.findMany({
       where: { polDetailId },
       orderBy: { createdAt: 'desc' },
@@ -389,12 +368,10 @@ export class ProductionService {
       tasks: tasks.map((task) => ({
         taskId: task.id,
         taskName: task.taskName,
-        taskDescription: task.taskDescription,
-        quantityRequired: task.quantityRequired,
-        quantityCompleted: task.quantityCompleted,
-        quantityRejected: task.quantityRejected,
-        status: task.status,
-        notes: task.notes,
+        description: task.description,
+        quantity: task.quantity,
+        completed: task.completed,
+        completedAt: task.completedAt,
         createdAt: task.createdAt,
         updatedAt: task.updatedAt,
       })),
@@ -405,12 +382,11 @@ export class ProductionService {
    * Create a new decoration task
    */
   async createDecorationTask(data: {
-    polDetailId: number;
+    polDetailId: string;
     taskName: string;
-    taskDescription?: string;
-    quantityRequired: number;
-    notes?: string;
-    createdBy?: number;
+    description?: string;
+    quantity: number;
+    userId?: string;
   }) {
     const detail = await prisma.pOLDetail.findUnique({
       where: { id: data.polDetailId },
@@ -422,27 +398,25 @@ export class ProductionService {
 
     const task = await prisma.decorationTask.create({
       data: {
+        id: `dec-${Date.now()}`,
         polDetailId: data.polDetailId,
         taskName: data.taskName,
-        taskDescription: data.taskDescription,
-        quantityRequired: data.quantityRequired,
-        quantityCompleted: 0,
-        quantityRejected: 0,
-        status: 'PENDING',
-        notes: data.notes,
-        createdBy: data.createdBy,
+        description: data.description,
+        quantity: data.quantity,
+        completed: false,
+        userId: data.userId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       },
     });
 
     return {
       taskId: task.id,
       taskName: task.taskName,
-      taskDescription: task.taskDescription,
-      quantityRequired: task.quantityRequired,
-      quantityCompleted: task.quantityCompleted,
-      quantityRejected: task.quantityRejected,
-      status: task.status,
-      notes: task.notes,
+      description: task.description,
+      quantity: task.quantity,
+      completed: task.completed,
+      completedAt: task.completedAt,
       createdAt: task.createdAt,
       updatedAt: task.updatedAt,
     };
@@ -452,12 +426,11 @@ export class ProductionService {
    * Update a decoration task
    */
   async updateDecorationTask(
-    taskId: number,
+    taskId: string,
     data: {
-      quantityCompleted?: number;
-      quantityRejected?: number;
-      notes?: string;
-      status?: string;
+      quantity?: number;
+      completed?: boolean;
+      completedAt?: Date;
     }
   ) {
     const task = await prisma.decorationTask.findUnique({
@@ -469,27 +442,17 @@ export class ProductionService {
     }
 
     const updateData: any = {};
-    if (data.quantityCompleted !== undefined) {
-      updateData.quantityCompleted = data.quantityCompleted;
-      // Auto-complete if quantity completed >= required
-      if (data.quantityCompleted >= task.quantityRequired && task.status === 'PENDING') {
-        updateData.status = 'COMPLETED';
-        updateData.completedAt = new Date();
-      } else if (data.quantityCompleted > 0 && task.status === 'PENDING') {
-        updateData.status = 'IN_PROGRESS';
-      }
+    if (data.quantity !== undefined) {
+      updateData.quantity = data.quantity;
     }
-    if (data.quantityRejected !== undefined) {
-      updateData.quantityRejected = data.quantityRejected;
-    }
-    if (data.notes !== undefined) {
-      updateData.notes = data.notes;
-    }
-    if (data.status !== undefined) {
-      updateData.status = data.status;
-      if (data.status === 'COMPLETED') {
+    if (data.completed !== undefined) {
+      updateData.completed = data.completed;
+      if (data.completed) {
         updateData.completedAt = new Date();
       }
+    }
+    if (data.completedAt !== undefined) {
+      updateData.completedAt = data.completedAt;
     }
 
     const updatedTask = await prisma.decorationTask.update({
@@ -500,12 +463,10 @@ export class ProductionService {
     return {
       taskId: updatedTask.id,
       taskName: updatedTask.taskName,
-      taskDescription: updatedTask.taskDescription,
-      quantityRequired: updatedTask.quantityRequired,
-      quantityCompleted: updatedTask.quantityCompleted,
-      quantityRejected: updatedTask.quantityRejected,
-      status: updatedTask.status,
-      notes: updatedTask.notes,
+      description: updatedTask.description,
+      quantity: updatedTask.quantity,
+      completed: updatedTask.completed,
+      completedAt: updatedTask.completedAt,
       createdAt: updatedTask.createdAt,
       updatedAt: updatedTask.updatedAt,
     };
@@ -514,7 +475,7 @@ export class ProductionService {
   /**
    * Delete a decoration task
    */
-  async deleteDecorationTask(taskId: number) {
+  async deleteDecorationTask(taskId: string) {
     const task = await prisma.decorationTask.findUnique({
       where: { id: taskId },
     });
@@ -582,9 +543,12 @@ export class ProductionService {
 
     const reason = await prisma.defectReason.create({
       data: {
+        id: `defect-${Date.now()}`,
         category: data.category,
         description: data.description,
         isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       },
     });
 
@@ -595,7 +559,7 @@ export class ProductionService {
    * Update a defect reason
    */
   async updateDefectReason(
-    reasonId: number,
+    reasonId: string,
     data: {
       category?: string;
       description?: string;
@@ -631,6 +595,7 @@ export class ProductionService {
         ...(data.category && { category: data.category }),
         ...(data.description && { description: data.description }),
         ...(data.isActive !== undefined && { isActive: data.isActive }),
+        updatedAt: new Date(),
       },
     });
 
@@ -640,7 +605,7 @@ export class ProductionService {
   /**
    * Delete (deactivate) a defect reason
    */
-  async deleteDefectReason(reasonId: number) {
+  async deleteDefectReason(reasonId: string) {
     const reason = await prisma.defectReason.findUnique({
       where: { id: reasonId },
     });
@@ -652,7 +617,7 @@ export class ProductionService {
     // Soft delete - just set isActive to false
     await prisma.defectReason.update({
       where: { id: reasonId },
-      data: { isActive: false },
+      data: { isActive: false, updatedAt: new Date() },
     });
 
     return { message: 'Defect reason deactivated successfully' };
@@ -661,7 +626,7 @@ export class ProductionService {
   /**
    * Get product parts for a POL detail
    */
-  async getProductParts(polDetailId: number) {
+  async getProductParts(polDetailId: string) {
     const parts = await prisma.productPart.findMany({
       where: { polDetailId },
       orderBy: { throwingOrder: 'asc' },
@@ -673,21 +638,22 @@ export class ProductionService {
    * Create a product part
    */
   async createProductPart(data: {
-    polDetailId: number;
+    polDetailId: string;
     partName: string;
-    partType?: 'MAIN' | 'SUB' | 'ASSEMBLY';
-    linkedToPartId?: number;
+    partType?: string;
     throwingRequired?: boolean;
     throwingOrder?: number;
   }) {
     const part = await prisma.productPart.create({
       data: {
+        id: `part-${Date.now()}`,
         polDetailId: data.polDetailId,
         partName: data.partName,
         partType: data.partType || 'MAIN',
-        linkedToPartId: data.linkedToPartId,
         throwingRequired: data.throwingRequired !== undefined ? data.throwingRequired : true,
         throwingOrder: data.throwingOrder,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       },
     });
     return part;
@@ -697,11 +663,10 @@ export class ProductionService {
    * Update a product part
    */
   async updateProductPart(
-    partId: number,
+    partId: string,
     data: {
       partName?: string;
-      partType?: 'MAIN' | 'SUB' | 'ASSEMBLY';
-      linkedToPartId?: number;
+      partType?: string;
       throwingRequired?: boolean;
       throwingOrder?: number;
     }
@@ -719,9 +684,9 @@ export class ProductionService {
       data: {
         ...(data.partName && { partName: data.partName }),
         ...(data.partType && { partType: data.partType }),
-        ...(data.linkedToPartId !== undefined && { linkedToPartId: data.linkedToPartId }),
         ...(data.throwingRequired !== undefined && { throwingRequired: data.throwingRequired }),
         ...(data.throwingOrder !== undefined && { throwingOrder: data.throwingOrder }),
+        updatedAt: new Date(),
       },
     });
 
@@ -731,7 +696,7 @@ export class ProductionService {
   /**
    * Delete a product part
    */
-  async deleteProductPart(partId: number) {
+  async deleteProductPart(partId: string) {
     const part = await prisma.productPart.findUnique({
       where: { id: partId },
     });
@@ -748,273 +713,10 @@ export class ProductionService {
   }
 
   /**
-   * Get production stages for a specific product part
-   */
-  async getPartProductionStages(partId: number) {
-    const part = await prisma.productPart.findUnique({
-      where: { id: partId },
-      include: {
-        polDetail: {
-          include: {
-            pol: true,
-          },
-        },
-        productionRecords: {
-          orderBy: { createdAt: 'desc' },
-        },
-      },
-    });
-
-    if (!part) {
-      throw new AppError('Product part not found', 404, 'PART_NOT_FOUND');
-    }
-
-    // Get workflow stages
-    let workflowStages: string[] = [];
-    try {
-      const workflow = await productService.getProductionWorkflow(part.polDetail.productCode);
-      if (workflow) {
-        workflowStages = workflow.stages;
-      }
-    } catch (error) {
-      console.error('Error getting production workflow:', error);
-    }
-
-    if (workflowStages.length === 0) {
-      workflowStages = this.getStagesByProductType(part.polDetail.productType);
-    }
-
-    // Group records by stage
-    const stageRecords: Record<string, any[]> = {};
-    part.productionRecords.forEach((record) => {
-      if (!stageRecords[record.stage]) {
-        stageRecords[record.stage] = [];
-      }
-      stageRecords[record.stage].push(record);
-    });
-
-    // Calculate quantities per stage
-    const stageData = workflowStages.map((stage) => {
-      const records = stageRecords[stage] || [];
-      const latestRecord = records[0];
-      const totalQuantity = records.reduce((sum, r) => sum + r.quantity, 0);
-      const totalRejectQuantity = records.reduce((sum, r) => sum + (r.rejectQuantity || 0), 0);
-
-      return {
-        stage,
-        totalQuantity,
-        totalRejectQuantity,
-        latestRecord,
-        records,
-      };
-    });
-
-    return {
-      part,
-      polDetail: part.polDetail,
-      stages: stageData,
-    };
-  }
-
-  /**
-   * Track production for a specific part
-   */
-  async trackPartProduction(data: TrackProductionData & { partId: number }) {
-    const { partId, polDetailId, stage, quantity, rejectQuantity, remakeCycle, category, remakeType, ovenId, operatorId, rejectReasonId, productionDate, userId, notes } = data;
-
-    // Validate part exists
-    const part = await prisma.productPart.findUnique({
-      where: { id: partId },
-    });
-
-    if (!part) {
-      throw new AppError('Product part not found', 404, 'PART_NOT_FOUND');
-    }
-
-    // Validate quantity
-    if (quantity <= 0) {
-      throw new AppError('Quantity must be greater than 0', 400, 'INVALID_QUANTITY');
-    }
-
-    // Check for discrepancies
-    const discrepancy = await this.checkForPartDiscrepancy(partId, stage, quantity, rejectQuantity);
-
-    // Auto-determine category if not provided
-    const productionCategory = category || this.getCategoryForStage(stage);
-
-    // Create production record with part reference
-    const record = await prisma.productionRecord.create({
-      data: {
-        polDetailId,
-        partId,
-        stage,
-        quantity,
-        rejectQuantity: rejectQuantity || 0,
-        remakeCycle: remakeCycle || 0,
-        category: productionCategory,
-        remakeType,
-        ovenId,
-        operatorId,
-        rejectReasonId,
-        productionDate: productionDate || undefined,
-        createdBy: userId,
-        notes,
-      },
-    });
-
-    // Create discrepancy alert if needed
-    if (discrepancy) {
-      const detail = await prisma.pOLDetail.findUnique({
-        where: { id: polDetailId },
-      });
-
-      if (detail) {
-        await this.createDiscrepancyAlert({
-          polId: detail.polId,
-          polDetailId,
-          stage,
-          expected: discrepancy.expected,
-          actual: discrepancy.actual,
-          difference: discrepancy.difference,
-          userId,
-        });
-      }
-    }
-
-    return record;
-  }
-
-  /**
-   * Check for quantity discrepancies at part level
-   */
-  private async checkForPartDiscrepancy(
-    partId: number,
-    stage: ProductionStage,
-    quantity: number,
-    rejectQuantity?: number
-  ): Promise<DiscrepancyData | null> {
-    const stageOrder = ['THROWING', 'TRIMMING', 'DECORATION', 'DRYING', 'LOAD_BISQUE', 'OUT_BISQUE', 'LOAD_HIGH_FIRING', 'OUT_HIGH_FIRING', 'LOAD_RAKU_FIRING', 'OUT_RAKU_FIRING', 'LOAD_LUSTER_FIRING', 'OUT_LUSTER_FIRING', 'SANDING', 'WAXING', 'DIPPING', 'SPRAYING', 'COLOR_DECORATION', 'QC_GOOD', 'QC_REJECT', 'QC_RE_FIRING', 'QC_SECOND'];
-    const currentIndex = stageOrder.indexOf(stage);
-
-    if (currentIndex === 0) {
-      return null;
-    }
-
-    const previousStage = stageOrder[currentIndex - 1] as ProductionStage;
-
-    // Get total quantity from previous stage for this part
-    const previousRecords = await prisma.productionRecord.findMany({
-      where: {
-        partId,
-        stage: previousStage,
-      },
-    });
-
-    const expectedQuantity = previousRecords.reduce((sum, r) => sum + r.quantity, 0);
-
-    if (expectedQuantity === 0) {
-      return null;
-    }
-
-    // Get already recorded quantity for current stage
-    const currentRecords = await prisma.productionRecord.findMany({
-      where: {
-        partId,
-        stage,
-      },
-    });
-
-    const alreadyRecordedGood = currentRecords.reduce((sum, r) => sum + r.quantity, 0);
-    const alreadyRecordedRejects = currentRecords.reduce((sum, r) => sum + (r.rejectQuantity || 0), 0);
-    const newRejectQuantity = rejectQuantity || 0;
-
-    const totalAfterNewEntry = alreadyRecordedGood + quantity + alreadyRecordedRejects + newRejectQuantity;
-    const difference = totalAfterNewEntry - expectedQuantity;
-
-    const tolerance = expectedQuantity * 0.05;
-    if (Math.abs(difference) > tolerance) {
-      return {
-        expected: expectedQuantity,
-        actual: totalAfterNewEntry,
-        difference,
-        stage,
-      };
-    }
-
-    return null;
-  }
-
-  /**
-   * Get remake cycles for a POL detail
-   */
-  async getRemakeCycles(polDetailId: number) {
-    const cycles = await prisma.remakeCycle.findMany({
-      where: { polDetailId },
-      orderBy: { remakeNumber: 'desc' },
-      include: {
-        rejectReason: true,
-      },
-    });
-    return cycles;
-  }
-
-  /**
-   * Create a remake cycle
-   */
-  async createRemakeCycle(data: {
-    polDetailId: number;
-    originalRecordId?: number;
-    remakeNumber: number;
-    remakeType: RemakeType;
-    rejectStage?: string;
-    rejectCategory?: string;
-    rejectReasonId?: number;
-    rejectQuantity: number;
-    createdBy: number;
-  }) {
-    // Check if remake number exceeds 3 - requires escalation
-    if (data.remakeNumber > 3) {
-      // Create with ESCALATED status
-      const cycle = await prisma.remakeCycle.create({
-        data: {
-          polDetailId: data.polDetailId,
-          originalRecordId: data.originalRecordId,
-          remakeNumber: data.remakeNumber,
-          remakeType: data.remakeType,
-          rejectStage: data.rejectStage,
-          rejectCategory: data.rejectCategory,
-          rejectReasonId: data.rejectReasonId,
-          rejectQuantity: data.rejectQuantity,
-          status: 'ESCALATED',
-          createdBy: data.createdBy,
-        },
-      });
-      return { cycle, isEscalated: true };
-    }
-
-    const cycle = await prisma.remakeCycle.create({
-      data: {
-        polDetailId: data.polDetailId,
-        originalRecordId: data.originalRecordId,
-        remakeNumber: data.remakeNumber,
-        remakeType: data.remakeType,
-        rejectStage: data.rejectStage,
-        rejectCategory: data.rejectCategory,
-        rejectReasonId: data.rejectReasonId,
-        rejectQuantity: data.rejectQuantity,
-        status: 'IN_PROGRESS',
-        createdBy: data.createdBy,
-      },
-    });
-
-    return { cycle, isEscalated: false };
-  }
-
-  /**
    * Get production stages based on product type
    * Handbuild and Slab products skip Forming stage
    */
-  getStagesByProductType(productType: ProductType): string[] {
+  getStagesByProductType(productType: string): string[] {
     const allStages = [
       'THROWING',
       'TRIMMING',
@@ -1024,49 +726,18 @@ export class ProductionService {
       'OUT_BISQUE',
       'LOAD_HIGH_FIRING',
       'OUT_HIGH_FIRING',
-      'LOAD_RAKU_FIRING',
-      'OUT_RAKU_FIRING',
-      'LOAD_LUSTER_FIRING',
-      'OUT_LUSTER_FIRING',
       'SANDING',
-      'WAXING',
       'DIPPING',
-      'SPRAYING',
-      'COLOR_DECORATION',
       'QC_GOOD',
-      'QC_REJECT',
-      'QC_RE_FIRING',
-      'QC_SECOND',
     ];
 
     // Handbuild and Slab products skip Forming stages
-    if (productType === 'HANDBUILD' || productType === 'SLAB') {
+    if (productType === 'HAND_BUILT' || productType === 'SLAB_TRAY') {
       // Start from DECORATION instead of THROWING
       return allStages.filter(stage => stage !== 'THROWING' && stage !== 'TRIMMING');
     }
 
     return allStages;
-  }
-
-  /**
-   * Get product category for a stage
-   */
-  getCategoryForStage(stage: ProductionStage): ProductCategory {
-    const formingStages = ['THROWING', 'TRIMMING'];
-    const decorStages = ['DECORATION'];
-    const dryingStages = ['DRYING'];
-    const firingStages = ['LOAD_BISQUE', 'OUT_BISQUE', 'LOAD_HIGH_FIRING', 'OUT_HIGH_FIRING', 'LOAD_RAKU_FIRING', 'OUT_RAKU_FIRING', 'LOAD_LUSTER_FIRING', 'OUT_LUSTER_FIRING'];
-    const glazingStages = ['SANDING', 'WAXING', 'DIPPING', 'SPRAYING', 'COLOR_DECORATION'];
-    const qcStages = ['QC_GOOD', 'QC_REJECT', 'QC_RE_FIRING', 'QC_SECOND'];
-
-    if (formingStages.includes(stage)) return 'FORMING';
-    if (decorStages.includes(stage)) return 'DECOR';
-    if (dryingStages.includes(stage)) return 'DRYING';
-    if (firingStages.includes(stage)) return 'FIRING';
-    if (glazingStages.includes(stage)) return 'GLAZING';
-    if (qcStages.includes(stage)) return 'QC';
-
-    return 'FORMING'; // Default
   }
 
   /**
@@ -1088,125 +759,6 @@ export class ProductionService {
       orderBy: { fullName: 'asc' },
     });
     return users;
-  }
-
-  /**
-   * Combine multiple product parts at any production stage
-   */
-  async combineParts(data: {
-    polDetailId: number;
-    stage: ProductionStage;
-    parts: Array<{ partId: number; quantity: number }>;
-    notes?: string;
-    userId: number;
-  }) {
-    const { polDetailId, stage, parts, notes, userId } = data;
-
-    // Validate POL detail exists
-    const detail = await prisma.pOLDetail.findUnique({
-      where: { id: polDetailId },
-    });
-
-    if (!detail) {
-      throw new AppError('POL detail not found', 404, 'DETAIL_NOT_FOUND');
-    }
-
-    // Validate at least 2 parts are provided
-    if (parts.length < 2) {
-      throw new AppError('At least 2 parts are required for combination', 400, 'INSUFFICIENT_PARTS');
-    }
-
-    // Validate all parts exist and belong to this POL detail
-    const partIds = parts.map(p => p.partId);
-    const existingParts = await prisma.productPart.findMany({
-      where: {
-        id: { in: partIds },
-        polDetailId,
-      },
-    });
-
-    if (existingParts.length !== partIds.length) {
-      throw new AppError('One or more parts not found', 404, 'PARTS_NOT_FOUND');
-    }
-
-    // Calculate combined quantity (minimum of all parts)
-    const quantities = parts.map(p => p.quantity);
-    const combinedQuantity = Math.min(...quantities);
-
-    if (combinedQuantity <= 0) {
-      throw new AppError('Combined quantity must be greater than 0', 400, 'INVALID_QUANTITY');
-    }
-
-    // Create combination record
-    const combination = await prisma.productPartCombination.create({
-      data: {
-        polDetailId,
-        combinedAtStage: stage,
-        combinedQuantity,
-        combinedBy: userId,
-        notes,
-      },
-    });
-
-    // Create combination items
-    const combinationItems = await Promise.all(
-      parts.map(part =>
-        prisma.productPartCombinationItem.create({
-          data: {
-            combinationId: combination.id,
-            partId: part.partId,
-            quantityUsed: part.quantity,
-          },
-        })
-      )
-    );
-
-    // Create a production record for the combined unit
-    const productionRecord = await prisma.productionRecord.create({
-      data: {
-        polDetailId,
-        stage,
-        quantity: combinedQuantity,
-        rejectQuantity: 0,
-        remakeCycle: 0,
-        category: this.getCategoryForStage(stage),
-        createdBy: userId,
-        notes: `Combined from ${parts.length} parts: ${notes || ''}`,
-      },
-    });
-
-    return {
-      combination,
-      combinationItems,
-      productionRecord,
-      combinedQuantity,
-    };
-  }
-
-  /**
-   * Get all part combinations for a POL detail
-   */
-  async getPartCombinations(polDetailId: number) {
-    const combinations = await prisma.productPartCombination.findMany({
-      where: { polDetailId },
-      include: {
-        combinationItems: {
-          include: {
-            part: true,
-          },
-        },
-        combinedByUser: {
-          select: {
-            id: true,
-            fullName: true,
-            username: true,
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    return combinations;
   }
 }
 

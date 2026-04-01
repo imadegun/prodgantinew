@@ -17,7 +17,7 @@ interface ProductionStage {
 }
 
 interface ProductionStagesResponse {
-  polDetailId: number;
+  polDetailId: string;
   productCode: string;
   productName: string;
   orderQuantity: number;
@@ -67,7 +67,7 @@ interface ProductProductionInfo {
 }
 
 interface TrackProductionRequest {
-  polDetailId: number;
+  polDetailId: string;
   stage: string;
   quantity: number;
   rejectQuantity?: number;
@@ -129,7 +129,7 @@ interface DecorationTask {
 }
 
 interface DecorationTasksResponse {
-  polDetailId: number;
+  polDetailId: string;
   tasks: DecorationTask[];
 }
 
@@ -142,7 +142,7 @@ interface TrackDecorationTaskRequest {
 }
 
 export const productionService = {
-  async getProductionStages(polDetailId: number): Promise<ProductionStagesResponse> {
+  async getProductionStages(polDetailId: string): Promise<ProductionStagesResponse> {
     const response = await apiClient.get<ProductionStagesResponse>(
       `/production/${polDetailId}/stages`
     );
@@ -162,7 +162,7 @@ export const productionService = {
     return response;
   },
 
-  async getDecorationTasks(polDetailId: number): Promise<DecorationTasksResponse> {
+  async getDecorationTasks(polDetailId: string): Promise<DecorationTasksResponse> {
     const response = await apiClient.get<DecorationTasksResponse>(
       `/production/decorations/${polDetailId}`
     );
@@ -170,7 +170,7 @@ export const productionService = {
   },
 
   async createDecorationTask(data: {
-    polDetailId: number;
+    polDetailId: string;
     taskName: string;
     taskDescription?: string;
     quantityRequired: number;
@@ -286,7 +286,7 @@ export const productionService = {
   },
 
   // Get product parts for a POL detail
-  async getProductParts(polDetailId: number): Promise<Array<{
+  async getProductParts(polDetailId: string): Promise<Array<{
     id: number;
     partName: string;
     partType: string;
@@ -307,7 +307,7 @@ export const productionService = {
 
   // Create a product part
   async createProductPart(data: {
-    polDetailId: number;
+    polDetailId: string;
     partName: string;
     partType?: string;
     linkedToPartId?: number;
@@ -343,7 +343,7 @@ export const productionService = {
 
   // Track production for a specific product part
   async trackPartProduction(data: {
-    polDetailId: number;
+    polDetailId: string;
     partId: number;
     stage: string;
     quantity: number;
@@ -363,7 +363,7 @@ export const productionService = {
   },
 
   // Get remake cycles for a POL detail
-  async getRemakeCycles(polDetailId: number): Promise<Array<{
+  async getRemakeCycles(polDetailId: string): Promise<Array<{
     id: number;
     remakeNumber: number;
     remakeType: string;
@@ -396,7 +396,7 @@ export const productionService = {
 
   // Create a remake cycle
   async createRemakeCycle(data: {
-    polDetailId: number;
+    polDetailId: string;
     originalRecordId?: number;
     remakeNumber: number;
     remakeType: string;
@@ -463,7 +463,7 @@ export const productionService = {
 
   // Combine parts at any stage
   async combineParts(data: {
-    polDetailId: number;
+    polDetailId: string;
     stage: string;
     parts: Array<{ partId: number; quantity: number }>;
     notes?: string;
@@ -473,7 +473,7 @@ export const productionService = {
   },
 
   // Get part combinations for a POL detail
-  async getPartCombinations(polDetailId: number): Promise<Array<{
+  async getPartCombinations(polDetailId: string): Promise<Array<{
     id: number;
     combinedAtStage: string;
     combinedQuantity: number;

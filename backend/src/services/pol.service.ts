@@ -8,7 +8,7 @@ interface CreatePOLData {
   poDate: Date;
   deliveryDate: Date;
   notes?: string;
-  createdBy?: number;
+  createdBy: string;
 }
 
 interface UpdatePOLData {
@@ -101,17 +101,17 @@ export class POLService {
   /**
    * Get POL by ID with full details
    */
-  async getPOLById(id: number) {
+  async getPOLById(id: string) {
     const pol = await prisma.pOL.findUnique({
       where: { id },
       include: {
         polDetails: {
           include: {
-            productionRecords: {
+            production_records: {
               orderBy: { createdAt: 'desc' },
               take: 1,
             },
-            decorationTasks: {
+            decoration_tasks: {
               orderBy: { createdAt: 'desc' },
               take: 1,
             },
@@ -147,22 +147,23 @@ export class POLService {
       throw new AppError('POL number already exists', 400, 'POL_EXISTS');
     }
 
-    // Validate that createdBy is provided and is a valid number
-    // This field is required by the database schema (non-nullable integer)
-    if (data.createdBy === undefined) {
+    // Validate that createdBy is provided
+    if (!data.createdBy) {
       throw new AppError('Created by user is required', 400, 'CREATED_BY_REQUIRED');
     }
 
     const pol = await prisma.pOL.create({
       data: {
+        id: `pol-${Date.now()}`,
         poNumber: data.poNumber,
         clientName: data.clientName,
         poDate: data.poDate,
         deliveryDate: data.deliveryDate,
         notes: data.notes,
         createdBy: data.createdBy,
+        createdAt: new Date(),
         updatedAt: new Date(),
-        status: POLStatus.DRAFT,
+        status: POLStatus.PENDING,
       },
     });
 
@@ -172,7 +173,7 @@ export class POLService {
   /**
    * Update POL
    */
-  async updatePOL(id: number, data: UpdatePOLData) {
+  async updatePOL(id: string, data: UpdatePOLData) {
     const pol = await prisma.pOL.findUnique({
       where: { id },
     });
@@ -183,7 +184,10 @@ export class POLService {
 
     const updatedPOL = await prisma.pOL.update({
       where: { id },
-      data,
+      data: {
+        ...data,
+        updatedAt: new Date(),
+      },
     });
 
     return updatedPOL;
@@ -192,7 +196,7 @@ export class POLService {
   /**
    * Delete POL
    */
-  async deletePOL(id: number) {
+  async deletePOL(id: string) {
     const pol = await prisma.pOL.findUnique({
       where: { id },
     });
@@ -205,7 +209,7 @@ export class POLService {
     const hasProductionRecords = await prisma.pOLDetail.findFirst({
       where: {
         polId: id,
-        productionRecords: {
+        production_records: {
           some: {},
         },
       },
@@ -225,7 +229,7 @@ export class POLService {
   /**
    * Add product to POL
    */
-  async addProductToPOL(polId: number, productData: any) {
+  async addProductToPOL(polId: string, productData: any) {
     const pol = await prisma.pOL.findUnique({
       where: { id: polId },
     });
@@ -234,19 +238,13 @@ export class POLService {
       throw new AppError('POL not found', 404, 'POL_NOT_FOUND');
     }
 
-    // Calculate qtyToMake based on quantity and extra buffer (always auto-calculate)
-    const quantity = productData.quantity || 0;
-    const extraBuffer = productData.extraBuffer || 15; // Default 15%
-    const qtyToMake = Math.round(quantity + (quantity * extraBuffer / 100));
-
     const detail = await prisma.pOLDetail.create({
       data: {
+        id: `detail-${Date.now()}`,
         polId,
         productCode: productData.productCode,
         productName: productData.productName,
-        quantity: quantity,
-        extraBuffer: extraBuffer,
-        qtyToMake: qtyToMake,
+        quantity: productData.quantity,
         productType: productData.productType || 'PLAIN',
         color: productData.color,
         texture: productData.texture,
@@ -254,6 +252,8 @@ export class POLService {
         size: productData.size,
         finalSize: productData.finalSize,
         notes: productData.notes,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       },
     });
 
@@ -263,7 +263,7 @@ export class POLService {
   /**
    * Update POL detail
    */
-  async updatePOLDetail(detailId: number, data: any) {
+  async updatePOLDetail(detailId: string, data: any) {
     const detail = await prisma.pOLDetail.findUnique({
       where: { id: detailId },
     });
@@ -272,18 +272,12 @@ export class POLService {
       throw new AppError('POL detail not found', 404, 'DETAIL_NOT_FOUND');
     }
 
-    // Recalculate qtyToMake if quantity or extraBuffer is being updated
-    let updateData = { ...data };
-    
-    if (data.quantity !== undefined || data.extraBuffer !== undefined) {
-      const quantity = data.quantity !== undefined ? data.quantity : detail.quantity;
-      const extraBuffer = data.extraBuffer !== undefined ? data.extraBuffer : detail.extraBuffer;
-      updateData.qtyToMake = Math.round(quantity + (quantity * extraBuffer / 100));
-    }
-
     const updatedDetail = await prisma.pOLDetail.update({
       where: { id: detailId },
-      data: updateData,
+      data: {
+        ...data,
+        updatedAt: new Date(),
+      },
     });
 
     return updatedDetail;
@@ -292,7 +286,7 @@ export class POLService {
   /**
    * Delete POL detail
    */
-  async deletePOLDetail(detailId: number) {
+  async deletePOLDetail(detailId: string) {
     const detail = await prisma.pOLDetail.findUnique({
       where: { id: detailId },
     });

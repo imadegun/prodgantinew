@@ -6,7 +6,7 @@ interface Client {
 }
 
 interface POL {
-  polId: number;
+  polId: string;
   poNumber: string;
   clientName: string;
   totalOrder: number;
@@ -24,8 +24,8 @@ interface POL {
 }
 
 interface POLDetail {
-  polDetailId: number;
-  polId: number;
+  polDetailId: string;
+  polId: string;
   productCode: string;
   productName: string;
   color: string | null;
@@ -115,7 +115,7 @@ export const polService = {
     return response;
   },
 
-  async getPOLById(polId: number): Promise<POLDetailResponse> {
+  async getPOLById(polId: string): Promise<POLDetailResponse> {
     const response = await apiClient.get<POLDetailResponse>(`/pols/${polId}`);
     return response;
   },
@@ -125,12 +125,12 @@ export const polService = {
     return response;
   },
 
-  async updatePOL(polId: number, data: UpdatePOLRequest): Promise<POL> {
+  async updatePOL(polId: string, data: UpdatePOLRequest): Promise<POL> {
     const response = await apiClient.put<POL>(`/pols/${polId}`, data);
     return response;
   },
 
-  async deletePOL(polId: number): Promise<void> {
+  async deletePOL(polId: string): Promise<void> {
     await apiClient.delete(`/pols/${polId}`);
   },
 
@@ -163,7 +163,7 @@ export const polService = {
     return response;
   },
 
-  async updatePOLDetail(detailId: number, data: {
+  async updatePOLDetail(detailId: string, data: {
     productCode?: string;
     productName?: string;
     color?: string;
@@ -177,11 +177,11 @@ export const polService = {
     return response;
   },
 
-  async deletePOLDetail(detailId: number): Promise<void> {
+  async deletePOLDetail(detailId: string): Promise<void> {
     await apiClient.delete(`/pols/details/${detailId}`);
   },
 
-  async addProductToPOL(polId: number, data: {
+  async addProductToPOL(polId: string, data: {
     productCode: string;
     productName: string;
     color?: string;
