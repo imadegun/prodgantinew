@@ -22,39 +22,44 @@ The backend API for the ProdGantiNew Production Tracking System has been success
 backend/
 ├── src/
 │   ├── config/
-│   │   └── database.ts              # Prisma client configuration
-│   ├── controllers/                 # Request handlers (to be implemented)
+│   │   ├── database.ts              # Prisma client configuration
+│   │   └── mysql.ts                 # MySQL connection for gayafusionall
+│   ├── controllers/                 # Request handlers (routes call services directly)
 │   ├── middleware/
 │   │   ├── auth.middleware.ts       # JWT authentication & RBAC
-│   │   └── error.middleware.ts     # Error handling
+│   │   └── error.middleware.ts       # Error handling
 │   ├── models/                     # Database models (Prisma)
 │   ├── routes/
 │   │   ├── auth.routes.ts          # Authentication endpoints
 │   │   ├── pol.routes.ts           # POL management endpoints
-│   │   ├── production.routes.ts     # Production tracking endpoints
-│   │   ├── alert.routes.ts          # Alert system endpoints
-│   │   ├── report.routes.ts         # Reporting endpoints
+│   │   ├── production.routes.ts    # Production tracking endpoints
+│   │   ├── alert.routes.ts         # Alert system endpoints
+│   │   ├── report.routes.ts        # Reporting endpoints
 │   │   ├── logbook.routes.ts       # Logbook endpoints
 │   │   ├── revision.routes.ts      # Revision ticket endpoints
-│   │   └── product.routes.ts       # Product lookup endpoints
+│   │   ├── product.routes.ts       # Product lookup endpoints
+│   │   └── stage.routes.ts         # Stage management endpoints (NEW)
 │   ├── services/
-│   │   ├── auth.service.ts         # Authentication business logic
+│   │   ├── auth.service.ts          # Authentication business logic
 │   │   ├── pol.service.ts          # POL management business logic
-│   │   ├── production.service.ts    # Production tracking business logic
+│   │   ├── production.service.ts   # Production tracking business logic
 │   │   ├── alert.service.ts        # Alert system business logic
 │   │   ├── report.service.ts       # Reporting business logic
 │   │   ├── logbook.service.ts      # Logbook business logic
 │   │   ├── revision.service.ts     # Revision ticket business logic
-│   │   └── product.service.ts      # Product lookup business logic
+│   │   ├── product.service.ts      # Product lookup (with MySQL gayafusionall)
+│   │   └── stage.service.ts        # Stage management business logic (NEW)
 │   ├── types/
-│   │   └── index.ts               # TypeScript type definitions
+│   │   └── index.ts                # TypeScript type definitions
 │   ├── utils/
-│   │   ├── validation.util.ts      # Zod validation schemas
+│   │   ├── validation.util.ts       # Zod validation schemas
 │   │   ├── logger.util.ts          # Logging utility
-│   │   └── date.util.ts           # Date utility functions
-│   └── app.ts                     # Express app setup
+│   │   └── date.util.ts            # Date utility functions
+│   └── app.ts                      # Express app setup
 ├── prisma/
-│   └── schema.prisma              # Database schema
+│   ├── schema.prisma               # Database schema
+│   ├── prisma.config.ts           # Prisma 5.x configuration
+│   └── seed.ts                    # Database seed data
 ├── tests/                         # Test files (to be implemented)
 ├── .env.example                   # Environment variables template
 ├── .gitignore
@@ -66,7 +71,7 @@ backend/
 
 ## Database Schema
 
-The Prisma schema includes 9 core models:
+The Prisma schema includes 13 core models:
 
 ### 1. User
 - User accounts with authentication
@@ -86,7 +91,7 @@ The Prisma schema includes 9 core models:
 
 ### 4. ProductionRecord
 - Production tracking at each stage
-- Stages: FORMING, FIRING, GLAZING, QUALITY_CONTROL, PACKAGING
+- Stages: THROWING, TRIMMING, DECORATION, DRYING, LOAD_BISQUE, OUT_BISQUE, LOAD_HIGH_FIRING, OUT_HIGH_FIRING, SANDING, DIPPING, QC_GOOD
 - Quantity tracking per stage
 - User attribution
 
@@ -117,6 +122,32 @@ The Prisma schema includes 9 core models:
 - Action logging with timestamps
 - IP address and user agent tracking
 
+### 10. ProductPart (NEW)
+- Tracks individual parts of a product
+- Supports manual assembly at different stages
+- Part types: MAIN, SUB, ASSEMBLY
+
+### 11. Oven (NEW)
+- Kiln/oven management for firing stages
+- Status tracking
+- Capacity information
+
+### 12. DefectReason (NEW)
+- Defines types of defects for QC
+- Category-based organization
+- Active/inactive status
+
+### 13. StageCategory (NEW)
+- Groups production stages by category
+- Color coding for UI
+- Sort order for display
+
+### 14. ProductionStageConfig (NEW)
+- Configurable production stages
+- Links to categories
+- Oven requirement flag
+- Soft delete support
+
 ## API Endpoints
 
 ### Authentication (`/api/v1/auth`)
@@ -125,6 +156,9 @@ The Prisma schema includes 9 core models:
 - `POST /logout` - User logout
 - `POST /refresh` - Refresh access token
 - `GET /me` - Get current user
+- `GET /users` - List users (admin)
+- `POST /users` - Create user
+- `PUT /users/:id` - Update user
 
 ### POL Management (`/api/v1/pols`)
 - `GET /` - List POLs with pagination and filters
@@ -132,16 +166,31 @@ The Prisma schema includes 9 core models:
 - `POST /` - Create POL (Manager only)
 - `PUT /:id` - Update POL (Manager only)
 - `DELETE /:id` - Delete POL (Manager only)
+- `POST /:id/products` - Add product to POL
+- `PUT /details/:detailId` - Update POL detail
+- `DELETE /details/:detailId` - Delete POL detail
 
 ### Production Tracking (`/api/v1/production`)
 - `GET /:polDetailId/stages` - Get production stages for a product
 - `POST /track` - Track production quantity at a stage
-- `GET /active` - Get active production tasks for current user
+- `GET /active` - Get active production tasks
+- `GET /ovens` - Get all ovens
+- `GET /defect-reasons` - Get defect reasons
+- `GET /operators` - Get all operators (users)
+- `POST /combine-parts` - Combine parts at any stage
+- `GET /:polDetailId/combinations` - Get all combinations for a POL detail
+- `GET /stages-by-product-type/:productType` - Get stages by product type
+- `GET /product-parts/:polDetailId` - Get product parts
+- `POST /product-parts` - Create product part
+- `POST /track-part` - Track part production
+- `POST /remake-cycles` - Create remake cycle
+- `GET /product-parts/:partId/stages` - Get part production stages
 
 ### Alerts (`/api/v1/alerts`)
 - `GET /` - List alerts with pagination and filters
 - `PUT /:id/acknowledge` - Acknowledge alert
 - `PUT /:id/resolve` - Resolve alert
+- `GET /unread-count` - Get unread alert count
 
 ### Reports (`/api/v1/reports`)
 - `GET /pol-summary` - POL order summary report
@@ -153,19 +202,41 @@ The Prisma schema includes 9 core models:
 - `GET /` - List logbook entries
 - `POST /` - Create logbook entry
 - `PUT /:id` - Update logbook entry
+- `DELETE /:id` - Delete logbook entry
 
 ### Revision Tickets (`/api/v1/revisions`)
 - `GET /` - List revision tickets
 - `POST /` - Create revision ticket (Manager only)
+- `PUT /:id` - Update revision ticket
 - `PUT /:id/submit` - Submit for approval
-- `PUT /:id/approve` - Approve/Reject revision (Manager only)
+- `PUT /:id/approve` - Approve revision (Manager only)
+- `PUT /:id/reject` - Reject revision (Manager only)
 
 ### Products (`/api/v1/products`)
-- `GET /search` - Search products from gayafusionall
+- `GET /search` - Search products from gayafusionall (MySQL)
 - `GET /:code` - Get product by code
 - `GET /:code/materials` - Get material requirements
 - `GET /:code/tools` - Get tool requirements
 - `GET /:code/notes` - Get build notes
+- `GET /:code/production-info` - Get production workflow info
+- `GET /:code/workflow` - Get production workflow
+- `GET /clients` - Get list of clients
+- `GET /workflow-types` - Get available workflow types
+
+### Stage Management (`/api/v1/stages`) - NEW
+- `GET /categories` - List all categories with stages
+- `GET /categories/:id` - Get category by ID
+- `POST /categories` - Create category
+- `PUT /categories/:id` - Update category
+- `DELETE /categories/:id` - Delete category (soft delete)
+- `GET /` - List all stages
+- `GET /by-category/:categoryId` - Get stages by category
+- `GET /mapping/stages` - Get stage code-to-name mapping
+- `GET /mapping/categories` - Get category code-to-info mapping
+- `GET /:id` - Get stage by ID
+- `POST /` - Create stage
+- `PUT /:id` - Update stage
+- `DELETE /:id` - Delete stage (soft delete)
 
 ### Health Check
 - `GET /api/health` - API health check
@@ -185,41 +256,52 @@ The Prisma schema includes 9 core models:
 - Pagination and filtering
 
 ### 3. Production Tracking
-- Multi-stage production tracking
+- Multi-stage production tracking (11 stages)
 - Automatic discrepancy detection (5% tolerance)
 - Active task management
 - Stage progression tracking
+- Part combination at any stage (manual assembly)
+- Oven/kiln management
+- Remake cycle tracking
 
-### 4. Alert System
+### 4. Stage Management (NEW)
+- Category management (Forming, Drying, Firing, Glazing, QC)
+- Stage configuration (11 predefined stages)
+- Soft delete support
+- Stage-to-category mapping
+- Oven requirement tracking
+
+### 5. Alert System
 - Automatic discrepancy alerts
 - Priority-based alerting
 - Acknowledgment and resolution workflow
 - Alert statistics
 
-### 5. Reporting
+### 6. Reporting
 - POL summary reports
 - Forming analysis
 - QC analysis
 - Production progress tracking
 - Discrepancy reports
 
-### 6. Logbook
+### 7. Logbook
 - Daily production logging
 - Status tracking (NORMAL, ISSUES, RESOLVED)
 - Issues and actions documentation
 - Logbook statistics
 
-### 7. Revision Tickets
+### 8. Revision Tickets
 - Design/production revision requests
 - Approval workflow
 - Severity-based prioritization
 - Revision statistics
 
-### 8. Product Lookup
-- Integration with gayafusionall database
+### 9. Product Lookup
+- Integration with gayafusionall MySQL database
 - Product search
 - Material and tool requirements
 - Build notes
+- Production workflow determination
 
 ## Security Features
 
@@ -269,7 +351,7 @@ The Prisma schema includes 9 core models:
 - Database connection (DATABASE_URL)
 - Authentication (JWT_SECRET, REFRESH_TOKEN_SECRET)
 - Security (BCRYPT_ROUNDS)
-- Redis (REDIS_URL)
+- MySQL connection (MYSQL_HOST, MYSQL_PORT, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE)
 - Logging (LOG_FORMAT)
 
 ### TypeScript Configuration
@@ -286,6 +368,16 @@ The Prisma schema includes 9 core models:
 - Non-root user for security
 - Alpine Linux base image
 
+## Seed Data
+
+The database seed includes:
+- 3 users (Manager, Admin, Worker)
+- 7 ovens (K1-K7)
+- 8 defect reasons
+- 5 stage categories (Forming, Drying, Firing, Glazing, QC)
+- 11 production stages
+- Sample POLs and production records
+
 ## Next Steps
 
 ### Immediate
@@ -295,22 +387,20 @@ The Prisma schema includes 9 core models:
 4. Start development server: `npm run dev`
 
 ### Future Enhancements
-1. Implement controller layer for better separation of concerns
-2. Add comprehensive unit and integration tests
-3. Implement rate limiting
-4. Add Redis caching for frequently accessed data
-5. Implement WebSocket support for real-time updates
-6. Add API documentation with Swagger/OpenAPI
-7. Implement file upload for attachments
-8. Add email notifications for alerts and revisions
+1. Add comprehensive unit and integration tests
+2. Implement rate limiting
+3. Add Redis caching for frequently accessed data
+4. Implement WebSocket support for real-time updates
+5. Add API documentation with Swagger/OpenAPI
+6. Implement file upload for attachments
+7. Add email notifications for alerts and revisions
 
 ## Notes
 
-- TypeScript errors are expected until dependencies are installed
-- The routes currently contain placeholder implementations
-- Controllers directory is empty - routes directly call services
-- Tests directory is empty - tests need to be implemented
-- Product service uses mock data - needs integration with gayafusionall
+- TypeScript errors may exist due to Prisma schema field naming mismatches
+- Routes directly call services (no controller layer)
+- Tests directory needs implementation
+- Product service integrates with MySQL gayafusionall database
 
 ## Dependencies
 
@@ -325,6 +415,7 @@ The Prisma schema includes 9 core models:
 - jsonwebtoken
 - bcrypt
 - @prisma/client
+- mysql2
 - zod
 
 ### Development
@@ -345,6 +436,8 @@ The Prisma schema includes 9 core models:
 - ts-jest
 - nodemon
 - prisma
+- prisma在全球
+- @prisma/currency
 
 ## Conclusion
 
