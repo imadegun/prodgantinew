@@ -20,6 +20,7 @@ export interface ProductionStage {
   sortOrder: number;
   isActive: boolean;
   requiresOven: boolean;
+  hasDetailProcess: boolean;
   description: string | null;
   createdAt: string;
   updatedAt: string;
@@ -29,6 +30,16 @@ export interface ProductionStage {
     name: string;
     color: string;
   };
+}
+
+export interface StageDetailProcess {
+  id: string;
+  stageId: string;
+  processName: string;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CreateCategoryRequest {
@@ -51,6 +62,7 @@ export interface CreateStageRequest {
   categoryId: string;
   sortOrder?: number;
   requiresOven?: boolean;
+  hasDetailProcess?: boolean;
   description?: string;
 }
 
@@ -60,6 +72,7 @@ export interface UpdateStageRequest {
   sortOrder?: number;
   isActive?: boolean;
   requiresOven?: boolean;
+  hasDetailProcess?: boolean;
   description?: string;
 }
 
@@ -142,6 +155,31 @@ class StageService {
   async getCategoryMapping(): Promise<CategoryMapping> {
     const response = await apiClient.get<CategoryMapping>('/stages/mapping/categories');
     return response;
+  }
+
+  // Stage Detail Processes
+  async getProcessesByStageId(stageId: string): Promise<StageDetailProcess[]> {
+    const response = await apiClient.get<StageDetailProcess[]>(`/stage-detail-processes/stages/${stageId}/processes`);
+    return response || [];
+  }
+
+  async createProcess(stageId: string, data: { processName: string; sortOrder?: number }): Promise<StageDetailProcess> {
+    const response = await apiClient.post<StageDetailProcess>(`/stage-detail-processes/stages/${stageId}/processes`, data);
+    return response;
+  }
+
+  async updateProcess(id: string, data: { processName?: string; sortOrder?: number; isActive?: boolean }): Promise<StageDetailProcess> {
+    const response = await apiClient.put<StageDetailProcess>(`/stage-detail-processes/processes/${id}`, data);
+    return response;
+  }
+
+  async deleteProcess(id: string): Promise<void> {
+    return apiClient.delete<void>(`/stage-detail-processes/processes/${id}`);
+  }
+
+  async bulkCreateProcesses(stageId: string, processes: { processName: string; sortOrder?: number }[]): Promise<StageDetailProcess[]> {
+    const response = await apiClient.post<StageDetailProcess[]>(`/stage-detail-processes/stages/${stageId}/processes/bulk`, { processes });
+    return response || [];
   }
 }
 

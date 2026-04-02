@@ -29,13 +29,17 @@ import {
   Snackbar,
   Tabs,
   Tab,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
 } from '@mui/material';
 import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   Add as AddIcon,
 } from '@mui/icons-material';
-import { stageService, StageCategory, ProductionStage } from '../services/stage.service';
+import { stageService, StageCategory, ProductionStage, StageDetailProcess } from '../services/stage.service';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -80,8 +84,19 @@ const StageManagement = (): JSX.Element => {
     sortOrder: 0,
     isActive: true,
     requiresOven: false,
+    hasDetailProcess: false,
     description: '',
   });
+
+  // Detail processes state
+  const [detailProcessDialogOpen, setDetailProcessDialogOpen] = useState(false);
+  const [selectedStageForProcesses, setSelectedStageForProcesses] = useState<ProductionStage | null>(null);
+  const [detailProcesses, setDetailProcesses] = useState<StageDetailProcess[]>([]);
+  const [detailProcessForm, setDetailProcessForm] = useState({
+    processName: '',
+    sortOrder: 0,
+  });
+  const [editingDetailProcess, setEditingDetailProcess] = useState<StageDetailProcess | null>(null);
   
   // Snackbar
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
@@ -212,6 +227,7 @@ const StageManagement = (): JSX.Element => {
         sortOrder: stage.sortOrder,
         isActive: stage.isActive,
         requiresOven: stage.requiresOven,
+        hasDetailProcess: stage.hasDetailProcess,
         description: stage.description || '',
       });
     } else {
@@ -223,6 +239,7 @@ const StageManagement = (): JSX.Element => {
         sortOrder: 0,
         isActive: true,
         requiresOven: false,
+        hasDetailProcess: false,
         description: '',
       });
     }
@@ -243,6 +260,7 @@ const StageManagement = (): JSX.Element => {
           sortOrder: stageForm.sortOrder,
           isActive: stageForm.isActive,
           requiresOven: stageForm.requiresOven,
+          hasDetailProcess: stageForm.hasDetailProcess,
           description: stageForm.description,
         });
         showSnackbar('Stage updated successfully', 'success');
@@ -253,6 +271,7 @@ const StageManagement = (): JSX.Element => {
           categoryId: stageForm.categoryId,
           sortOrder: stageForm.sortOrder,
           requiresOven: stageForm.requiresOven,
+          hasDetailProcess: stageForm.hasDetailProcess,
           description: stageForm.description,
         });
         showSnackbar('Stage created successfully', 'success');
@@ -272,6 +291,74 @@ const StageManagement = (): JSX.Element => {
         loadStages();
       } catch (error: any) {
         showSnackbar(error.response?.data?.error?.message || 'Failed to deactivate stage', 'error');
+      }
+    }
+  };
+
+  // Detail process handlers
+  const handleOpenDetailProcessDialog = async (stage: ProductionStage) => {
+    setSelectedStageForProcesses(stage);
+    setDetailProcessDialogOpen(true);
+    try {
+      const processes = await stageService.getProcessesByStageId(stage.id);
+      setDetailProcesses(processes);
+    } catch (error: any) {
+      showSnackbar(error.response?.data?.error?.message || 'Failed to load detail processes', 'error');
+    }
+  };
+
+  const handleCloseDetailProcessDialog = () => {
+    setDetailProcessDialogOpen(false);
+    setSelectedStageForProcesses(null);
+    setDetailProcesses([]);
+    setDetailProcessForm({ processName: '', sortOrder: 0 });
+    setEditingDetailProcess(null);
+  };
+
+  const handleSaveDetailProcess = async () => {
+    if (!selectedStageForProcesses) return;
+    try {
+      if (editingDetailProcess) {
+        await stageService.updateProcess(editingDetailProcess.id, {
+          processName: detailProcessForm.processName,
+          sortOrder: detailProcessForm.sortOrder,
+        });
+        showSnackbar('Detail process updated successfully', 'success');
+      } else {
+        await stageService.createProcess(selectedStageForProcesses.id, {
+          processName: detailProcessForm.processName,
+          sortOrder: detailProcessForm.sortOrder,
+        });
+        showSnackbar('Detail process created successfully', 'success');
+      }
+      setDetailProcessForm({ processName: '', sortOrder: 0 });
+      setEditingDetailProcess(null);
+      const processes = await stageService.getProcessesByStageId(selectedStageForProcesses.id);
+      setDetailProcesses(processes);
+    } catch (error: any) {
+      showSnackbar(error.response?.data?.error?.message || 'Failed to save detail process', 'error');
+    }
+  };
+
+  const handleEditDetailProcess = (process: StageDetailProcess) => {
+    setEditingDetailProcess(process);
+    setDetailProcessForm({
+      processName: process.processName,
+      sortOrder: process.sortOrder,
+    });
+  };
+
+  const handleDeleteDetailProcess = async (processId: string) => {
+    if (confirm('Are you sure you want to delete this detail process?')) {
+      try {
+        await stageService.deleteProcess(processId);
+        showSnackbar('Detail process deleted successfully', 'success');
+        if (selectedStageForProcesses) {
+          const processes = await stageService.getProcessesByStageId(selectedStageForProcesses.id);
+          setDetailProcesses(processes);
+        }
+      } catch (error: any) {
+        showSnackbar(error.response?.data?.error?.message || 'Failed to delete detail process', 'error');
       }
     }
   };
@@ -465,6 +552,7 @@ const StageManagement = (): JSX.Element => {
                     <TableCell><strong>Category</strong></TableCell>
                     <TableCell><strong>Sort Order</strong></TableCell>
                     <TableCell><strong>Requires Oven</strong></TableCell>
+                    <TableCell><strong>Has Detail Process</strong></TableCell>
                     <TableCell><strong>Status</strong></TableCell>
                     <TableCell><strong>Actions</strong></TableCell>
                   </TableRow>
@@ -472,11 +560,11 @@ const StageManagement = (): JSX.Element => {
                 <TableBody>
                   {stagesLoading ? (
                     <TableRow>
-                      <TableCell colSpan={7} align="center">Loading...</TableCell>
+                      <TableCell colSpan={8} align="center">Loading...</TableCell>
                     </TableRow>
                   ) : stages.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} align="center">No stages found</TableCell>
+                      <TableCell colSpan={8} align="center">No stages found</TableCell>
                     </TableRow>
                   ) : (
                     stages.map((stage) => (
@@ -499,6 +587,16 @@ const StageManagement = (): JSX.Element => {
                             size="small" 
                             color={stage.requiresOven ? 'warning' : 'default'}
                           />
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            size="small"
+                            variant={stage.hasDetailProcess ? 'contained' : 'outlined'}
+                            color={stage.hasDetailProcess ? 'primary' : 'inherit'}
+                            onClick={() => handleOpenDetailProcessDialog(stage)}
+                          >
+                            {stage.hasDetailProcess ? 'Manage' : 'Enable'}
+                          </Button>
                         </TableCell>
                         <TableCell>
                           <Chip 
@@ -587,6 +685,17 @@ const StageManagement = (): JSX.Element => {
                   label="Requires Oven"
                 />
               </Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={stageForm.hasDetailProcess}
+                      onChange={(e) => setStageForm({ ...stageForm, hasDetailProcess: e.target.checked })}
+                    />
+                  }
+                  label="Has Detail Process"
+                />
+              </Grid>
               <Grid item xs={12}>
                 <TextField
                   fullWidth
@@ -618,6 +727,115 @@ const StageManagement = (): JSX.Element => {
             <Button onClick={handleSaveStage} variant="contained">
               {editingStage ? 'Update' : 'Create'}
             </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Detail Process Dialog */}
+        <Dialog open={detailProcessDialogOpen} onClose={handleCloseDetailProcessDialog} maxWidth="sm" fullWidth>
+          <DialogTitle>
+            Manage Detail Processes - {selectedStageForProcesses?.name}
+          </DialogTitle>
+          <DialogContent>
+            {selectedStageForProcesses && !selectedStageForProcesses.hasDetailProcess ? (
+              <Box sx={{ py: 2 }}>
+                <Typography variant="body1" gutterBottom>
+                  This stage does not have detail processes enabled.
+                </Typography>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={async () => {
+                    if (selectedStageForProcesses) {
+                      try {
+                        await stageService.updateStage(selectedStageForProcesses.id, {
+                          hasDetailProcess: true,
+                        });
+                        setSelectedStageForProcesses({ ...selectedStageForProcesses, hasDetailProcess: true });
+                        showSnackbar('Detail processes enabled for this stage', 'success');
+                      } catch (error: any) {
+                        showSnackbar(error.response?.data?.error?.message || 'Failed to enable detail processes', 'error');
+                      }
+                    }
+                  }}
+                  sx={{ mt: 1 }}
+                >
+                  Enable Detail Processes
+                </Button>
+              </Box>
+            ) : (
+              <>
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>Add New Process</Typography>
+                  <Grid container spacing={2} alignItems="center">
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        label="Process Name"
+                        value={detailProcessForm.processName}
+                        onChange={(e) => setDetailProcessForm({ ...detailProcessForm, processName: e.target.value })}
+                        placeholder="e.g., Cutting, Carving, Attach Handle"
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        fullWidth
+                        label="Sort Order"
+                        type="number"
+                        value={detailProcessForm.sortOrder}
+                        onChange={(e) => setDetailProcessForm({ ...detailProcessForm, sortOrder: parseInt(e.target.value) || 0 })}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={2}>
+                      <Button
+                        fullWidth
+                        variant="contained"
+                        onClick={handleSaveDetailProcess}
+                        disabled={!detailProcessForm.processName.trim()}
+                      >
+                        {editingDetailProcess ? 'Update' : 'Add'}
+                      </Button>
+                    </Grid>
+                  </Grid>
+                </Box>
+
+                <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>
+                  Current Processes ({detailProcesses.length})
+                </Typography>
+                {detailProcesses.length === 0 ? (
+                  <Typography variant="body2" color="textSecondary">
+                    No detail processes defined yet. Add one above.
+                  </Typography>
+                ) : (
+                  <List>
+                    {detailProcesses
+                      .sort((a, b) => a.sortOrder - b.sortOrder)
+                      .map((process) => (
+                        <ListItem
+                          key={process.id}
+                          secondaryAction={
+                            <Box>
+                              <IconButton edge="end" onClick={() => handleEditDetailProcess(process)}>
+                                <EditIcon />
+                              </IconButton>
+                              <IconButton edge="end" onClick={() => handleDeleteDetailProcess(process.id)}>
+                                <DeleteIcon />
+                              </IconButton>
+                            </Box>
+                          }
+                        >
+                          <ListItemIcon>
+                            <Chip label={process.sortOrder} size="small" />
+                          </ListItemIcon>
+                          <ListItemText primary={process.processName} />
+                        </ListItem>
+                      ))}
+                  </List>
+                )}
+              </>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseDetailProcessDialog}>Close</Button>
           </DialogActions>
         </Dialog>
       </TabPanel>

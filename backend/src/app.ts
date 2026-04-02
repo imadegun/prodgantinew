@@ -16,6 +16,7 @@ import revisionRoutes from './routes/revision.routes';
 import productRoutes from './routes/product.routes';
 import usersRoutes from './routes/users.routes';
 import stageRoutes from './routes/stage.routes';
+import stageDetailProcessRoutes from './routes/stage-detail-process.routes';
 import { errorHandler } from './middleware/error.middleware';
 import { notFoundHandler } from './middleware/error.middleware';
 import { initializeMySQL, closeMySQL } from './config/mysql';
@@ -84,6 +85,7 @@ app.use('/api/v1/revisions', revisionRoutes);
 app.use('/api/v1/products', productRoutes);
 app.use('/api/v1/users', usersRoutes);
 app.use('/api/v1/stages', stageRoutes);
+app.use('/api/v1/stage-detail-processes', stageDetailProcessRoutes);
 
 // API documentation endpoint
 app.get('/api', (_req, res) => {

@@ -270,7 +270,7 @@ router.get('/:id', authenticate, async (req, res) => {
 // Create a new stage
 router.post('/', authenticate, async (req, res) => {
   try {
-    const { code, name, categoryId, sortOrder, requiresOven, description } = req.body;
+    const { code, name, categoryId, sortOrder, requiresOven, hasDetailProcess, description } = req.body;
     
     if (!code || !name || !categoryId) {
       return res.status(400).json({
@@ -288,6 +288,7 @@ router.post('/', authenticate, async (req, res) => {
       categoryId,
       sortOrder,
       requiresOven,
+      hasDetailProcess,
       description,
     });
     
@@ -311,7 +312,7 @@ router.post('/', authenticate, async (req, res) => {
 router.put('/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, categoryId, sortOrder, isActive, requiresOven, description } = req.body;
+    const { name, categoryId, sortOrder, isActive, requiresOven, hasDetailProcess, description } = req.body;
     
     const stage = await stageService.updateStage(id, {
       name,
@@ -319,6 +320,7 @@ router.put('/:id', authenticate, async (req, res) => {
       sortOrder,
       isActive,
       requiresOven,
+      hasDetailProcess,
       description,
     });
     

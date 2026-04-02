@@ -246,19 +246,34 @@ model StageCategory {
 }
 
 model ProductionStageConfig {
-  id            String        @id
-  code          String        @unique
-  name          String
-  categoryId    String
-  sortOrder     Int           @default(0)
-  isActive      Boolean       @default(true)
-  requiresOven  Boolean       @default(false)
-  description   String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  category      StageCategory @relation(fields: [categoryId], references: [id])
+  id                String        @id
+  code              String        @unique
+  name              String
+  categoryId        String
+  sortOrder         Int           @default(0)
+  isActive          Boolean       @default(true)
+  requiresOven      Boolean       @default(false)
+  hasDetailProcess  Boolean       @default(false)
+  description       String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  category          StageCategory @relation(fields: [categoryId], references: [id])
+  detailProcesses   StageDetailProcess[]
 
   @@map("production_stage_configs")
+}
+
+model StageDetailProcess {
+  id          String                @id
+  stageId     String
+  processName String
+  sortOrder   Int                   @default(0)
+  isActive    Boolean               @default(true)
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  stage       ProductionStageConfig @relation(fields: [stageId], references: [id])
+
+  @@map("stage_detail_processes")
 }
 
 enum UserRole {

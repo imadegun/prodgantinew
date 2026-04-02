@@ -21,6 +21,7 @@ export interface ProductionStageConfig {
   sortOrder: number;
   isActive: boolean;
   requiresOven: boolean;
+  hasDetailProcess: boolean;
   description: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -52,6 +53,7 @@ export interface CreateStageDTO {
   categoryId: string;
   sortOrder?: number;
   requiresOven?: boolean;
+  hasDetailProcess?: boolean;
   description?: string;
 }
 
@@ -61,6 +63,7 @@ export interface UpdateStageDTO {
   sortOrder?: number;
   isActive?: boolean;
   requiresOven?: boolean;
+  hasDetailProcess?: boolean;
   description?: string;
 }
 
@@ -81,7 +84,7 @@ export class StageService {
         orderBy: { sortOrder: 'asc' },
       });
 
-      return categories;
+      return categories as StageCategory[];
     } catch (error: any) {
       console.error('Error getting categories with stages:', error);
       throw new AppError('Failed to get categories with stages', 500, 'STAGE_CATEGORIES_ERROR');
@@ -304,6 +307,7 @@ export class StageService {
           categoryId: data.categoryId,
           sortOrder: data.sortOrder || 0,
           requiresOven: data.requiresOven || false,
+          hasDetailProcess: data.hasDetailProcess || false,
           description: data.description,
           isActive: true,
           createdAt: new Date(),
