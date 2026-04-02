@@ -76,7 +76,7 @@ const StageManagement = (): JSX.Element => {
   const [stageForm, setStageForm] = useState({
     code: '',
     name: '',
-    categoryId: 0,
+    categoryId: '',
     sortOrder: 0,
     isActive: true,
     requiresOven: false,
@@ -189,14 +189,14 @@ const StageManagement = (): JSX.Element => {
     }
   };
 
-  const handleDeleteCategory = async (categoryId: number) => {
+  const handleDeleteCategory = async (categoryId: string) => {
     if (confirm('Are you sure you want to deactivate this category?')) {
       try {
         await stageService.deleteCategory(categoryId);
         showSnackbar('Category deactivated successfully', 'success');
         loadCategories();
-      } catch (error) {
-        showSnackbar('Failed to deactivate category', 'error');
+      } catch (error: any) {
+        showSnackbar(error.response?.data?.error?.message || 'Failed to deactivate category', 'error');
       }
     }
   };
@@ -219,7 +219,7 @@ const StageManagement = (): JSX.Element => {
       setStageForm({
         code: '',
         name: '',
-        categoryId: categories.length > 0 ? categories[0].id : 0,
+        categoryId: categories.length > 0 ? categories[0].id : '',
         sortOrder: 0,
         isActive: true,
         requiresOven: false,
@@ -264,14 +264,14 @@ const StageManagement = (): JSX.Element => {
     }
   };
 
-  const handleDeleteStage = async (stageId: number) => {
+  const handleDeleteStage = async (stageId: string) => {
     if (confirm('Are you sure you want to deactivate this stage?')) {
       try {
         await stageService.deleteStage(stageId);
         showSnackbar('Stage deactivated successfully', 'success');
         loadStages();
-      } catch (error) {
-        showSnackbar('Failed to deactivate stage', 'error');
+      } catch (error: any) {
+        showSnackbar(error.response?.data?.error?.message || 'Failed to deactivate stage', 'error');
       }
     }
   };
@@ -557,7 +557,7 @@ const StageManagement = (): JSX.Element => {
                   <Select
                     value={stageForm.categoryId}
                     label="Category"
-                    onChange={(e) => setStageForm({ ...stageForm, categoryId: Number(e.target.value) })}
+                    onChange={(e) => setStageForm({ ...stageForm, categoryId: String(e.target.value) })}
                   >
                     {categories.map((category) => (
                       <MenuItem key={category.id} value={category.id}>

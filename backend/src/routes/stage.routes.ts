@@ -148,6 +148,48 @@ router.delete('/categories/:id', authenticate, async (req, res) => {
   }
 });
 
+// Get stage mapping (code -> name) - MUST come before /:id route
+router.get('/mapping/stages', authenticate, async (req, res) => {
+  try {
+    const mapping = await stageService.getStageMapping();
+    
+    res.json({
+      success: true,
+      data: mapping,
+    });
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
+      success: false,
+      error: {
+        code: error.code || 'GET_STAGE_MAPPING_FAILED',
+        message: error.message || 'Failed to get stage mapping',
+      },
+    });
+  }
+});
+
+// Get category mapping (code -> { name, color }) - MUST come before /:id route
+router.get('/mapping/categories', authenticate, async (req, res) => {
+  try {
+    const mapping = await stageService.getCategoryMapping();
+    
+    res.json({
+      success: true,
+      data: mapping,
+    });
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
+      success: false,
+      error: {
+        code: error.code || 'GET_CATEGORY_MAPPING_FAILED',
+        message: error.message || 'Failed to get category mapping',
+      },
+    });
+  }
+});
+
 // Get all stages
 router.get('/', authenticate, async (req, res) => {
   try {
@@ -192,7 +234,7 @@ router.get('/by-category/:categoryId', authenticate, async (req, res) => {
   }
 });
 
-// Get stage by ID
+// Get stage by ID - MUST come after /mapping/* routes
 router.get('/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
@@ -314,48 +356,6 @@ router.delete('/:id', authenticate, async (req, res) => {
       error: {
         code: error.code || 'DELETE_STAGE_FAILED',
         message: error.message || 'Failed to delete stage',
-      },
-    });
-  }
-});
-
-// Get stage mapping (code -> name)
-router.get('/mapping/stages', authenticate, async (req, res) => {
-  try {
-    const mapping = await stageService.getStageMapping();
-    
-    res.json({
-      success: true,
-      data: mapping,
-    });
-  } catch (error: any) {
-    const statusCode = error.statusCode || 500;
-    res.status(statusCode).json({
-      success: false,
-      error: {
-        code: error.code || 'GET_STAGE_MAPPING_FAILED',
-        message: error.message || 'Failed to get stage mapping',
-      },
-    });
-  }
-});
-
-// Get category mapping (code -> { name, color })
-router.get('/mapping/categories', authenticate, async (req, res) => {
-  try {
-    const mapping = await stageService.getCategoryMapping();
-    
-    res.json({
-      success: true,
-      data: mapping,
-    });
-  } catch (error: any) {
-    const statusCode = error.statusCode || 500;
-    res.status(statusCode).json({
-      success: false,
-      error: {
-        code: error.code || 'GET_CATEGORY_MAPPING_FAILED',
-        message: error.message || 'Failed to get category mapping',
       },
     });
   }

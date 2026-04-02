@@ -1,7 +1,7 @@
 import { apiClient } from './api';
 
 export interface StageCategory {
-  id: number;
+  id: string;
   code: string;
   name: string;
   color: string;
@@ -13,17 +13,22 @@ export interface StageCategory {
 }
 
 export interface ProductionStage {
-  id: number;
+  id: string;
   code: string;
   name: string;
-  categoryId: number;
+  categoryId: string;
   sortOrder: number;
   isActive: boolean;
   requiresOven: boolean;
   description: string | null;
   createdAt: string;
   updatedAt: string;
-  category?: StageCategory;
+  category?: {
+    id: string;
+    code: string;
+    name: string;
+    color: string;
+  };
 }
 
 export interface CreateCategoryRequest {
@@ -43,7 +48,7 @@ export interface UpdateCategoryRequest {
 export interface CreateStageRequest {
   code: string;
   name: string;
-  categoryId: number;
+  categoryId: string;
   sortOrder?: number;
   requiresOven?: boolean;
   description?: string;
@@ -51,7 +56,7 @@ export interface CreateStageRequest {
 
 export interface UpdateStageRequest {
   name?: string;
-  categoryId?: number;
+  categoryId?: string;
   sortOrder?: number;
   isActive?: boolean;
   requiresOven?: boolean;
@@ -72,57 +77,71 @@ export interface CategoryMapping {
 class StageService {
   // Categories
   async getCategories(): Promise<StageCategory[]> {
-    return apiClient.get<StageCategory[]>('/stages/categories');
+    // apiClient.get already returns response.data.data, so we get the array directly
+    const response = await apiClient.get<StageCategory[]>('/stages/categories');
+    return response || [];
   }
 
-  async getCategoryById(id: number): Promise<StageCategory> {
-    return apiClient.get<StageCategory>(`/stages/categories/${id}`);
+  async getCategoryById(id: string): Promise<StageCategory> {
+    const response = await apiClient.get<StageCategory>(`/stages/categories/${id}`);
+    return response;
   }
 
   async createCategory(data: CreateCategoryRequest): Promise<StageCategory> {
-    return apiClient.post<StageCategory>('/stages/categories', data);
+    const response = await apiClient.post<StageCategory>('/stages/categories', data);
+    return response;
   }
 
-  async updateCategory(id: number, data: UpdateCategoryRequest): Promise<StageCategory> {
-    return apiClient.put<StageCategory>(`/stages/categories/${id}`, data);
+  async updateCategory(id: string, data: UpdateCategoryRequest): Promise<StageCategory> {
+    const response = await apiClient.put<StageCategory>(`/stages/categories/${id}`, data);
+    return response;
   }
 
-  async deleteCategory(id: number): Promise<void> {
+  async deleteCategory(id: string): Promise<void> {
     return apiClient.delete<void>(`/stages/categories/${id}`);
   }
 
   // Stages
   async getStages(): Promise<ProductionStage[]> {
-    return apiClient.get<ProductionStage[]>('/stages');
+    // apiClient.get already returns response.data.data, so we get the array directly
+    const response = await apiClient.get<ProductionStage[]>('/stages');
+    return response || [];
   }
 
-  async getStagesByCategory(categoryId: number): Promise<ProductionStage[]> {
-    return apiClient.get<ProductionStage[]>(`/stages/category/${categoryId}`);
+  async getStagesByCategory(categoryId: string): Promise<ProductionStage[]> {
+    // apiClient.get already returns response.data.data, so we get the array directly
+    const response = await apiClient.get<ProductionStage[]>(`/stages/by-category/${categoryId}`);
+    return response || [];
   }
 
-  async getStageById(id: number): Promise<ProductionStage> {
-    return apiClient.get<ProductionStage>(`/stages/${id}`);
+  async getStageById(id: string): Promise<ProductionStage> {
+    const response = await apiClient.get<ProductionStage>(`/stages/${id}`);
+    return response;
   }
 
   async createStage(data: CreateStageRequest): Promise<ProductionStage> {
-    return apiClient.post<ProductionStage>('/stages', data);
+    const response = await apiClient.post<ProductionStage>('/stages', data);
+    return response;
   }
 
-  async updateStage(id: number, data: UpdateStageRequest): Promise<ProductionStage> {
-    return apiClient.put<ProductionStage>(`/stages/${id}`, data);
+  async updateStage(id: string, data: UpdateStageRequest): Promise<ProductionStage> {
+    const response = await apiClient.put<ProductionStage>(`/stages/${id}`, data);
+    return response;
   }
 
-  async deleteStage(id: number): Promise<void> {
+  async deleteStage(id: string): Promise<void> {
     return apiClient.delete<void>(`/stages/${id}`);
   }
 
   // Mappings
   async getStageMapping(): Promise<StageMapping> {
-    return apiClient.get<StageMapping>('/stages/mapping/stages');
+    const response = await apiClient.get<StageMapping>('/stages/mapping/stages');
+    return response;
   }
 
   async getCategoryMapping(): Promise<CategoryMapping> {
-    return apiClient.get<CategoryMapping>('/stages/mapping/categories');
+    const response = await apiClient.get<CategoryMapping>('/stages/mapping/categories');
+    return response;
   }
 }
 

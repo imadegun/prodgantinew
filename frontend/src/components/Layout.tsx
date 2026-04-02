@@ -33,6 +33,7 @@ import {
   Settings as SettingsIcon,
   Logout as LogoutIcon,
   Person as PersonIcon,
+  Build as StageIcon,
 } from '@mui/icons-material';
 import { RootState } from '../store';
 import { logout } from '../store/slices/authSlice';
@@ -48,6 +49,7 @@ const menuItems = [
   { text: 'Reports', icon: <ReportIcon />, path: '/reports' },
   { text: 'Logbook', icon: <LogbookIcon />, path: '/logbook' },
   { text: 'Revision Tickets', icon: <RevisionIcon />, path: '/revisions' },
+  { text: 'Stage Management', icon: <StageIcon />, path: '/stages' },
   { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
 ];
 
