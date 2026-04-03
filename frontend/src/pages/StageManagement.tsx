@@ -33,6 +33,7 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
+  ListItemSecondaryAction,
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -813,14 +814,14 @@ const StageManagement = (): JSX.Element => {
                         <ListItem
                           key={process.id}
                           secondaryAction={
-                            <Box>
+                            <ListItemSecondaryAction>
                               <IconButton edge="end" onClick={() => handleEditDetailProcess(process)}>
                                 <EditIcon />
                               </IconButton>
                               <IconButton edge="end" onClick={() => handleDeleteDetailProcess(process.id)}>
                                 <DeleteIcon />
                               </IconButton>
-                            </Box>
+                            </ListItemSecondaryAction>
                           }
                         >
                           <ListItemIcon>
