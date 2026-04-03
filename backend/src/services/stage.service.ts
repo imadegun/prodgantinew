@@ -169,6 +169,24 @@ export class StageService {
    */
   async updateCategory(id: string, data: UpdateCategoryDTO): Promise<StageCategory> {
     try {
+      // If trying to deactivate a category, check if it has active stages
+      if (data.isActive === false) {
+        const activeStages = await prisma.productionStageConfig.findMany({
+          where: {
+            categoryId: id,
+            isActive: true,
+          },
+        });
+        
+        if (activeStages.length > 0) {
+          throw new AppError(
+            `Cannot deactivate category: ${activeStages.length} active stage(s) still exist in this category. Please deactivate or reassign all stages first.`,
+            400,
+            'CATEGORY_HAS_ACTIVE_STAGES'
+          );
+        }
+      }
+      
       const category = await prisma.stageCategory.update({
         where: { id },
         data: {
@@ -195,6 +213,22 @@ export class StageService {
    */
   async deleteCategory(id: string): Promise<void> {
     try {
+      // Check if category has active stages before deactivating
+      const activeStages = await prisma.productionStageConfig.findMany({
+        where: {
+          categoryId: id,
+          isActive: true,
+        },
+      });
+      
+      if (activeStages.length > 0) {
+        throw new AppError(
+          `Cannot deactivate category: ${activeStages.length} active stage(s) still exist in this category. Please deactivate or reassign all stages first.`,
+          400,
+          'CATEGORY_HAS_ACTIVE_STAGES'
+        );
+      }
+      
       await prisma.stageCategory.update({
         where: { id },
         data: {
@@ -212,12 +246,13 @@ export class StageService {
   }
 
   /**
-   * Get all active stages
+   * Get all stages with optional inactive filter
+   * @param includeInactive - If true, includes inactive stages; defaults to true for management page
    */
-  async getAllStages(): Promise<ProductionStageConfig[]> {
+  async getAllStages(includeInactive: boolean = true): Promise<ProductionStageConfig[]> {
     try {
       const stages = await prisma.productionStageConfig.findMany({
-        where: { isActive: true },
+        where: includeInactive ? {} : { isActive: true },
         include: {
           category: {
             select: {

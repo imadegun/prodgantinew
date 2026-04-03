@@ -401,7 +401,7 @@ const StageManagement = (): JSX.Element => {
                     <TableCell><strong>Color</strong></TableCell>
                     <TableCell><strong>Sort Order</strong></TableCell>
                     <TableCell><strong>Status</strong></TableCell>
-                    <TableCell><strong>Stages</strong></TableCell>
+                    <TableCell><strong>Stages (Active/Total)</strong></TableCell>
                     <TableCell><strong>Actions</strong></TableCell>
                   </TableRow>
                 </TableHead>
@@ -415,42 +415,74 @@ const StageManagement = (): JSX.Element => {
                       <TableCell colSpan={7} align="center">No categories found</TableCell>
                     </TableRow>
                   ) : (
-                    categories.map((category) => (
-                      <TableRow key={category.id} hover>
-                        <TableCell>
-                          <Chip label={category.code} size="small" />
-                        </TableCell>
-                        <TableCell>{category.name}</TableCell>
-                        <TableCell>
-                          <Box
-                            sx={{
-                              width: 24,
-                              height: 24,
-                              borderRadius: 1,
-                              bgcolor: category.color,
-                              border: '1px solid #ccc',
-                            }}
-                          />
-                        </TableCell>
-                        <TableCell>{category.sortOrder}</TableCell>
-                        <TableCell>
-                          <Chip 
-                            label={category.isActive ? 'Active' : 'Inactive'} 
-                            size="small" 
-                            color={category.isActive ? 'success' : 'error'}
-                          />
-                        </TableCell>
-                        <TableCell>{category.stages?.length || 0}</TableCell>
-                        <TableCell>
-                          <IconButton size="small" onClick={() => handleOpenCategoryDialog(category)}>
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                          <IconButton size="small" onClick={() => handleDeleteCategory(category.id)}>
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </TableCell>
-                      </TableRow>
-                    ))
+                    categories.map((category) => {
+                      const activeStagesCount = category.stages?.filter((s: any) => s.isActive).length || 0;
+                      const totalStagesCount = category.stages?.length || 0;
+                      const canDelete = category.isActive && activeStagesCount === 0;
+                      return (
+                        <TableRow 
+                          key={category.id} 
+                          hover
+                          sx={{ 
+                            opacity: category.isActive ? 1 : 0.5,
+                            bgcolor: category.isActive ? 'inherit' : '#f5f5f5',
+                          }}
+                        >
+                          <TableCell>
+                            <Chip label={category.code} size="small" sx={{ opacity: category.isActive ? 1 : 0.6 }} />
+                          </TableCell>
+                          <TableCell sx={{ opacity: category.isActive ? 1 : 0.6 }}>{category.name}</TableCell>
+                          <TableCell>
+                            <Box
+                              sx={{
+                                width: 24,
+                                height: 24,
+                                borderRadius: 1,
+                                bgcolor: category.color,
+                                border: '1px solid #ccc',
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell sx={{ opacity: category.isActive ? 1 : 0.6 }}>{category.sortOrder}</TableCell>
+                          <TableCell>
+                            <Switch
+                              size="small"
+                              checked={category.isActive}
+                              onChange={async (e) => {
+                                if (!e.target.checked && activeStagesCount > 0) {
+                                  showSnackbar(`Cannot deactivate category: ${activeStagesCount} active stage(s) exist. Please deactivate all stages first.`, 'error');
+                                  return;
+                                }
+                                try {
+                                  await stageService.updateCategory(category.id, { isActive: e.target.checked });
+                                  loadCategories();
+                                } catch (error: any) {
+                                  showSnackbar(error.response?.data?.error?.message || 'Failed to update category', 'error');
+                                }
+                              }}
+                              color="success"
+                              disabled={activeStagesCount > 0 && category.isActive}
+                            />
+                          </TableCell>
+                          <TableCell sx={{ opacity: category.isActive ? 1 : 0.6 }}>
+                            <Chip 
+                              label={`${activeStagesCount} / ${totalStagesCount}`} 
+                              size="small" 
+                              color={activeStagesCount > 0 ? 'warning' : 'default'}
+                              title={`${activeStagesCount} active, ${totalStagesCount - activeStagesCount} inactive`}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <IconButton size="small" onClick={() => handleOpenCategoryDialog(category)}>
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                            <IconButton size="small" onClick={() => handleDeleteCategory(category.id)} disabled={!canDelete}>
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>
@@ -569,20 +601,27 @@ const StageManagement = (): JSX.Element => {
                     </TableRow>
                   ) : (
                     stages.map((stage) => (
-                      <TableRow key={stage.id} hover>
+                      <TableRow 
+                        key={stage.id} 
+                        hover
+                        sx={{ 
+                          opacity: stage.isActive ? 1 : 0.5,
+                          bgcolor: stage.isActive ? 'inherit' : '#f5f5f5',
+                        }}
+                      >
                         <TableCell>
-                          <Chip label={stage.code} size="small" />
+                          <Chip label={stage.code} size="small" sx={{ opacity: stage.isActive ? 1 : 0.6 }} />
                         </TableCell>
-                        <TableCell>{stage.name}</TableCell>
+                        <TableCell sx={{ opacity: stage.isActive ? 1 : 0.6 }}>{stage.name}</TableCell>
                         <TableCell>
                           <Chip 
                             label={stage.category?.name || 'Unknown'} 
                             size="small" 
-                            sx={{ bgcolor: stage.category?.color || '#ccc', color: 'white' }}
+                            sx={{ bgcolor: stage.category?.color || '#ccc', color: 'white', opacity: stage.isActive ? 1 : 0.6 }}
                           />
                         </TableCell>
-                        <TableCell>{stage.sortOrder}</TableCell>
-                        <TableCell>
+                        <TableCell sx={{ opacity: stage.isActive ? 1 : 0.6 }}>{stage.sortOrder}</TableCell>
+                        <TableCell sx={{ opacity: stage.isActive ? 1 : 0.6 }}>
                           <Chip 
                             label={stage.requiresOven ? 'Yes' : 'No'} 
                             size="small" 
@@ -590,27 +629,47 @@ const StageManagement = (): JSX.Element => {
                           />
                         </TableCell>
                         <TableCell>
-                          <Button
+                          <Switch
                             size="small"
-                            variant={stage.hasDetailProcess ? 'contained' : 'outlined'}
-                            color={stage.hasDetailProcess ? 'primary' : 'inherit'}
-                            onClick={() => handleOpenDetailProcessDialog(stage)}
-                          >
-                            {stage.hasDetailProcess ? 'Manage' : 'Enable'}
-                          </Button>
-                        </TableCell>
-                        <TableCell>
-                          <Chip 
-                            label={stage.isActive ? 'Active' : 'Inactive'} 
-                            size="small" 
-                            color={stage.isActive ? 'success' : 'error'}
+                            checked={stage.hasDetailProcess}
+                            onChange={async (e) => {
+                              try {
+                                await stageService.updateStage(stage.id, {
+                                  hasDetailProcess: e.target.checked,
+                                });
+                                loadStages();
+                                if (e.target.checked) {
+                                  handleOpenDetailProcessDialog(stage);
+                                }
+                              } catch (error: any) {
+                                showSnackbar(error.response?.data?.error?.message || 'Failed to update stage', 'error');
+                              }
+                            }}
+                            color="primary"
                           />
                         </TableCell>
                         <TableCell>
-                          <IconButton size="small" onClick={() => handleOpenStageDialog(stage)}>
+                          <Switch
+                            size="small"
+                            checked={stage.isActive}
+                            onChange={async (e) => {
+                              try {
+                                await stageService.updateStage(stage.id, {
+                                  isActive: e.target.checked,
+                                });
+                                loadStages();
+                              } catch (error: any) {
+                                showSnackbar(error.response?.data?.error?.message || 'Failed to update stage', 'error');
+                              }
+                            }}
+                            color="success"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <IconButton size="small" onClick={() => handleOpenStageDialog(stage)} disabled={!stage.isActive}>
                             <EditIcon fontSize="small" />
                           </IconButton>
-                          <IconButton size="small" onClick={() => handleDeleteStage(stage.id)}>
+                          <IconButton size="small" onClick={() => handleDeleteStage(stage.id)} disabled={!stage.isActive}>
                             <DeleteIcon fontSize="small" />
                           </IconButton>
                         </TableCell>
@@ -814,12 +873,12 @@ const StageManagement = (): JSX.Element => {
                         <ListItem
                           key={process.id}
                           secondaryAction={
-                            <ListItemSecondaryAction>
-                              <IconButton edge="end" onClick={() => handleEditDetailProcess(process)}>
-                                <EditIcon />
+                            <ListItemSecondaryAction sx={{ display: 'flex', gap: 0.5 }}>
+                              <IconButton edge="end" onClick={() => handleEditDetailProcess(process)} size="small">
+                                <EditIcon fontSize="small" />
                               </IconButton>
-                              <IconButton edge="end" onClick={() => handleDeleteDetailProcess(process.id)}>
-                                <DeleteIcon />
+                              <IconButton edge="end" onClick={() => handleDeleteDetailProcess(process.id)} size="small">
+                                <DeleteIcon fontSize="small" />
                               </IconButton>
                             </ListItemSecondaryAction>
                           }

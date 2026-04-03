@@ -190,10 +190,13 @@ router.get('/mapping/categories', authenticate, async (req, res) => {
   }
 });
 
-// Get all stages
+// Get all stages (with optional includeInactive filter for management page)
 router.get('/', authenticate, async (req, res) => {
   try {
-    const stages = await stageService.getAllStages();
+    // Default to include inactive stages for management page
+    // Use ?includeInactive=false to get only active stages
+    const includeInactive = req.query.includeInactive !== 'false';
+    const stages = await stageService.getAllStages(includeInactive);
     
     res.json({
       success: true,

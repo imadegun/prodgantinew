@@ -32,6 +32,11 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
+  List,
+  ListItem,
+  ListItemText,
+  Switch,
+  FormControlLabel,
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
@@ -130,7 +135,7 @@ const ProductionTracking = () => {
   const [productionDate, setProductionDate] = useState('');
   const [notes, setNotes] = useState('');
   const [discrepancyAlert, setDiscrepancyAlert] = useState<any>(null);
-  const [tabValue, setTabValue] = useState('part-production');
+  const [tabValue, setTabValue] = useState('input-production');
   const [categoryTab, setCategoryTab] = useState(0);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
@@ -1645,7 +1650,7 @@ const ProductionTracking = () => {
             <MenuItem value="">-- Select Product --</MenuItem>
             {polDetails.map((detail: any) => (
               <MenuItem key={detail.id} value={detail.id}>
-                {detail.productCode} - {detail.productName} (Qty: {detail.quantity})
+                {detail.productCode} - {detail.productName}
               </MenuItem>
             ))}
           </TextField>
@@ -1684,6 +1689,7 @@ const ProductionTracking = () => {
               <Tab label="Part Production" value="part-production" />
               <Tab label="Combine Parts" value="combine-parts" />
               <Tab label="Production History" value="history" />
+              <Tab label="Remake History" value="remake-history" />
             </Tabs>
           </Box>
 
@@ -1878,23 +1884,577 @@ const ProductionTracking = () => {
 
           {/* Part Production Tab */}
           {tabValue === 'part-production' && (
-            <Box>
-              {/* Part Management and Tracking UI here - already implemented */}
-            </Box>
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={4}>
+                <Card sx={{ height: '100%' }}>
+                  <CardContent>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                      <Typography variant="h6">Product Parts</Typography>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<AddIcon />}
+                        onClick={handleOpenAddPartDialog}
+                      >
+                        Add Part
+                      </Button>
+                    </Box>
+                    
+                    {productParts.length === 0 ? (
+                      <Box sx={{ textAlign: 'center', py: 4 }}>
+                        <InfoIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
+                        <Typography color="text.secondary">
+                          No parts created yet. Click "Add Part" to create one.
+                        </Typography>
+                      </Box>
+                    ) : (
+                      <List dense>
+                        {productParts.map((part: any) => (
+                          <ListItem
+                            key={part.id}
+                            button
+                            selected={selectedPart?.id === part.id}
+                            onClick={() => handlePartSelect(part)}
+                            sx={{
+                              borderRadius: 1,
+                              mb: 0.5,
+                              border: '1px solid',
+                              borderColor: selectedPart?.id === part.id ? 'primary.main' : 'divider',
+                              bgcolor: selectedPart?.id === part.id ? 'action.selected' : 'background.paper',
+                            }}
+                            secondaryAction={
+                              <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleOpenEditPartDialog(part); }}>
+                                  <EditIcon fontSize="small" />
+                                </IconButton>
+                                <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleDeletePart(part.id); }}>
+                                  <DeleteIcon fontSize="small" />
+                                </IconButton>
+                              </Box>
+                            }
+                          >
+                            <ListItemText
+                              primary={part.partName}
+                              secondary={
+                                <Box component="span" sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 0.5 }}>
+                                  <Chip label={part.partType} size="small" />
+                                  {part.throwingRequired && (
+                                    <Chip label="Throwing" size="small" color="primary" variant="outlined" />
+                                  )}
+                                </Box>
+                              }
+                            />
+                          </ListItem>
+                        ))}
+                      </List>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+              
+              <Grid item xs={12} md={8}>
+                {selectedPart ? (
+                  <Card>
+                    <CardContent>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                        <Typography variant="h6">
+                          Track: {selectedPart.partName}
+                        </Typography>
+                        <Chip 
+                          label={selectedPart.partType} 
+                          color={selectedPart.partType === 'MAIN' ? 'primary' : 'default'}
+                        />
+                      </Box>
+                      
+                      {/* Category Tabs for Part */}
+                      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+                        <Tabs 
+                          value={categories.indexOf(partCurrentCategory)} 
+                          onChange={handlePartCategoryTabChange}
+                          variant="scrollable"
+                        >
+                          {categories.map((cat) => (
+                            <Tab 
+                              key={cat} 
+                              label={categoryLabels[cat]}
+                              sx={{ bgcolor: categoryColors[cat] + '20', mr: 1, borderRadius: 1 }}
+                            />
+                          ))}
+                        </Tabs>
+                      </Box>
+                      
+                      {/* Stage Selection for Part */}
+                      <Box sx={{ mb: 3 }}>
+                        <Typography variant="subtitle2" sx={{ mb: 1 }}>Select Stage:</Typography>
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                          {getStagesForCategory(partCurrentCategory).map(stage => (
+                            <Chip
+                              key={stage}
+                              label={stageNames[stage]}
+                              onClick={() => handlePartStageSelect(stage)}
+                              color={partCurrentStage === stage ? 'primary' : 'default'}
+                              variant={partCurrentStage === stage ? 'filled' : 'outlined'}
+                            />
+                          ))}
+                        </Box>
+                      </Box>
+                      
+                      {/* Detail Process Dropdown for Part */}
+                      {partDetailProcesses.length > 0 && (
+                        <FormControl fullWidth sx={{ mb: 3 }}>
+                          <InputLabel>Detail Process</InputLabel>
+                          <Select
+                            value={partSelectedDetailProcess}
+                            onChange={(e) => setPartSelectedDetailProcess(e.target.value)}
+                            label="Detail Process"
+                          >
+                            <MenuItem value="">-- Select Process --</MenuItem>
+                            {partDetailProcesses.map(process => (
+                              <MenuItem key={process.id} value={process.id}>
+                                {process.processName}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      )}
+                      
+                      <Grid container spacing={2}>
+                        <Grid item xs={12} sm={6}>
+                          <TextField
+                            fullWidth
+                            label="Good Quantity"
+                            type="number"
+                            value={partQuantity}
+                            onChange={(e) => setPartQuantity(e.target.value)}
+                            required
+                          />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <TextField
+                            fullWidth
+                            label="Reject Quantity"
+                            type="number"
+                            value={partRejectQuantity}
+                            onChange={(e) => setPartRejectQuantity(e.target.value)}
+                          />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <TextField
+                            fullWidth
+                            label="Production Date"
+                            type="date"
+                            value={partProductionDate}
+                            onChange={(e) => setPartProductionDate(e.target.value)}
+                            InputLabelProps={{ shrink: true }}
+                            required
+                          />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <FormControl fullWidth required>
+                            <InputLabel>Operator</InputLabel>
+                            <Select
+                              value={partSelectedOperator}
+                              onChange={(e) => setPartSelectedOperator(e.target.value)}
+                              label="Operator"
+                            >
+                              <MenuItem value="">-- Select Operator --</MenuItem>
+                              {operators.map((op: any) => (
+                                <MenuItem key={op.id} value={op.id}>{op.name}</MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        </Grid>
+                        
+                        {/* Oven selection for firing stages in Part */}
+                        {firingStages.includes(partCurrentStage) && (
+                          <Grid item xs={12} sm={6}>
+                            <FormControl fullWidth>
+                              <InputLabel>Oven</InputLabel>
+                              <Select
+                                value={partSelectedOven}
+                                onChange={(e) => setPartSelectedOven(e.target.value)}
+                                label="Oven"
+                              >
+                                <MenuItem value="">-- Select Oven --</MenuItem>
+                                {ovens.map((oven: any) => (
+                                  <MenuItem key={oven.id} value={oven.id}>{oven.name}</MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          </Grid>
+                        )}
+                        
+                        <Grid item xs={12}>
+                          <TextField
+                            fullWidth
+                            label="Notes"
+                            multiline
+                            rows={2}
+                            value={partNotes}
+                            onChange={(e) => setPartNotes(e.target.value)}
+                            placeholder="Optional notes about this production entry"
+                          />
+                        </Grid>
+                      </Grid>
+                      
+                      {partValidationError && (
+                        <MuiAlert severity="error" sx={{ mt: 2 }} onClose={() => setPartValidationError('')}>
+                          {partValidationError}
+                        </MuiAlert>
+                      )}
+                      
+                      <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
+                        <Button
+                          variant="contained"
+                          onClick={handlePartSubmit}
+                          startIcon={<SaveIcon />}
+                          size="large"
+                        >
+                          Save Part Production
+                        </Button>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Box sx={{ textAlign: 'center', py: 4 }}>
+                      <BuildIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
+                      <Typography variant="h6" color="text.secondary">
+                        Select a part to track production
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Choose a part from the list on the left, or add a new part
+                      </Typography>
+                    </Box>
+                  </Card>
+                )}
+              </Grid>
+            </Grid>
           )}
 
           {/* Combine Parts Tab */}
           {tabValue === 'combine-parts' && (
-            <Box>
-              {/* Combine parts UI here - already implemented */}
-            </Box>
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={6}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="h6" sx={{ mb: 2 }}>Select Parts to Combine</Typography>
+                    
+                    {productParts.length < 2 ? (
+                      <Box sx={{ textAlign: 'center', py: 4 }}>
+                        <InfoIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
+                        <Typography color="text.secondary">
+                          You need at least 2 parts to combine. Please add more parts first.
+                        </Typography>
+                      </Box>
+                    ) : (
+                      <>
+                        {/* Stage Selection */}
+                        <FormControl fullWidth sx={{ mb: 2 }}>
+                          <InputLabel>Select Stage</InputLabel>
+                          <Select
+                            value={combineStage}
+                            onChange={(e) => {
+                              setCombineStage(e.target.value);
+                              setCombineCategory(getCategoryForStage(e.target.value));
+                            }}
+                            label="Select Stage"
+                          >
+                            <MenuItem value="">-- Select Stage --</MenuItem>
+                            {categories.flatMap(cat => 
+                              (categoryStages[cat] || []).map(stage => (
+                                <MenuItem key={stage} value={stage}>
+                                  {categoryLabels[cat]} - {stageNames[stage]}
+                                </MenuItem>
+                              ))
+                            )}
+                          </Select>
+                        </FormControl>
+                        
+                        {/* Parts Selection */}
+                        <Typography variant="subtitle2" sx={{ mb: 1 }}>Select Parts:</Typography>
+                        {productParts.map((part: any) => (
+                          <Box key={part.id} sx={{ mb: 2 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Typography sx={{ flex: 1 }}>{part.partName}</Typography>
+                              <TextField
+                                type="number"
+                                size="small"
+                                sx={{ width: 100 }}
+                                placeholder="Qty"
+                                value={selectedPartsForCombine[part.id] || ''}
+                                onChange={(e) => setSelectedPartsForCombine({
+                                  ...selectedPartsForCombine,
+                                  [part.id]: parseInt(e.target.value) || 0,
+                                })}
+                              />
+                            </Box>
+                          </Box>
+                        ))}
+                        
+                        {/* Notes */}
+                        <TextField
+                          fullWidth
+                          label="Notes"
+                          multiline
+                          rows={2}
+                          value={combineNotes}
+                          onChange={(e) => setCombineNotes(e.target.value)}
+                          placeholder="Optional notes about this combination"
+                          sx={{ mb: 2 }}
+                        />
+                        
+                        <Button
+                          fullWidth
+                          variant="contained"
+                          onClick={handleCombineSubmit}
+                          disabled={combineLoading || !combineStage || Object.keys(selectedPartsForCombine).length < 2}
+                          startIcon={combineLoading ? <RefreshIcon /> : <SaveIcon />}
+                        >
+                          {combineLoading ? 'Combining...' : 'Combine Parts'}
+                        </Button>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+              
+              <Grid item xs={12} md={6}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="h6" sx={{ mb: 2 }}>Combination History</Typography>
+                    
+                    {partCombinations.length === 0 ? (
+                      <Box sx={{ textAlign: 'center', py: 4 }}>
+                        <InfoIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
+                        <Typography color="text.secondary">
+                          No combinations recorded yet
+                        </Typography>
+                      </Box>
+                    ) : (
+                      <TableContainer>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow sx={{ bgcolor: '#f5f5f5' }}>
+                              <TableCell><strong>Stage</strong></TableCell>
+                              <TableCell><strong>Parts</strong></TableCell>
+                              <TableCell><strong>Date</strong></TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {partCombinations.map((combo: any, index: number) => (
+                              <TableRow key={index}>
+                                <TableCell>{stageNames[combo.stage] || combo.stage}</TableCell>
+                                <TableCell>
+                                  {combo.parts?.map((p: any) => `${p.partName} (${p.quantity})`).join(', ')}
+                                </TableCell>
+                                <TableCell>{combo.createdAt ? format(new Date(combo.createdAt), 'dd/MM/yyyy') : '-'}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
           )}
 
-          {/* History Tab */}
+          {/* Production History Tab */}
           {tabValue === 'history' && (
-            <Box>
-              {/* Production history UI here - already implemented */}
-            </Box>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" sx={{ mb: 2 }}>Production History</Typography>
+                
+                {Object.keys(stageRecords).length === 0 ? (
+                  <Box sx={{ textAlign: 'center', py: 4 }}>
+                    <InfoIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
+                    <Typography variant="h6" color="text.secondary">
+                      No production records yet
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Production history will appear here after you record production data
+                    </Typography>
+                  </Box>
+                ) : (
+                  <TableContainer>
+                    <Table>
+                      <TableHead>
+                        <TableRow sx={{ bgcolor: '#f5f5f5' }}>
+                          <TableCell><strong>Stage</strong></TableCell>
+                          <TableCell><strong>Category</strong></TableCell>
+                          <TableCell><strong>Total Qty</strong></TableCell>
+                          <TableCell><strong>Records</strong></TableCell>
+                          <TableCell><strong>Last Updated</strong></TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {Object.entries(stageRecords).map(([stage, data]: [string, any]) => (
+                          <TableRow key={stage} hover>
+                            <TableCell>
+                              <Chip 
+                                label={stageNames[stage] || stage} 
+                                color={getCategoryForStage(stage) === 'FIRING' ? 'error' : 'primary'}
+                                variant="outlined"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Chip 
+                                label={categoryLabels[getCategoryForStage(stage)] || getCategoryForStage(stage)}
+                                size="small"
+                                sx={{ bgcolor: categoryColors[getCategoryForStage(stage)] + '20' }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2" fontWeight="bold">
+                                {data.totalQuantity || 0}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Chip 
+                                label={`${data.records?.length || 0} entries`} 
+                                size="small"
+                                color="default"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              {data.records && data.records.length > 0 && data.records[0].createdAt ? (
+                                <Typography variant="body2">
+                                  {format(new Date(data.records[0].createdAt), 'dd/MM/yyyy HH:mm')}
+                                </Typography>
+                              ) : (
+                                <Typography variant="body2" color="text.secondary">-</Typography>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Remake History Tab */}
+          {tabValue === 'remake-history' && (
+            <Grid container spacing={3}>
+              <Grid item xs={12}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="h6" sx={{ mb: 2 }}>Remake Cycles History</Typography>
+                    
+                    {/* Remake Summary Cards */}
+                    <Grid container spacing={2} sx={{ mb: 3 }}>
+                      <Grid item xs={12} sm={4}>
+                        <Paper sx={{ p: 2, bgcolor: '#fff3e0' }}>
+                          <Typography variant="subtitle2" color="text.secondary">RPR (Pre-Firing) Remakes</Typography>
+                          <Typography variant="h4" fontWeight="bold">
+                            {getTotalRemadeQtyByType('RPR')}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Total pieces remade (R1-R{getNextRemakeNumberByType('RPR') - 1})
+                          </Typography>
+                        </Paper>
+                      </Grid>
+                      <Grid item xs={12} sm={4}>
+                        <Paper sx={{ p: 2, bgcolor: '#e3f2fd' }}>
+                          <Typography variant="subtitle2" color="text.secondary">RQC (Post-Firing) Remakes</Typography>
+                          <Typography variant="h4" fontWeight="bold">
+                            {getTotalRemadeQtyByType('RQC')}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Total pieces remade (R1-R{getNextRemakeNumberByType('RQC') - 1})
+                          </Typography>
+                        </Paper>
+                      </Grid>
+                      <Grid item xs={12} sm={4}>
+                        <Paper sx={{ p: 2, bgcolor: '#fce4ec' }}>
+                          <Typography variant="subtitle2" color="text.secondary">Total Remakes</Typography>
+                          <Typography variant="h4" fontWeight="bold">
+                            {getTotalRemadeQtyByType('RPR') + getTotalRemadeQtyByType('RQC')}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Combined total of all remakes
+                          </Typography>
+                        </Paper>
+                      </Grid>
+                    </Grid>
+                    
+                    {/* Remake Cycles Table */}
+                    {remakeCycles.length === 0 ? (
+                      <Box sx={{ textAlign: 'center', py: 4 }}>
+                        <InfoIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
+                        <Typography variant="h6" color="text.secondary">
+                          No remake records yet
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Remake history will appear here when production rejects are recorded
+                        </Typography>
+                      </Box>
+                    ) : (
+                      <TableContainer>
+                        <Table>
+                          <TableHead>
+                            <TableRow sx={{ bgcolor: '#f5f5f5' }}>
+                              <TableCell><strong>Remake Type</strong></TableCell>
+                              <TableCell><strong>Cycle #</strong></TableCell>
+                              <TableCell><strong>Stage</strong></TableCell>
+                              <TableCell><strong>Quantity</strong></TableCell>
+                              <TableCell><strong>Status</strong></TableCell>
+                              <TableCell><strong>Created</strong></TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {remakeCycles.map((cycle: any, index: number) => (
+                              <TableRow key={index} hover>
+                                <TableCell>
+                                  <Chip 
+                                    label={cycle.remakeType} 
+                                    color={cycle.remakeType === 'RPR' ? 'warning' : 'info'}
+                                    size="small"
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <Typography variant="body2" fontWeight="bold">
+                                    R{cycle.remakeNumber}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell>
+                                  <Chip 
+                                    label={stageNames[cycle.rejectStage] || cycle.rejectStage} 
+                                    size="small"
+                                    variant="outlined"
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <Typography variant="body2" fontWeight="bold">
+                                    {cycle.rejectQuantity}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell>
+                                  <Chip 
+                                    label={cycle.status} 
+                                    color={cycle.status === 'ESCALATED' ? 'error' : 'success'}
+                                    size="small"
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <Typography variant="body2">
+                                    {cycle.createdAt ? format(new Date(cycle.createdAt), 'dd/MM/yyyy HH:mm') : '-'}
+                                  </Typography>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
           )}
         </>
       )}
@@ -1939,6 +2499,170 @@ const ProductionTracking = () => {
           <Button onClick={handleCloseRemakeEscalation}>Cancel</Button>
           <Button onClick={handleConfirmRemakeEscalation} variant="contained" color="warning">
             Confirm and Proceed
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Add Part Dialog */}
+      <Dialog open={addPartDialogOpen} onClose={handleCloseAddPartDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>Add New Part</DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Part Name"
+                value={newPartName}
+                onChange={(e) => setNewPartName(e.target.value)}
+                required
+                placeholder="e.g., Body, Handle, Lid"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth>
+                <InputLabel>Part Type</InputLabel>
+                <Select
+                  value={newPartType}
+                  onChange={(e) => setNewPartType(e.target.value)}
+                  label="Part Type"
+                >
+                  <MenuItem value="MAIN">Main</MenuItem>
+                  <MenuItem value="SUB">Sub</MenuItem>
+                  <MenuItem value="ACCESSORY">Accessory</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Throwing Order"
+                type="number"
+                value={newPartThrowingOrder}
+                onChange={(e) => setNewPartThrowingOrder(e.target.value ? parseInt(e.target.value) : '')}
+                placeholder="1, 2, 3..."
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={newPartThrowingRequired}
+                    onChange={(e) => setNewPartThrowingRequired(e.target.checked)}
+                  />
+                }
+                label="Throwing Required"
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseAddPartDialog}>Cancel</Button>
+          <Button onClick={handleAddPart} variant="contained" disabled={!newPartName.trim()}>
+            Add Part
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Edit Part Dialog */}
+      <Dialog open={editPartDialogOpen} onClose={handleCloseEditPartDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>Edit Part</DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Part Name"
+                value={editPartName}
+                onChange={(e) => setEditPartName(e.target.value)}
+                required
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth>
+                <InputLabel>Part Type</InputLabel>
+                <Select
+                  value={editPartType}
+                  onChange={(e) => setEditPartType(e.target.value)}
+                  label="Part Type"
+                >
+                  <MenuItem value="MAIN">Main</MenuItem>
+                  <MenuItem value="SUB">Sub</MenuItem>
+                  <MenuItem value="ACCESSORY">Accessory</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Throwing Order"
+                type="number"
+                value={editPartThrowingOrder}
+                onChange={(e) => setEditPartThrowingOrder(e.target.value ? parseInt(e.target.value) : '')}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={editPartThrowingRequired}
+                    onChange={(e) => setEditPartThrowingRequired(e.target.checked)}
+                  />
+                }
+                label="Throwing Required"
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseEditPartDialog}>Cancel</Button>
+          <Button onClick={handleUpdatePart} variant="contained" disabled={!editPartName.trim()}>
+            Update Part
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Combine Parts Dialog */}
+      <Dialog open={combineDialogOpen} onClose={handleCloseCombineDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>Combine Parts at {stageNames[combineStage] || combineStage}</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Select parts and quantities to combine for {categoryLabels[combineCategory]} stage.
+          </Typography>
+          {productParts.map((part: any) => (
+            <Box key={part.id} sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+              <Typography sx={{ flex: 1 }}>{part.partName}</Typography>
+              <TextField
+                type="number"
+                size="small"
+                sx={{ width: 100 }}
+                placeholder="Qty"
+                value={selectedPartsForCombine[part.id] || ''}
+                onChange={(e) => setSelectedPartsForCombine({
+                  ...selectedPartsForCombine,
+                  [part.id]: parseInt(e.target.value) || 0,
+                })}
+              />
+            </Box>
+          ))}
+          <TextField
+            fullWidth
+            label="Notes"
+            multiline
+            rows={2}
+            value={combineNotes}
+            onChange={(e) => setCombineNotes(e.target.value)}
+            sx={{ mt: 2 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseCombineDialog}>Cancel</Button>
+          <Button 
+            onClick={handleCombineSubmit} 
+            variant="contained" 
+            disabled={combineLoading}
+            startIcon={combineLoading ? <RefreshIcon /> : undefined}
+          >
+            {combineLoading ? 'Combining...' : 'Combine'}
           </Button>
         </DialogActions>
       </Dialog>
