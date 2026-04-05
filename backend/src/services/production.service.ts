@@ -44,6 +44,7 @@ export class ProductionService {
       workflow = await productService.getProductionWorkflow(detail.productCode);
       if (workflow) {
         workflowStages = workflow.stages;
+        console.log(`[getProductionStages] Product: ${detail.productCode}, Workflow: ${workflow.workflowType}, Stages:`, workflowStages);
       }
     } catch (error) {
       console.error('Error getting production workflow:', error);
@@ -53,6 +54,7 @@ export class ProductionService {
     // If workflow lookup failed, use default stages based on productType
     if (workflowStages.length === 0) {
       workflowStages = this.getStagesByProductType(detail.productType);
+      console.log(`[getProductionStages] Using fallback stages for product type: ${detail.productType}, Stages:`, workflowStages);
     }
 
     // Group records by stage
@@ -69,10 +71,12 @@ export class ProductionService {
       const records = stageRecords[stage] || [];
       const latestRecord = records[0];
       const totalQuantity = records.reduce((sum, r) => sum + r.quantity, 0);
+      const totalRejectQuantity = records.reduce((sum, r) => sum + (r.rejectQuantity || 0), 0);
 
       return {
         stage,
         totalQuantity,
+        totalRejectQuantity,
         latestRecord,
         records,
       };
@@ -713,6 +717,58 @@ export class ProductionService {
   }
 
   /**
+   * Get production stages for a specific product part
+   * Returns the same workflow stages as the parent product
+   */
+  async getPartProductionStages(partId: string) {
+    const part = await prisma.productPart.findUnique({
+      where: { id: partId },
+      include: {
+        pol_details: true,
+      },
+    });
+
+    if (!part) {
+      throw new AppError('Product part not found', 404, 'PART_NOT_FOUND');
+    }
+
+    // Get production workflow from MySQL based on product code
+    let workflowStages: string[] = [];
+    let workflow: any = null;
+    
+    try {
+      workflow = await productService.getProductionWorkflow(part.pol_details.productCode);
+      if (workflow) {
+        workflowStages = workflow.stages;
+        console.log(`[getPartProductionStages] Part: ${partId}, Product: ${part.pol_details.productCode}, Workflow: ${workflow.workflowType}, Stages:`, workflowStages);
+      }
+    } catch (error) {
+      console.error('Error getting production workflow for part:', error);
+    }
+
+    // If workflow lookup failed, use default stages based on productType
+    if (workflowStages.length === 0) {
+      workflowStages = this.getStagesByProductType(part.pol_details.productType);
+    }
+
+    // Note: Part production records are stored in production_records table with partId reference
+    // For now, we return the workflow stages and empty records
+    const stageData = workflowStages.map((stage) => ({
+      stage,
+      totalQuantity: 0,
+      totalRejectQuantity: 0,
+      latestRecord: null,
+      records: [],
+    }));
+
+    return {
+      part,
+      workflow,
+      stages: stageData,
+    };
+  }
+
+  /**
    * Get production stages based on product type
    * Handbuild and Slab products skip Forming stage
    */
@@ -742,23 +798,58 @@ export class ProductionService {
 
   /**
    * Get all operators (users) for selection
-   * Only returns active users with WORKER role for production tracking
+   * Returns active users with WORKER role for production tracking
    */
   async getOperators() {
-    const users = await prisma.user.findMany({
-      where: { 
-        role: 'WORKER',
-        is_active: true,
-      },
-      select: {
-        id: true,
-        username: true,
-        fullName: true,
-        role: true,
-      },
-      orderBy: { fullName: 'asc' },
-    });
-    return users;
+    try {
+      // Try with Prisma enum first
+      const users = await prisma.user.findMany({
+        where: {
+          role: 'WORKER' as any,
+          is_active: true,
+        },
+        select: {
+          id: true,
+          username: true,
+          fullName: true,
+          role: true,
+        },
+        orderBy: { fullName: 'asc' },
+      });
+      
+      // If no WORKER users found, return all active users as fallback
+      if (users.length === 0) {
+        const allUsers = await prisma.user.findMany({
+          where: { is_active: true },
+          select: {
+            id: true,
+            username: true,
+            fullName: true,
+            role: true,
+          },
+          orderBy: { fullName: 'asc' },
+        });
+        console.log(`[getOperators] No WORKER users found, returning all ${allUsers.length} active users`);
+        return allUsers;
+      }
+      
+      console.log(`[getOperators] Found ${users.length} WORKER users`);
+      return users;
+    } catch (error) {
+      console.error('[getOperators] Error fetching operators:', error);
+      // Fallback: return all active users
+      const allUsers = await prisma.user.findMany({
+        where: { is_active: true },
+        select: {
+          id: true,
+          username: true,
+          fullName: true,
+          role: true,
+        },
+        orderBy: { fullName: 'asc' },
+      });
+      return allUsers;
+    }
   }
 }
 

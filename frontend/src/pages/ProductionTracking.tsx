@@ -286,12 +286,29 @@ const ProductionTracking = () => {
     return defaultCategoryLabels;
   }, [stageCategories]);
   
+  // Determine if this product skips forming stages (HAND_BUILT, SLAB_TRAY)
+  const isNonThrowingProduct = useMemo(() => {
+    const productType = polDetailsData?.productType || '';
+    const workflowType = productionWorkflow?.workflowType || '';
+    return productType === 'HAND_BUILT' || productType === 'SLAB_TRAY' ||
+           workflowType === 'HANDBUILD' || workflowType === 'SLAB';
+  }, [polDetailsData?.productType, productionWorkflow?.workflowType]);
+  
+  // Filter categories based on product type - exclude FORMING for non-throwing products
   const categories = useMemo(() => {
+    let allCategories: string[];
     if (stageCategories.length > 0) {
-      return stageCategories.map(cat => cat.code);
+      allCategories = stageCategories.map(cat => cat.code);
+    } else {
+      allCategories = ['FORMING', 'DECOR', 'DRYING', 'FIRING', 'GLAZING', 'QC'];
     }
-    return ['FORMING', 'DECOR', 'DRYING', 'FIRING', 'GLAZING', 'QC'];
-  }, [stageCategories]);
+    
+    // Filter out FORMING for HAND_BUILT/SLAB_TRAY products
+    if (isNonThrowingProduct) {
+      return allCategories.filter(cat => cat !== 'FORMING');
+    }
+    return allCategories;
+  }, [stageCategories, isNonThrowingProduct]);
   
   const categoryStages = useMemo(() => {
     if (stageCategories.length > 0) {
@@ -379,21 +396,47 @@ const ProductionTracking = () => {
       const result = await dispatch(fetchProductionStages(selectedProduct));
       const payload = result.payload as any;
       if (payload) {
-        // Find current stage from records
         const stages = payload.stages as any[];
-        let currentStageFound = 'THROWING';
         
+        // Get the workflow stages from the payload (if available)
+        const workflowStages = payload.workflow?.stages || [];
+        
+        // IMPORTANT: Store the workflow for validation
+        if (payload.workflow) {
+          console.log(`[loadProductionStages] Workflow: ${payload.workflow.workflowType}, Stages:`, workflowStages);
+          setProductionWorkflow(payload.workflow);
+        }
+        
+        // Find current stage from records
+        let currentStageFound = '';
+        
+        // Check if there are any existing records
         stages.forEach((stageData: any) => {
           if (stageData.records && stageData.records.length > 0) {
             currentStageFound = stageData.stage;
           }
         });
         
+        // If no records found, use the first stage from the workflow
+        if (!currentStageFound && workflowStages.length > 0) {
+          currentStageFound = workflowStages[0];
+          console.log(`[loadProductionStages] No existing records, using first workflow stage: ${currentStageFound}`);
+        } else if (!currentStageFound) {
+          // Fallback to THROWING if no workflow available
+          currentStageFound = 'THROWING';
+          console.log(`[loadProductionStages] No workflow available, defaulting to THROWING`);
+        }
+        
         setCurrentStage(currentStageFound);
         setCurrentCategory(getCategoryForStage(currentStageFound));
         
-        // Set the category tab
-        const categoryIndex = categories.indexOf(getCategoryForStage(currentStageFound));
+        // Set the category tab based on current stage
+        // Note: categories is now filtered based on product type
+        const stageCategory = getCategoryForStage(currentStageFound);
+        const filteredCategories = isNonThrowingProduct
+          ? categories.filter(cat => cat !== 'FORMING')
+          : categories;
+        const categoryIndex = filteredCategories.indexOf(stageCategory);
         if (categoryIndex >= 0) {
           setCategoryTab(categoryIndex);
         }
@@ -427,10 +470,15 @@ const ProductionTracking = () => {
 
   const loadOperators = async () => {
     try {
-      const operatorsData = await productionService.getOperators();
-      setOperators(operatorsData || []);
+      const response = await productionService.getOperators();
+      // Handle both wrapped response { success, data } and direct data
+      const operatorsData = (response as any)?.data || response;
+      console.log('[loadOperators] Response:', response);
+      console.log('[loadOperators] Operators data:', operatorsData);
+      setOperators(Array.isArray(operatorsData) ? operatorsData : []);
     } catch (error) {
       console.error('Error loading operators:', error);
+      setOperators([]);
     }
   };
 
@@ -986,6 +1034,41 @@ const ProductionTracking = () => {
       return { valid: true };
     }
     
+    // Get workflow stages to determine the actual stage sequence for this product
+    let workflowStages = productionWorkflow?.stages || [];
+    let workflowType = productionWorkflow?.workflowType || '';
+    
+    // FALLBACK: If workflow not loaded yet, determine stages from product type
+    // This handles cases where the user tries to save before the workflow is fully loaded
+    if (workflowStages.length === 0) {
+      const productType = polDetailsData?.productType || '';
+      if (productType === 'HAND_BUILT' || productType === 'SLAB_TRAY') {
+        // These products skip THROWING and TRIMMING
+        workflowType = productType === 'HAND_BUILT' ? 'HANDBUILD' : 'SLAB';
+        workflowStages = ['DECORATION', 'DRYING', 'LOAD_BISQUE', 'OUT_BISQUE', 'LOAD_HIGH_FIRING', 'OUT_HIGH_FIRING', 'LOAD_RAKU_FIRING', 'OUT_RAKU_FIRING', 'LOAD_LUSTER_FIRING', 'OUT_LUSTER_FIRING', 'SANDING', 'WAXING', 'DIPPING', 'SPRAYING', 'COLOR_DECORATION', 'QC_GOOD', 'QC_REJECT', 'QC_RE_FIRING', 'QC_SECOND'];
+      }
+    }
+    
+    // CRITICAL: Check if the stage is valid for this product's workflow
+    // This check runs even if workflowStages is empty - it will block THROWING/TRIMMING for known non-throwing products
+    const isNonThrowingProduct = workflowType === 'HANDBUILD' || workflowType === 'SLAB' ||
+                                  polDetailsData?.productType === 'HAND_BUILT' || polDetailsData?.productType === 'SLAB_TRAY';
+    
+    if (isNonThrowingProduct && (stage === 'THROWING' || stage === 'TRIMMING')) {
+      return {
+        valid: false,
+        error: `Stage "${stageNames[stage] || stage}" is not applicable for this product. This product uses ${workflowType || polDetailsData?.productType || 'HAND_BUILT/SLAB'} workflow which skips THROWING and TRIMMING stages.`
+      };
+    }
+    
+    if (workflowStages.length > 0 && !workflowStages.includes(stage)) {
+      const skipMsg = isNonThrowingProduct ? 'skips THROWING and TRIMMING stages' : 'has a different workflow';
+      return {
+        valid: false,
+        error: `Stage "${stageNames[stage] || stage}" is not part of this product's workflow (${workflowType || 'unknown'}). This product ${skipMsg}.`
+      };
+    }
+    
     const orderQty = polDetailsData?.quantity || 0;
     const extraBuffer = polDetailsData?.extraBuffer ?? 15;
     const qtyToMake = Math.round(orderQty + (orderQty * extraBuffer / 100));
@@ -998,77 +1081,44 @@ const ProductionTracking = () => {
     // Calculate total after adding new entry (including both good and reject quantities)
     const totalAfterNewEntry = alreadyRecordedQty + qty + alreadyRecordedRejects + rejectQty;
     
-    // Define stage flow and validation rules
-    const stageFlow = {
-      THROWING: { prevStage: null, maxQty: qtyToMake },
-      TRIMMING: { prevStage: 'THROWING', useGoodQty: false },
-      DECORATION: { prevStage: 'TRIMMING', useGoodQty: true },
-      DRYING: { prevStage: 'DECORATION', useGoodQty: true },
-      LOAD_BISQUE: { prevStage: 'DRYING', useGoodQty: true },
-      OUT_BISQUE: { prevStage: 'LOAD_BISQUE', useGoodQty: true },
-      LOAD_HIGH_FIRING: { prevStage: 'OUT_BISQUE', useGoodQty: true },
-      OUT_HIGH_FIRING: { prevStage: 'LOAD_HIGH_FIRING', useGoodQty: true },
-      LOAD_RAKU_FIRING: { prevStage: 'OUT_HIGH_FIRING', useGoodQty: true },
-      OUT_RAKU_FIRING: { prevStage: 'LOAD_RAKU_FIRING', useGoodQty: true },
-      LOAD_LUSTER_FIRING: { prevStage: 'OUT_RAKU_FIRING', useGoodQty: true },
-      OUT_LUSTER_FIRING: { prevStage: 'LOAD_LUSTER_FIRING', useGoodQty: true },
-      SANDING: { prevStage: 'OUT_LUSTER_FIRING', useGoodQty: true },
-      WAXING: { prevStage: 'SANDING', useGoodQty: true },
-      DIPPING: { prevStage: 'WAXING', useGoodQty: true },
-      SPRAYING: { prevStage: 'DIPPING', useGoodQty: true },
-      COLOR_DECORATION: { prevStage: 'SPRAYING', useGoodQty: true },
-      QC_GOOD: { prevStage: 'COLOR_DECORATION', useGoodQty: true },
-      QC_REJECT: { prevStage: 'COLOR_DECORATION', useGoodQty: true },
-      QC_RE_FIRING: { prevStage: 'COLOR_DECORATION', useGoodQty: true },
-      QC_SECOND: { prevStage: 'COLOR_DECORATION', useGoodQty: true },
-    };
+    // Find the index of the current stage in the workflow
+    const currentStageIndex = workflowStages.indexOf(stage);
     
-    const flowConfig = stageFlow[stage as keyof typeof stageFlow];
+    // Determine the previous stage based on the workflow (not hardcoded)
+    const prevStage = currentStageIndex > 0 ? workflowStages[currentStageIndex - 1] : null;
     
-    if (!flowConfig) {
-      return { valid: true };
-    }
+    console.log(`[validateStageQuantity] Stage: ${stage}, Index: ${currentStageIndex}, PrevStage: ${prevStage}, WorkflowStages:`, workflowStages);
     
-    // For THROWING stage, validate against qtyToMake
-    if ('maxQty' in flowConfig) {
-      const maxQty = flowConfig.maxQty;
-      if (totalAfterNewEntry > maxQty) {
+    // For the first stage in the workflow, validate against qtyToMake
+    if (currentStageIndex === 0) {
+      if (totalAfterNewEntry > qtyToMake) {
         return {
           valid: false,
-          error: `Total quantity (${totalAfterNewEntry}) cannot exceed quantity to make (${maxQty}). Already recorded: ${alreadyRecordedQty} good + ${alreadyRecordedRejects} reject, New entry: ${qty} good + ${rejectQty} reject. Order: ${orderQty} + Extra: ${extraBuffer}% = ${maxQty}. Please reduce quantity.`
+          error: `Total quantity (${totalAfterNewEntry}) cannot exceed quantity to make (${qtyToMake}). Already recorded: ${alreadyRecordedQty} good + ${alreadyRecordedRejects} reject, New entry: ${qty} good + ${rejectQty} reject. Order: ${orderQty} + Extra: ${extraBuffer}% = ${qtyToMake}. Please reduce quantity.`
         };
       }
       return { valid: true };
     }
     
     // For other stages, validate against previous stage's output
-    if (flowConfig.prevStage) {
-      const prevStageData = stageRecords[flowConfig.prevStage];
+    if (prevStage) {
+      const prevStageData = stageRecords[prevStage];
       
       if (!prevStageData || prevStageData.totalQuantity === 0) {
         return {
           valid: false,
-          error: `Previous stage (${stageNames[flowConfig.prevStage]}) has no recorded quantity. Please complete ${stageNames[flowConfig.prevStage]} first.`
+          error: `Previous stage (${stageNames[prevStage] || prevStage}) has no recorded quantity. Please complete ${stageNames[prevStage] || prevStage} first.`
         };
       }
       
       // Calculate previous stage's available quantity
-      let prevStageAvailableQty = 0;
-      
-      if (flowConfig.useGoodQty) {
-        // Use good quantity from previous stage (NOT subtracting rejects - rejects are discarded)
-        // Use totalRejectQuantity from backend if available, otherwise calculate from records
-        prevStageAvailableQty = prevStageData.totalQuantity;
-      } else {
-        // Use total quantity (good + rejects) from previous stage
-        prevStageAvailableQty = prevStageData.totalQuantity;
-      }
+      const prevStageAvailableQty = prevStageData.totalQuantity;
       
       // Validate - current stage total should not exceed previous stage's available quantity
       if (totalAfterNewEntry > prevStageAvailableQty) {
         return {
           valid: false,
-          error: `Total quantity (${totalAfterNewEntry}) cannot exceed available quantity from ${stageNames[flowConfig.prevStage]} (${prevStageAvailableQty} good - rejects are discarded). Already recorded in ${stageNames[stage]}: ${alreadyRecordedQty} good + ${alreadyRecordedRejects} reject, New entry: ${qty} good + ${rejectQty} reject. Please reduce quantity.`
+          error: `Total quantity (${totalAfterNewEntry}) cannot exceed available quantity from ${stageNames[prevStage] || prevStage} (${prevStageAvailableQty} good - rejects are discarded). Already recorded in ${stageNames[stage] || stage}: ${alreadyRecordedQty} good + ${alreadyRecordedRejects} reject, New entry: ${qty} good + ${rejectQty} reject. Please reduce quantity.`
         };
       }
     }
@@ -1089,8 +1139,21 @@ const ProductionTracking = () => {
         return;
       }
 
+      // Validate operator is required
+      if (!selectedOperator) {
+        showSnackbar('Please select operator', 'error');
+        return;
+      }
+
+      // Validate reject reason is required when reject quantity > 0
+      const parsedRejectQty = parseInt(rejectQuantity) || 0;
+      if (parsedRejectQty > 0 && !selectedDefectReason) {
+        showSnackbar('Please select reject reason when reject quantity is greater than 0', 'error');
+        return;
+      }
+
       const qty = parseInt(quantity);
-      const rejectQty = parseInt(rejectQuantity) || 0;
+      const rejectQty = parsedRejectQty;
       
       // Get dynamic validation based on stage flow (pass remakeType to allow bypass for remakes)
       const validationResult = validateStageQuantity(currentStage, qty, rejectQty, selectedRemakeType);
@@ -1287,18 +1350,34 @@ const ProductionTracking = () => {
     
     if (part) {
       try {
-        const result = await productionService.getPartProductionStages(part.id);
+        const response = await productionService.getPartProductionStages(part.id);
+        // Handle both wrapped response { success, data } and direct data
+        const result = response?.data || response;
         console.log('Loaded part production stages for part', part.id, ':', result);
         if (result) {
           setPartStages(result.stages || []);
           
+          // Get the workflow stages from the payload (if available)
+          const workflowStages = result.workflow?.stages || [];
+          console.log(`[handlePartSelect] Workflow stages for part ${part.id}:`, workflowStages);
+          
           // Find current stage from records
-          let currentStageFound = 'THROWING';
+          let currentStageFound = '';
           result.stages?.forEach((stageData: any) => {
             if (stageData.records && stageData.records.length > 0) {
               currentStageFound = stageData.stage;
             }
           });
+          
+          // If no records found, use the first stage from the workflow
+          if (!currentStageFound && workflowStages.length > 0) {
+            currentStageFound = workflowStages[0];
+            console.log(`[handlePartSelect] No existing records for part ${part.id}, using first workflow stage: ${currentStageFound}`);
+          } else if (!currentStageFound) {
+            // Fallback to THROWING if no workflow available
+            currentStageFound = 'THROWING';
+            console.log(`[handlePartSelect] No workflow available for part ${part.id}, defaulting to THROWING`);
+          }
           
           setPartCurrentStage(currentStageFound);
           setPartCurrentCategory(getCategoryForStage(currentStageFound));
@@ -1356,6 +1435,39 @@ const ProductionTracking = () => {
       return { valid: true };
     }
     
+    // Get workflow stages to determine the actual stage sequence for this product
+    let workflowStages = productionWorkflow?.stages || [];
+    let workflowType = productionWorkflow?.workflowType || '';
+    
+    // FALLBACK: If workflow not loaded yet, determine stages from product type
+    if (workflowStages.length === 0) {
+      const productType = polDetailsData?.productType || '';
+      if (productType === 'HAND_BUILT' || productType === 'SLAB_TRAY') {
+        workflowType = productType === 'HAND_BUILT' ? 'HANDBUILD' : 'SLAB';
+        workflowStages = ['DECORATION', 'DRYING', 'LOAD_BISQUE', 'OUT_BISQUE', 'LOAD_HIGH_FIRING', 'OUT_HIGH_FIRING', 'LOAD_RAKU_FIRING', 'OUT_RAKU_FIRING', 'LOAD_LUSTER_FIRING', 'OUT_LUSTER_FIRING', 'SANDING', 'WAXING', 'DIPPING', 'SPRAYING', 'COLOR_DECORATION', 'QC_GOOD', 'QC_REJECT', 'QC_RE_FIRING', 'QC_SECOND'];
+      }
+    }
+    
+    // CRITICAL: Check if the stage is valid for this product's workflow
+    // This check runs even if workflowStages is empty - it will block THROWING/TRIMMING for known non-throwing products
+    const isNonThrowingProduct = workflowType === 'HANDBUILD' || workflowType === 'SLAB' ||
+                                  polDetailsData?.productType === 'HAND_BUILT' || polDetailsData?.productType === 'SLAB_TRAY';
+    
+    if (isNonThrowingProduct && (stage === 'THROWING' || stage === 'TRIMMING')) {
+      return {
+        valid: false,
+        error: `Stage "${stageNames[stage] || stage}" is not applicable for this product. This product uses ${workflowType || polDetailsData?.productType || 'HAND_BUILT/SLAB'} workflow which skips THROWING and TRIMMING stages.`
+      };
+    }
+    
+    if (workflowStages.length > 0 && !workflowStages.includes(stage)) {
+      const skipMsg = isNonThrowingProduct ? 'skips THROWING and TRIMMING stages' : 'has a different workflow';
+      return {
+        valid: false,
+        error: `Stage "${stageNames[stage] || stage}" is not part of this product's workflow (${workflowType || 'unknown'}). This product ${skipMsg}.`
+      };
+    }
+    
     // Get the part's target quantity - use qtyToMake (order + extra buffer) like Input Production
     const orderQty = polDetailsData?.quantity || 0;
     const extraBuffer = polDetailsData?.extraBuffer ?? 15;
@@ -1370,76 +1482,44 @@ const ProductionTracking = () => {
     // Calculate total after adding new entry (including both good and reject quantities)
     const totalAfterNewEntry = alreadyRecordedQty + qty + alreadyRecordedRejects + rejectQty;
     
-    // Define stage flow and validation rules - same as Input Production
-    const stageFlow = {
-      THROWING: { prevStage: null, maxQty: partTargetQty },
-      TRIMMING: { prevStage: 'THROWING', useGoodQty: false },
-      DECORATION: { prevStage: 'TRIMMING', useGoodQty: true },
-      DRYING: { prevStage: 'DECORATION', useGoodQty: true },
-      LOAD_BISQUE: { prevStage: 'DRYING', useGoodQty: true },
-      OUT_BISQUE: { prevStage: 'LOAD_BISQUE', useGoodQty: true },
-      LOAD_HIGH_FIRING: { prevStage: 'OUT_BISQUE', useGoodQty: true },
-      OUT_HIGH_FIRING: { prevStage: 'LOAD_HIGH_FIRING', useGoodQty: true },
-      LOAD_RAKU_FIRING: { prevStage: 'OUT_HIGH_FIRING', useGoodQty: true },
-      OUT_RAKU_FIRING: { prevStage: 'LOAD_RAKU_FIRING', useGoodQty: true },
-      LOAD_LUSTER_FIRING: { prevStage: 'OUT_RAKU_FIRING', useGoodQty: true },
-      OUT_LUSTER_FIRING: { prevStage: 'LOAD_LUSTER_FIRING', useGoodQty: true },
-      SANDING: { prevStage: 'OUT_LUSTER_FIRING', useGoodQty: true },
-      WAXING: { prevStage: 'SANDING', useGoodQty: true },
-      DIPPING: { prevStage: 'WAXING', useGoodQty: true },
-      SPRAYING: { prevStage: 'DIPPING', useGoodQty: true },
-      COLOR_DECORATION: { prevStage: 'SPRAYING', useGoodQty: true },
-      QC_GOOD: { prevStage: 'COLOR_DECORATION', useGoodQty: true },
-      QC_REJECT: { prevStage: 'COLOR_DECORATION', useGoodQty: true },
-      QC_RE_FIRING: { prevStage: 'COLOR_DECORATION', useGoodQty: true },
-      QC_SECOND: { prevStage: 'COLOR_DECORATION', useGoodQty: true },
-    };
+    // Find the index of the current stage in the workflow
+    const currentStageIndex = workflowStages.indexOf(stage);
     
-    const flowConfig = stageFlow[stage as keyof typeof stageFlow];
+    // Determine the previous stage based on the workflow (not hardcoded)
+    const prevStage = currentStageIndex > 0 ? workflowStages[currentStageIndex - 1] : null;
     
-    if (!flowConfig) {
-      return { valid: true };
-    }
+    console.log(`[validatePartStageQuantity] Stage: ${stage}, Index: ${currentStageIndex}, PrevStage: ${prevStage}, WorkflowStages:`, workflowStages);
     
-    // For THROWING stage, validate against part target quantity
-    if ('maxQty' in flowConfig) {
-      const maxQty = flowConfig.maxQty;
-      if (totalAfterNewEntry > maxQty) {
+    // For the first stage in the workflow, validate against part target quantity
+    if (currentStageIndex === 0) {
+      if (totalAfterNewEntry > partTargetQty) {
         return {
           valid: false,
-          error: `Total quantity (${totalAfterNewEntry}) cannot exceed quantity to make (${maxQty}). Order: ${orderQty} + Extra: ${extraBuffer}% = ${qtyToMake}. Already recorded: ${alreadyRecordedQty} good + ${alreadyRecordedRejects} reject, New entry: ${qty} good + ${rejectQty} reject. Please reduce quantity.`
+          error: `Total quantity (${totalAfterNewEntry}) cannot exceed quantity to make (${partTargetQty}). Order: ${orderQty} + Extra: ${extraBuffer}% = ${qtyToMake}. Already recorded: ${alreadyRecordedQty} good + ${alreadyRecordedRejects} reject, New entry: ${qty} good + ${rejectQty} reject. Please reduce quantity.`
         };
       }
       return { valid: true };
     }
     
     // For other stages, validate against previous stage's output
-    if (flowConfig.prevStage) {
-      const prevStageData = partStageRecords[flowConfig.prevStage];
+    if (prevStage) {
+      const prevStageData = partStageRecords[prevStage];
       
       if (!prevStageData || prevStageData.totalQuantity === 0) {
         return {
           valid: false,
-          error: `Previous stage (${stageNames[flowConfig.prevStage]}) has no recorded quantity. Please complete ${stageNames[flowConfig.prevStage]} first.`
+          error: `Previous stage (${stageNames[prevStage] || prevStage}) has no recorded quantity. Please complete ${stageNames[prevStage] || prevStage} first.`
         };
       }
       
       // Calculate previous stage's available quantity
-      let prevStageAvailableQty = 0;
-      
-      if (flowConfig.useGoodQty) {
-        // Use good quantity from previous stage (NOT subtracting rejects - rejects are discarded)
-        prevStageAvailableQty = prevStageData.totalQuantity;
-      } else {
-        // Use total quantity (good + rejects) from previous stage
-        prevStageAvailableQty = prevStageData.totalQuantity;
-      }
+      const prevStageAvailableQty = prevStageData.totalQuantity;
       
       // Validate - current stage total should not exceed previous stage's available quantity
       if (totalAfterNewEntry > prevStageAvailableQty) {
         return {
           valid: false,
-          error: `Total quantity (${totalAfterNewEntry}) cannot exceed available quantity from ${stageNames[flowConfig.prevStage]} (${prevStageAvailableQty} good - rejects are discarded). Already recorded in ${stageNames[stage]}: ${alreadyRecordedQty} good + ${alreadyRecordedRejects} reject, New entry: ${qty} good + ${rejectQty} reject. Please reduce quantity.`
+          error: `Total quantity (${totalAfterNewEntry}) cannot exceed available quantity from ${stageNames[prevStage] || prevStage} (${prevStageAvailableQty} good - rejects are discarded). Already recorded in ${stageNames[stage] || stage}: ${alreadyRecordedQty} good + ${alreadyRecordedRejects} reject, New entry: ${qty} good + ${rejectQty} reject. Please reduce quantity.`
         };
       }
     }
@@ -1464,8 +1544,15 @@ const ProductionTracking = () => {
         return;
       }
 
+      // Validate reject reason is required when reject quantity > 0
+      const parsedRejectQty = parseInt(partRejectQuantity) || 0;
+      if (parsedRejectQty > 0 && !partSelectedDefectReason) {
+        showSnackbar('Please select reject reason when reject quantity is greater than 0', 'error');
+        return;
+      }
+
       const qty = parseInt(partQuantity);
-      const rejectQty = parseInt(partRejectQuantity) || 0;
+      const rejectQty = parsedRejectQty;
       
       // Validate (pass remakeType to allow bypass for remakes)
       const validationResult = validatePartStageQuantity(partCurrentStage, qty, rejectQty, partSelectedRemakeType);
@@ -1703,20 +1790,26 @@ const ProductionTracking = () => {
                       Record Production
                     </Typography>
 
-                    {/* Category Tabs */}
+                    {/* Category Tabs - FORMING is hidden for HAND_BUILT/SLAB_TRAY products */}
                     <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
                       <Tabs value={categoryTab} onChange={handleCategoryTabChange} variant="scrollable">
-                        {categories.map((cat, index) => (
-                          <Tab 
-                            key={cat} 
-                            label={categoryLabels[cat]} 
-                            sx={{ 
-                              bgcolor: categoryColors[cat] + '20',
-                              mr: 1,
-                              borderRadius: 1,
-                            }} 
-                          />
-                        ))}
+                        {categories.map((cat, index) => {
+                          // Skip FORMING tab for non-throwing products
+                          if (cat === 'FORMING' && isNonThrowingProduct) {
+                            return null;
+                          }
+                          return (
+                            <Tab
+                              key={cat}
+                              label={categoryLabels[cat]}
+                              sx={{
+                                bgcolor: categoryColors[cat] + '20',
+                                mr: 1,
+                                borderRadius: 1,
+                              }}
+                            />
+                          );
+                        })}
                       </Tabs>
                     </Box>
 
@@ -1787,7 +1880,7 @@ const ProductionTracking = () => {
                         />
                       </Grid>
                       <Grid item xs={12} sm={6}>
-                        <FormControl fullWidth>
+                        <FormControl fullWidth required>
                           <InputLabel>Operator</InputLabel>
                           <Select
                             value={selectedOperator}
@@ -1796,7 +1889,7 @@ const ProductionTracking = () => {
                           >
                             <MenuItem value="">-- Select Operator --</MenuItem>
                             {operators.map((op: any) => (
-                              <MenuItem key={op.id} value={op.id}>{op.name}</MenuItem>
+                              <MenuItem key={op.id} value={op.id}>{op.fullName}</MenuItem>
                             ))}
                           </Select>
                         </FormControl>
@@ -1815,6 +1908,27 @@ const ProductionTracking = () => {
                               <MenuItem value="">-- Select Oven --</MenuItem>
                               {ovens.map((oven: any) => (
                                 <MenuItem key={oven.id} value={oven.id}>{oven.name}</MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        </Grid>
+                      )}
+
+                      {/* Reject Reason dropdown - shown when reject quantity > 0 */}
+                      {parseInt(rejectQuantity) > 0 && (
+                        <Grid item xs={12} sm={6}>
+                          <FormControl fullWidth required>
+                            <InputLabel>Reject Reason</InputLabel>
+                            <Select
+                              value={selectedDefectReason}
+                              onChange={(e) => setSelectedDefectReason(e.target.value)}
+                              label="Reject Reason"
+                            >
+                              <MenuItem value="">-- Select Reject Reason --</MenuItem>
+                              {defectReasons.map((reason: any) => (
+                                <MenuItem key={reason.id} value={reason.id}>
+                                  {reason.category} - {reason.description}
+                                </MenuItem>
                               ))}
                             </Select>
                           </FormControl>
@@ -2059,7 +2173,7 @@ const ProductionTracking = () => {
                             >
                               <MenuItem value="">-- Select Operator --</MenuItem>
                               {operators.map((op: any) => (
-                                <MenuItem key={op.id} value={op.id}>{op.name}</MenuItem>
+                                <MenuItem key={op.id} value={op.id}>{op.fullName}</MenuItem>
                               ))}
                             </Select>
                           </FormControl>
@@ -2078,6 +2192,27 @@ const ProductionTracking = () => {
                                 <MenuItem value="">-- Select Oven --</MenuItem>
                                 {ovens.map((oven: any) => (
                                   <MenuItem key={oven.id} value={oven.id}>{oven.name}</MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          </Grid>
+                        )}
+
+                        {/* Reject Reason dropdown for Part - shown when reject quantity > 0 */}
+                        {parseInt(partRejectQuantity) > 0 && (
+                          <Grid item xs={12} sm={6}>
+                            <FormControl fullWidth required>
+                              <InputLabel>Reject Reason</InputLabel>
+                              <Select
+                                value={partSelectedDefectReason}
+                                onChange={(e) => setPartSelectedDefectReason(e.target.value)}
+                                label="Reject Reason"
+                              >
+                                <MenuItem value="">-- Select Reject Reason --</MenuItem>
+                                {defectReasons.map((reason: any) => (
+                                  <MenuItem key={reason.id} value={reason.id}>
+                                    {reason.category} - {reason.description}
+                                  </MenuItem>
                                 ))}
                               </Select>
                             </FormControl>

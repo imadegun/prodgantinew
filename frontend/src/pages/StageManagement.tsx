@@ -628,26 +628,36 @@ const StageManagement = (): JSX.Element => {
                             color={stage.requiresOven ? 'warning' : 'default'}
                           />
                         </TableCell>
-                        <TableCell>
-                          <Switch
-                            size="small"
-                            checked={stage.hasDetailProcess}
-                            onChange={async (e) => {
-                              try {
-                                await stageService.updateStage(stage.id, {
-                                  hasDetailProcess: e.target.checked,
-                                });
-                                loadStages();
-                                if (e.target.checked) {
-                                  handleOpenDetailProcessDialog(stage);
-                                }
-                              } catch (error: any) {
-                                showSnackbar(error.response?.data?.error?.message || 'Failed to update stage', 'error');
-                              }
-                            }}
-                            color="primary"
-                          />
-                        </TableCell>
+                         <TableCell>
+                           {stage.hasDetailProcess ? (
+                             <Button
+                               size="small"
+                               variant="outlined"
+                               onClick={() => handleOpenDetailProcessDialog(stage)}
+                             >
+                               Manage
+                             </Button>
+                           ) : (
+                             <Switch
+                               size="small"
+                               checked={stage.hasDetailProcess}
+                               onChange={async (e) => {
+                                 try {
+                                   await stageService.updateStage(stage.id, {
+                                     hasDetailProcess: e.target.checked,
+                                   });
+                                   loadStages();
+                                   if (e.target.checked) {
+                                     handleOpenDetailProcessDialog(stage);
+                                   }
+                                 } catch (error: any) {
+                                   showSnackbar(error.response?.data?.error?.message || 'Failed to update stage', 'error');
+                                 }
+                               }}
+                               color="primary"
+                             />
+                           )}
+                         </TableCell>
                         <TableCell>
                           <Switch
                             size="small"

@@ -563,6 +563,39 @@ router.delete('/product-parts/:id', authenticate, async (req, res) => {
   }
 });
 
+// Get production stages for a specific product part
+router.get('/product-parts/:partId/stages', authenticate, async (req, res) => {
+  try {
+    const { partId } = req.params;
+    
+    if (!partId || partId === 'NaN') {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_ID',
+          message: 'Invalid product part ID',
+        },
+      });
+    }
+    
+    const result = await productionService.getPartProductionStages(partId);
+    
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
+      success: false,
+      error: {
+        code: error.code || 'FETCH_PART_STAGES_FAILED',
+        message: error.message || 'Failed to fetch part production stages',
+      },
+    });
+  }
+});
+
 // Get stages by product type
 router.get('/stages-by-product-type/:productType', authenticate, async (req, res) => {
   try {

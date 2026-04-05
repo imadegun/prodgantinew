@@ -228,8 +228,12 @@ export class POLService {
 
   /**
    * Add product to POL
+   * Automatically determines productType from product's BuildTech in MySQL
+   * BuildTech is the source of truth - always override any frontend-provided productType
    */
   async addProductToPOL(polId: string, productData: any) {
+    console.log('[addProductToPOL] Called with productData:', JSON.stringify(productData));
+    
     const pol = await prisma.pOL.findUnique({
       where: { id: polId },
     });
@@ -238,6 +242,51 @@ export class POLService {
       throw new AppError('POL not found', 404, 'POL_NOT_FOUND');
     }
 
+    // ALWAYS determine productType from BuildTech (source of truth is MySQL gayafusionall)
+    let productType = 'PLAIN'; // default fallback
+    
+    if (productData.productCode) {
+      console.log(`[addProductToPOL] Looking up BuildTech for productCode: ${productData.productCode}`);
+      try {
+        const { productService } = await import('./product.service');
+        const productInfo = await productService.getProductProductionInfo(productData.productCode);
+        
+        console.log(`[addProductToPOL] Product info retrieved:`, productInfo ? {
+          productCode: productInfo.productCode,
+          buildTech: productInfo.buildTech,
+          buildTechNote: productInfo.buildTechNote
+        } : 'null');
+        
+        if (productInfo?.buildTech) {
+          const buildTech = productInfo.buildTech.toUpperCase();
+          console.log(`[addProductToPOL] BuildTech (uppercase): "${buildTech}"`);
+          
+          // Map BuildTech to productType
+          if (buildTech.includes('HANDBUILD') || buildTech.includes('HAND BUILD') || buildTech.includes('HANDMADE') || buildTech.includes('HAND MADE')) {
+            productType = 'HAND_BUILT';
+          } else if (buildTech.includes('SLAB') || buildTech.includes('SLABING') || buildTech.includes('SLAB & ESTRUDER') || buildTech.includes('SLAB TRAY')) {
+            productType = 'SLAB_TRAY';
+          } else if (buildTech.includes('DECOR') || buildTech.includes('DECORATIVE')) {
+            productType = 'DECOR';
+          } else {
+            productType = 'PLAIN';
+          }
+          
+          console.log(`[addProductToPOL] Product ${productData.productCode}: BuildTech="${productInfo.buildTech}" -> productType="${productType}"`);
+        } else {
+          console.log(`[addProductToPOL] Product ${productData.productCode}: No BuildTech found in MySQL, using default productType="PLAIN"`);
+        }
+      } catch (error: any) {
+        console.error('[addProductToPOL] Error determining productType from BuildTech:', error.message);
+        // Fall back to default
+        productType = 'PLAIN';
+      }
+    } else {
+      console.log('[addProductToPOL] No productCode provided, using default productType="PLAIN"');
+    }
+
+    console.log(`[addProductToPOL] Creating POLDetail with productType="${productType}"`);
+    
     const detail = await prisma.pOLDetail.create({
       data: {
         id: `detail-${Date.now()}`,
@@ -245,7 +294,7 @@ export class POLService {
         productCode: productData.productCode,
         productName: productData.productName,
         quantity: productData.quantity,
-        productType: productData.productType || 'PLAIN',
+        productType,
         color: productData.color,
         texture: productData.texture,
         material: productData.material,
@@ -257,6 +306,8 @@ export class POLService {
       },
     });
 
+    console.log(`[addProductToPOL] POLDetail created with id=${detail.id}, productType="${detail.productType}"`);
+    
     return detail;
   }
 
