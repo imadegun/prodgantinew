@@ -207,6 +207,24 @@ const ProductionTracking = () => {
   const [selectedDetailProcess, setSelectedDetailProcess] = useState('');
   const [partDetailProcesses, setPartDetailProcesses] = useState<any[]>([]);
   const [partSelectedDetailProcess, setPartSelectedDetailProcess] = useState('');
+
+  // Sub-processes state for stages with detail processes
+  const [stageSubProcesses, setStageSubProcesses] = useState<any[]>([]);
+  const [partStageSubProcesses, setPartStageSubProcesses] = useState<any[]>([]);
+  const [subProcessesLoading, setSubProcessesLoading] = useState(false);
+  const [partSubProcessesLoading, setPartSubProcessesLoading] = useState(false);
+  const [showSubProcessForm, setShowSubProcessForm] = useState(false);
+  const [partShowSubProcessForm, setPartShowSubProcessForm] = useState(false);
+  const [editingSubProcess, setEditingSubProcess] = useState<any>(null);
+  const [partEditingSubProcess, setPartEditingSubProcess] = useState<any>(null);
+
+  // Sub-process form state
+  const [newSubProcessName, setNewSubProcessName] = useState('');
+  const [newSubProcessQuantity, setNewSubProcessQuantity] = useState('');
+  const [newSubProcessRejectQuantity, setNewSubProcessRejectQuantity] = useState('');
+  const [partNewSubProcessName, setPartNewSubProcessName] = useState('');
+  const [partNewSubProcessQuantity, setPartNewSubProcessQuantity] = useState('');
+  const [partNewSubProcessRejectQuantity, setPartNewSubProcessRejectQuantity] = useState('');
   
   // Active Remake Cycle Selection state
   const [selectedActiveRemakeCycle, setSelectedActiveRemakeCycle] = useState<any>(null);
@@ -370,7 +388,15 @@ const ProductionTracking = () => {
       setPartStageRecords({});
       setPartCurrentStage('');
       setPartCurrentCategory('FORMING');
-      
+
+      // Clear sub-process states
+      setStageSubProcesses([]);
+      setPartStageSubProcesses([]);
+      setShowSubProcessForm(false);
+      setPartShowSubProcessForm(false);
+      setEditingSubProcess(null);
+      setPartEditingSubProcess(null);
+
       loadProductionStages();
       loadProductParts();
       loadRemakeCycles();
@@ -1005,23 +1031,26 @@ const ProductionTracking = () => {
     }
   };
 
-   // Handle main stage selection with detail process loading
-   const handleStageSelect = (stage: string) => {
+   // Handle main stage selection with detail process and sub-process loading
+   const handleStageSelect = async (stage: string) => {
      setCurrentStage(stage);
-     
+
      // Load detail processes for selected stage
      const selectedStageData = allStages.find(s => s.code === stage);
      if (selectedStageData?.hasDetailProcess) {
-       stageService.getProcessesByStageId(selectedStageData.id)
-         .then(processes => {
-           setDetailProcesses(processes);
-         })
-         .catch(error => {
-           console.error('Error loading detail processes:', error);
-           setDetailProcesses([]);
-         });
+       try {
+         const processes = await stageService.getProcessesByStageId(selectedStageData.id);
+         setDetailProcesses(processes);
+       } catch (error) {
+         console.error('Error loading detail processes:', error);
+         setDetailProcesses([]);
+       }
+
+       // Load sub-processes for this stage
+       await loadStageSubProcesses();
      } else {
        setDetailProcesses([]);
+       setStageSubProcesses([]);
      }
      setSelectedDetailProcess('');
    };
@@ -1406,23 +1435,26 @@ const ProductionTracking = () => {
     }
   };
 
-   // Handle part stage selection with detail process loading
-   const handlePartStageSelect = (stage: string) => {
+   // Handle part stage selection with detail process and sub-process loading
+   const handlePartStageSelect = async (stage: string) => {
      setPartCurrentStage(stage);
-     
+
      // Load detail processes for selected stage
      const selectedStageData = allStages.find(s => s.code === stage);
      if (selectedStageData?.hasDetailProcess) {
-       stageService.getProcessesByStageId(selectedStageData.id)
-         .then(processes => {
-           setPartDetailProcesses(processes);
-         })
-         .catch(error => {
-           console.error('Error loading detail processes:', error);
-           setPartDetailProcesses([]);
-         });
+       try {
+         const processes = await stageService.getProcessesByStageId(selectedStageData.id);
+         setPartDetailProcesses(processes);
+       } catch (error) {
+         console.error('Error loading detail processes:', error);
+         setPartDetailProcesses([]);
+       }
+
+       // Load sub-processes for this stage
+       await loadPartStageSubProcesses();
      } else {
        setPartDetailProcesses([]);
+       setPartStageSubProcesses([]);
      }
      setPartSelectedDetailProcess('');
    };
@@ -1630,6 +1662,218 @@ const ProductionTracking = () => {
   };
 
   // =====================================================
+  // SUB-PROCESS HANDLERS
+  // =====================================================
+
+  // Load sub-processes for main production stage
+  const loadStageSubProcesses = async () => {
+    if (!selectedProduct || !currentStage) return;
+
+    try {
+      setSubProcessesLoading(true);
+      const response = await productionService.getStageSubProcesses(selectedProduct, currentStage);
+      setStageSubProcesses(response.subProcesses || []);
+    } catch (error) {
+      console.error('Error loading stage sub-processes:', error);
+      setStageSubProcesses([]);
+    } finally {
+      setSubProcessesLoading(false);
+    }
+  };
+
+  // Load sub-processes for part production stage
+  const loadPartStageSubProcesses = async () => {
+    if (!selectedProduct || !partCurrentStage || !selectedPart) return;
+
+    try {
+      setPartSubProcessesLoading(true);
+      const response = await productionService.getStageSubProcesses(selectedProduct, partCurrentStage);
+      setPartStageSubProcesses(response.subProcesses || []);
+    } catch (error) {
+      console.error('Error loading part stage sub-processes:', error);
+      setPartStageSubProcesses([]);
+    } finally {
+      setPartSubProcessesLoading(false);
+    }
+  };
+
+  // Create new sub-process for main production
+  const createSubProcess = async () => {
+    try {
+      if (!newSubProcessName.trim() || !newSubProcessQuantity || parseInt(newSubProcessQuantity) <= 0) {
+        showSnackbar('Please enter valid sub-process name and quantity', 'error');
+        return;
+      }
+
+      const data = {
+        polDetailId: selectedProduct,
+        stage: currentStage,
+        processName: newSubProcessName.trim(),
+        processOrder: stageSubProcesses.length + 1,
+        quantity: parseInt(newSubProcessQuantity),
+        rejectQuantity: parseInt(newSubProcessRejectQuantity) || 0,
+        createdBy: 'current-user', // TODO: Get from auth context
+      };
+
+      await productionService.createStageSubProcess(data);
+      showSnackbar('Sub-process created successfully', 'success');
+
+      // Reset form and reload
+      setNewSubProcessName('');
+      setNewSubProcessQuantity('');
+      setNewSubProcessRejectQuantity('');
+      setShowSubProcessForm(false);
+      await loadStageSubProcesses();
+    } catch (error: any) {
+      console.error('Error creating sub-process:', error);
+      showSnackbar(error.message || 'Failed to create sub-process', 'error');
+    }
+  };
+
+  // Create new sub-process for part production
+  const createPartSubProcess = async () => {
+    try {
+      if (!partNewSubProcessName.trim() || !partNewSubProcessQuantity || parseInt(partNewSubProcessQuantity) <= 0) {
+        showSnackbar('Please enter valid sub-process name and quantity', 'error');
+        return;
+      }
+
+      const data = {
+        polDetailId: selectedProduct,
+        stage: partCurrentStage,
+        processName: partNewSubProcessName.trim(),
+        processOrder: partStageSubProcesses.length + 1,
+        quantity: parseInt(partNewSubProcessQuantity),
+        rejectQuantity: parseInt(partNewSubProcessRejectQuantity) || 0,
+        createdBy: 'current-user', // TODO: Get from auth context
+      };
+
+      await productionService.createStageSubProcess(data);
+      showSnackbar('Part sub-process created successfully', 'success');
+
+      // Reset form and reload
+      setPartNewSubProcessName('');
+      setPartNewSubProcessQuantity('');
+      setPartNewSubProcessRejectQuantity('');
+      setPartShowSubProcessForm(false);
+      await loadPartStageSubProcesses();
+    } catch (error: any) {
+      console.error('Error creating part sub-process:', error);
+      showSnackbar(error.message || 'Failed to create part sub-process', 'error');
+    }
+  };
+
+  // Update sub-process
+  const updateSubProcess = async (subProcessId: string, updates: any) => {
+    try {
+      await productionService.updateStageSubProcess(subProcessId, updates);
+      showSnackbar('Sub-process updated successfully', 'success');
+      await loadStageSubProcesses();
+      await loadPartStageSubProcesses();
+    } catch (error: any) {
+      console.error('Error updating sub-process:', error);
+      showSnackbar(error.message || 'Failed to update sub-process', 'error');
+    }
+  };
+
+  // Complete sub-process
+  const completeSubProcess = async (subProcessId: string) => {
+    try {
+      await productionService.completeStageSubProcess(subProcessId, 'current-user'); // TODO: Get from auth context
+      showSnackbar('Sub-process completed successfully', 'success');
+      await loadStageSubProcesses();
+      await loadPartStageSubProcesses();
+    } catch (error: any) {
+      console.error('Error completing sub-process:', error);
+      showSnackbar(error.message || 'Failed to complete sub-process', 'error');
+    }
+  };
+
+  // Delete sub-process
+  const deleteSubProcess = async (subProcessId: string) => {
+    if (!confirm('Are you sure you want to delete this sub-process?')) return;
+
+    try {
+      await productionService.deleteStageSubProcess(subProcessId);
+      showSnackbar('Sub-process deleted successfully', 'success');
+      await loadStageSubProcesses();
+      await loadPartStageSubProcesses();
+    } catch (error: any) {
+      console.error('Error deleting sub-process:', error);
+      showSnackbar(error.message || 'Failed to delete sub-process', 'error');
+    }
+  };
+
+  // Validate sub-process quantities against stage totals
+  const validateSubProcessQuantities = (subProcesses: any[], stage: string, isPart: boolean = false): { valid: boolean; error?: string } => {
+    const stageData = isPart ? partStageRecords[stage] : stageRecords[stage];
+    if (!stageData) return { valid: true };
+
+    const stageTotal = stageData.totalQuantity || 0;
+    const subProcessTotal = subProcesses.reduce((sum, sp) => sum + sp.quantity + sp.rejectQuantity, 0);
+
+    if (subProcessTotal > stageTotal) {
+      return {
+        valid: false,
+        error: `Total sub-process quantities (${subProcessTotal}) cannot exceed stage total (${stageTotal}). Please reduce quantities.`
+      };
+    }
+
+    return { valid: true };
+  };
+
+  // Enhanced create sub-process with validation
+  const createSubProcessWithValidation = async () => {
+    // Validate quantities first
+    const tempSubProcess = {
+      quantity: parseInt(newSubProcessQuantity) || 0,
+      rejectQuantity: parseInt(newSubProcessRejectQuantity) || 0,
+    };
+    const tempSubProcesses = [...stageSubProcesses, tempSubProcess];
+    const validation = validateSubProcessQuantities(tempSubProcesses, currentStage, false);
+
+    if (!validation.valid) {
+      showSnackbar(validation.error!, 'error');
+      return;
+    }
+
+    await createSubProcess();
+  };
+
+  // Enhanced create part sub-process with validation
+  const createPartSubProcessWithValidation = async () => {
+    // Validate quantities first
+    const tempSubProcess = {
+      quantity: parseInt(partNewSubProcessQuantity) || 0,
+      rejectQuantity: parseInt(partNewSubProcessRejectQuantity) || 0,
+    };
+    const tempSubProcesses = [...partStageSubProcesses, tempSubProcess];
+    const validation = validateSubProcessQuantities(tempSubProcesses, partCurrentStage, true);
+
+    if (!validation.valid) {
+      showSnackbar(validation.error!, 'error');
+      return;
+    }
+
+    await createPartSubProcess();
+  };
+
+  // Enhanced update sub-process with validation
+  const updateSubProcessWithValidation = async (subProcessId: string, updates: any) => {
+    const subProcesses = stageSubProcesses.map(sp =>
+      sp.id === subProcessId ? { ...sp, ...updates } : sp
+    );
+    const validation = validateSubProcessQuantities(subProcesses, currentStage, false);
+
+    if (!validation.valid) {
+      showSnackbar(validation.error!, 'error');
+      return;
+    }
+
+    await updateSubProcess(subProcessId, updates);
+  };
+
+  // =====================================================
   // COMBINE PARTS HANDLERS
   // =====================================================
 
@@ -1829,23 +2073,199 @@ const ProductionTracking = () => {
                       </Box>
                     </Box>
 
-                    {/* Detail Process Dropdown (when available for selected stage) */}
+                    {/* Sub-Process Tracking (when stage has detail processes) */}
                     {detailProcesses.length > 0 && (
-                      <FormControl fullWidth sx={{ mb: 3 }}>
-                        <InputLabel>Detail Process</InputLabel>
-                        <Select
-                          value={selectedDetailProcess}
-                          onChange={(e) => setSelectedDetailProcess(e.target.value)}
-                          label="Detail Process"
-                        >
-                          <MenuItem value="">-- Select Process --</MenuItem>
-                          {detailProcesses.map(process => (
-                            <MenuItem key={process.id} value={process.id}>
-                              {process.processName}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
+                      <Box sx={{ mb: 3 }}>
+                        <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <BuildIcon />
+                          Sub-Process Tracking
+                        </Typography>
+
+                        {/* Sub-processes List */}
+                        {subProcessesLoading ? (
+                          <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                            <LinearProgress sx={{ width: '100%' }} />
+                          </Box>
+                        ) : stageSubProcesses.length > 0 ? (
+                          <Box sx={{ mb: 2 }}>
+                            {stageSubProcesses.map((subProcess: any, index: number) => (
+                              <Card key={subProcess.id} sx={{ mb: 1, border: '1px solid', borderColor: subProcess.completed ? 'success.main' : 'divider' }}>
+                                <CardContent sx={{ py: 2 }}>
+                                  <Grid container spacing={2} alignItems="center">
+                                    <Grid item xs={12} sm={4}>
+                                      <Typography variant="subtitle2" fontWeight="bold">
+                                        {subProcess.processName}
+                                      </Typography>
+                                      <Typography variant="caption" color="text.secondary">
+                                        Order: {subProcess.processOrder}
+                                      </Typography>
+                                    </Grid>
+                                    <Grid item xs={6} sm={2}>
+                                      <TextField
+                                        fullWidth
+                                        size="small"
+                                        label="Good Qty"
+                                        type="number"
+                                        value={subProcess.quantity}
+                                        onChange={(e) => updateSubProcessWithValidation(subProcess.id, { quantity: parseInt(e.target.value) || 0 })}
+                                        disabled={subProcess.completed}
+                                      />
+                                    </Grid>
+                                    <Grid item xs={6} sm={2}>
+                                      <TextField
+                                        fullWidth
+                                        size="small"
+                                        label="Reject Qty"
+                                        type="number"
+                                        value={subProcess.rejectQuantity}
+                                        onChange={(e) => updateSubProcessWithValidation(subProcess.id, { rejectQuantity: parseInt(e.target.value) || 0 })}
+                                        disabled={subProcess.completed}
+                                      />
+                                    </Grid>
+                                    <Grid item xs={12} sm={2}>
+                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <Chip
+                                          label={subProcess.completed ? 'Completed' : 'In Progress'}
+                                          color={subProcess.completed ? 'success' : 'warning'}
+                                          size="small"
+                                        />
+                                        <Typography variant="caption" color="text.secondary">
+                                          {format(new Date(subProcess.updatedAt), 'dd/MM/yyyy')}
+                                        </Typography>
+                                      </Box>
+                                    </Grid>
+                                    <Grid item xs={12} sm={2}>
+                                      <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                        {!subProcess.completed && (
+                                          <IconButton
+                                            size="small"
+                                            color="success"
+                                            onClick={() => completeSubProcess(subProcess.id)}
+                                            title="Complete sub-process"
+                                          >
+                                            <SaveIcon fontSize="small" />
+                                          </IconButton>
+                                        )}
+                                        <IconButton
+                                          size="small"
+                                          color="error"
+                                          onClick={() => deleteSubProcess(subProcess.id)}
+                                          title="Delete sub-process"
+                                        >
+                                          <DeleteIcon fontSize="small" />
+                                        </IconButton>
+                                      </Box>
+                                    </Grid>
+                                  </Grid>
+                                </CardContent>
+                              </Card>
+                            ))}
+
+                            {/* Progress Summary */}
+                            <Box sx={{ mt: 2, p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+                              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                                Progress Summary
+                              </Typography>
+                              <Grid container spacing={2}>
+                                <Grid item xs={6} sm={3}>
+                                  <Typography variant="body2" color="text.secondary">Total Processes</Typography>
+                                  <Typography variant="h6">{stageSubProcesses.length}</Typography>
+                                </Grid>
+                                <Grid item xs={6} sm={3}>
+                                  <Typography variant="body2" color="text.secondary">Completed</Typography>
+                                  <Typography variant="h6" color="success.main">
+                                    {stageSubProcesses.filter(sp => sp.completed).length}
+                                  </Typography>
+                                </Grid>
+                                <Grid item xs={6} sm={3}>
+                                  <Typography variant="body2" color="text.secondary">Total Good Qty</Typography>
+                                  <Typography variant="h6">
+                                    {stageSubProcesses.reduce((sum, sp) => sum + sp.quantity, 0)}
+                                  </Typography>
+                                </Grid>
+                                <Grid item xs={6} sm={3}>
+                                  <Typography variant="body2" color="text.secondary">Total Reject Qty</Typography>
+                                  <Typography variant="h6" color="error.main">
+                                    {stageSubProcesses.reduce((sum, sp) => sum + sp.rejectQuantity, 0)}
+                                  </Typography>
+                                </Grid>
+                              </Grid>
+                            </Box>
+                          </Box>
+                        ) : (
+                          <Box sx={{ textAlign: 'center', py: 4, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+                            <BuildIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
+                            <Typography color="text.secondary">
+                              No sub-processes created yet for this stage.
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              Create sub-processes to track detailed work within this stage.
+                            </Typography>
+                          </Box>
+                        )}
+
+                        {/* Add New Sub-Process Form */}
+                        {showSubProcessForm ? (
+                          <Card sx={{ mt: 2 }}>
+                            <CardContent>
+                              <Typography variant="subtitle1" sx={{ mb: 2 }}>Create New Sub-Process</Typography>
+                              <Grid container spacing={2}>
+                                <Grid item xs={12} sm={6}>
+                                  <TextField
+                                    fullWidth
+                                    label="Process Name"
+                                    value={newSubProcessName}
+                                    onChange={(e) => setNewSubProcessName(e.target.value)}
+                                    placeholder="e.g., Apply base glaze"
+                                    required
+                                  />
+                                </Grid>
+                                <Grid item xs={6} sm={3}>
+                                  <TextField
+                                    fullWidth
+                                    label="Good Quantity"
+                                    type="number"
+                                    value={newSubProcessQuantity}
+                                    onChange={(e) => setNewSubProcessQuantity(e.target.value)}
+                                    required
+                                  />
+                                </Grid>
+                                <Grid item xs={6} sm={3}>
+                                  <TextField
+                                    fullWidth
+                                    label="Reject Quantity"
+                                    type="number"
+                                    value={newSubProcessRejectQuantity}
+                                    onChange={(e) => setNewSubProcessRejectQuantity(e.target.value)}
+                                  />
+                                </Grid>
+                                <Grid item xs={12}>
+                                  <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                                    <Button onClick={() => setShowSubProcessForm(false)}>Cancel</Button>
+                                    <Button
+                                      variant="contained"
+                                      onClick={createSubProcessWithValidation}
+                                      disabled={!newSubProcessName.trim() || !newSubProcessQuantity}
+                                    >
+                                      Create Sub-Process
+                                    </Button>
+                                  </Box>
+                                </Grid>
+                              </Grid>
+                            </CardContent>
+                          </Card>
+                        ) : (
+                          <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
+                            <Button
+                              variant="outlined"
+                              startIcon={<AddIcon />}
+                              onClick={() => setShowSubProcessForm(true)}
+                            >
+                              Add Sub-Process
+                            </Button>
+                          </Box>
+                        )}
+                      </Box>
                     )}
 
                     <Grid container spacing={2}>
@@ -2113,23 +2533,199 @@ const ProductionTracking = () => {
                         </Box>
                       </Box>
                       
-                      {/* Detail Process Dropdown for Part */}
+                      {/* Sub-Process Tracking for Part (when stage has detail processes) */}
                       {partDetailProcesses.length > 0 && (
-                        <FormControl fullWidth sx={{ mb: 3 }}>
-                          <InputLabel>Detail Process</InputLabel>
-                          <Select
-                            value={partSelectedDetailProcess}
-                            onChange={(e) => setPartSelectedDetailProcess(e.target.value)}
-                            label="Detail Process"
-                          >
-                            <MenuItem value="">-- Select Process --</MenuItem>
-                            {partDetailProcesses.map(process => (
-                              <MenuItem key={process.id} value={process.id}>
-                                {process.processName}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
+                        <Box sx={{ mb: 3 }}>
+                          <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <BuildIcon />
+                            Part Sub-Process Tracking
+                          </Typography>
+
+                          {/* Part Sub-processes List */}
+                          {partSubProcessesLoading ? (
+                            <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                              <LinearProgress sx={{ width: '100%' }} />
+                            </Box>
+                          ) : partStageSubProcesses.length > 0 ? (
+                            <Box sx={{ mb: 2 }}>
+                              {partStageSubProcesses.map((subProcess: any, index: number) => (
+                                <Card key={subProcess.id} sx={{ mb: 1, border: '1px solid', borderColor: subProcess.completed ? 'success.main' : 'divider' }}>
+                                  <CardContent sx={{ py: 2 }}>
+                                    <Grid container spacing={2} alignItems="center">
+                                      <Grid item xs={12} sm={4}>
+                                        <Typography variant="subtitle2" fontWeight="bold">
+                                          {subProcess.processName}
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary">
+                                          Order: {subProcess.processOrder}
+                                        </Typography>
+                                      </Grid>
+                                      <Grid item xs={6} sm={2}>
+                                        <TextField
+                                          fullWidth
+                                          size="small"
+                                          label="Good Qty"
+                                          type="number"
+                                          value={subProcess.quantity}
+                                          onChange={(e) => updateSubProcess(subProcess.id, { quantity: parseInt(e.target.value) || 0 })}
+                                          disabled={subProcess.completed}
+                                        />
+                                      </Grid>
+                                      <Grid item xs={6} sm={2}>
+                                        <TextField
+                                          fullWidth
+                                          size="small"
+                                          label="Reject Qty"
+                                          type="number"
+                                          value={subProcess.rejectQuantity}
+                                          onChange={(e) => updateSubProcess(subProcess.id, { rejectQuantity: parseInt(e.target.value) || 0 })}
+                                          disabled={subProcess.completed}
+                                        />
+                                      </Grid>
+                                      <Grid item xs={12} sm={2}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                          <Chip
+                                            label={subProcess.completed ? 'Completed' : 'In Progress'}
+                                            color={subProcess.completed ? 'success' : 'warning'}
+                                            size="small"
+                                          />
+                                          <Typography variant="caption" color="text.secondary">
+                                            {format(new Date(subProcess.updatedAt), 'dd/MM/yyyy')}
+                                          </Typography>
+                                        </Box>
+                                      </Grid>
+                                      <Grid item xs={12} sm={2}>
+                                        <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                          {!subProcess.completed && (
+                                            <IconButton
+                                              size="small"
+                                              color="success"
+                                              onClick={() => completeSubProcess(subProcess.id)}
+                                              title="Complete sub-process"
+                                            >
+                                              <SaveIcon fontSize="small" />
+                                            </IconButton>
+                                          )}
+                                          <IconButton
+                                            size="small"
+                                            color="error"
+                                            onClick={() => deleteSubProcess(subProcess.id)}
+                                            title="Delete sub-process"
+                                          >
+                                            <DeleteIcon fontSize="small" />
+                                          </IconButton>
+                                        </Box>
+                                      </Grid>
+                                    </Grid>
+                                  </CardContent>
+                                </Card>
+                              ))}
+
+                              {/* Part Progress Summary */}
+                              <Box sx={{ mt: 2, p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+                                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                                  Part Progress Summary
+                                </Typography>
+                                <Grid container spacing={2}>
+                                  <Grid item xs={6} sm={3}>
+                                    <Typography variant="body2" color="text.secondary">Total Processes</Typography>
+                                    <Typography variant="h6">{partStageSubProcesses.length}</Typography>
+                                  </Grid>
+                                  <Grid item xs={6} sm={3}>
+                                    <Typography variant="body2" color="text.secondary">Completed</Typography>
+                                    <Typography variant="h6" color="success.main">
+                                      {partStageSubProcesses.filter(sp => sp.completed).length}
+                                    </Typography>
+                                  </Grid>
+                                  <Grid item xs={6} sm={3}>
+                                    <Typography variant="body2" color="text.secondary">Total Good Qty</Typography>
+                                    <Typography variant="h6">
+                                      {partStageSubProcesses.reduce((sum, sp) => sum + sp.quantity, 0)}
+                                    </Typography>
+                                  </Grid>
+                                  <Grid item xs={6} sm={3}>
+                                    <Typography variant="body2" color="text.secondary">Total Reject Qty</Typography>
+                                    <Typography variant="h6" color="error.main">
+                                      {partStageSubProcesses.reduce((sum, sp) => sum + sp.rejectQuantity, 0)}
+                                    </Typography>
+                                  </Grid>
+                                </Grid>
+                              </Box>
+                            </Box>
+                          ) : (
+                            <Box sx={{ textAlign: 'center', py: 4, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+                              <BuildIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
+                              <Typography color="text.secondary">
+                                No sub-processes created yet for this part stage.
+                              </Typography>
+                              <Typography variant="body2" color="text.secondary">
+                                Create sub-processes to track detailed work within this stage.
+                              </Typography>
+                            </Box>
+                          )}
+
+                          {/* Add New Part Sub-Process Form */}
+                          {partShowSubProcessForm ? (
+                            <Card sx={{ mt: 2 }}>
+                              <CardContent>
+                                <Typography variant="subtitle1" sx={{ mb: 2 }}>Create New Part Sub-Process</Typography>
+                                <Grid container spacing={2}>
+                                  <Grid item xs={12} sm={6}>
+                                    <TextField
+                                      fullWidth
+                                      label="Process Name"
+                                      value={partNewSubProcessName}
+                                      onChange={(e) => setPartNewSubProcessName(e.target.value)}
+                                      placeholder="e.g., Apply base glaze"
+                                      required
+                                    />
+                                  </Grid>
+                                  <Grid item xs={6} sm={3}>
+                                    <TextField
+                                      fullWidth
+                                      label="Good Quantity"
+                                      type="number"
+                                      value={partNewSubProcessQuantity}
+                                      onChange={(e) => setPartNewSubProcessQuantity(e.target.value)}
+                                      required
+                                    />
+                                  </Grid>
+                                  <Grid item xs={6} sm={3}>
+                                    <TextField
+                                      fullWidth
+                                      label="Reject Quantity"
+                                      type="number"
+                                      value={partNewSubProcessRejectQuantity}
+                                      onChange={(e) => setPartNewSubProcessRejectQuantity(e.target.value)}
+                                    />
+                                  </Grid>
+                                  <Grid item xs={12}>
+                                    <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                                      <Button onClick={() => setPartShowSubProcessForm(false)}>Cancel</Button>
+                                      <Button
+                                        variant="contained"
+                                        onClick={createPartSubProcessWithValidation}
+                                        disabled={!partNewSubProcessName.trim() || !partNewSubProcessQuantity}
+                                      >
+                                        Create Part Sub-Process
+                                      </Button>
+                                    </Box>
+                                  </Grid>
+                                </Grid>
+                              </CardContent>
+                            </Card>
+                          ) : (
+                            <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
+                              <Button
+                                variant="outlined"
+                                startIcon={<AddIcon />}
+                                onClick={() => setPartShowSubProcessForm(true)}
+                              >
+                                Add Part Sub-Process
+                              </Button>
+                            </Box>
+                          )}
+                        </Box>
                       )}
                       
                       <Grid container spacing={2}>

@@ -73,6 +73,7 @@ model POLDetail {
   production_records ProductionRecord[]
   revision_tickets   RevisionTicket[]
   product_parts      ProductPart[]
+  stage_sub_processes StageSubProcess[]
 
   @@map("pol_details")
 }
@@ -229,6 +230,23 @@ model DefectReason {
   updatedAt   DateTime @updatedAt @map("updatedAt")
 
   @@map("defect_reasons")
+}
+
+model StageSubProcess {
+  id             String   @id
+  polDetailId    String
+  stage          String
+  processName    String
+  processOrder   Int
+  quantity       Int
+  rejectQuantity Int      @default(0)
+  completed      Boolean  @default(false)
+  createdBy      String
+  createdAt      DateTime @default(now()) @map("createdAt")
+  updatedAt      DateTime @updatedAt @map("updatedAt")
+  pol_details    POLDetail @relation(fields: [polDetailId], references: [id], onDelete: Cascade)
+
+  @@map("stageSubProcess")
 }
 
 model StageCategory {

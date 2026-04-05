@@ -1,6 +1,6 @@
 import { prisma } from '../config/database';
 import { AppError } from '../middleware/error.middleware';
-import { ProductionStage } from '@prisma/client';
+import { ProductionStage, StageSubProcess } from '@prisma/client';
 import { productService } from './product.service';
 
 interface TrackProductionData {
@@ -111,6 +111,9 @@ export class ProductionService {
     if (quantity <= 0) {
       throw new AppError('Quantity must be greater than 0', 400, 'INVALID_QUANTITY');
     }
+
+    // Validate that all sub-processes are complete before allowing stage completion
+    await this.validateStageCompletion(polDetailId, stage);
 
     // Check for discrepancies
     const discrepancy = await this.checkForDiscrepancy(polDetailId, stage, quantity);
@@ -850,6 +853,377 @@ export class ProductionService {
       });
       return allUsers;
     }
+  }
+
+  /**
+   * Get all sub-processes for a specific stage of a POL detail
+   */
+  async getStageSubProcesses(polDetailId: string, stage: string) {
+    // Validate POL detail exists
+    const detail = await prisma.pOLDetail.findUnique({
+      where: { id: polDetailId },
+    });
+
+    if (!detail) {
+      throw new AppError('POL detail not found', 404, 'DETAIL_NOT_FOUND');
+    }
+
+    const subProcesses = await prisma.stageSubProcess.findMany({
+      where: {
+        polDetailId,
+        stage,
+      },
+      orderBy: { processOrder: 'asc' },
+    });
+
+    return {
+      polDetailId,
+      stage,
+      subProcesses: subProcesses.map((sp) => ({
+        id: sp.id,
+        processName: sp.processName,
+        processOrder: sp.processOrder,
+        quantity: sp.quantity,
+        rejectQuantity: sp.rejectQuantity,
+        completed: sp.completed,
+        createdBy: sp.createdBy,
+        createdAt: sp.createdAt,
+        updatedAt: sp.updatedAt,
+      })),
+    };
+  }
+
+  /**
+   * Create a new stage sub-process
+   */
+  async createStageSubProcess(data: {
+    polDetailId: string;
+    stage: string;
+    processName: string;
+    processOrder: number;
+    quantity: number;
+    rejectQuantity?: number;
+    createdBy: string;
+  }) {
+    // Validate POL detail exists
+    const detail = await prisma.pOLDetail.findUnique({
+      where: { id: data.polDetailId },
+    });
+
+    if (!detail) {
+      throw new AppError('POL detail not found', 404, 'DETAIL_NOT_FOUND');
+    }
+
+    // Validate quantity
+    if (data.quantity <= 0) {
+      throw new AppError('Quantity must be greater than 0', 400, 'INVALID_QUANTITY');
+    }
+
+    // Validate process order
+    if (data.processOrder < 0) {
+      throw new AppError('Process order must be non-negative', 400, 'INVALID_PROCESS_ORDER');
+    }
+
+    // Validate reject quantity
+    if (data.rejectQuantity !== undefined && data.rejectQuantity < 0) {
+      throw new AppError('Reject quantity must be non-negative', 400, 'INVALID_REJECT_QUANTITY');
+    }
+
+    const subProcess = await prisma.stageSubProcess.create({
+      data: {
+        id: `sub-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        polDetailId: data.polDetailId,
+        stage: data.stage,
+        processName: data.processName,
+        processOrder: data.processOrder,
+        quantity: data.quantity,
+        rejectQuantity: data.rejectQuantity || 0,
+        completed: false,
+        createdBy: data.createdBy,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+
+    // Run integrated validation after creation
+    await this.validateSubProcessUpdate(data.polDetailId, data.stage, subProcess.id);
+
+    return {
+      id: subProcess.id,
+      processName: subProcess.processName,
+      processOrder: subProcess.processOrder,
+      quantity: subProcess.quantity,
+      rejectQuantity: subProcess.rejectQuantity,
+      completed: subProcess.completed,
+      createdBy: subProcess.createdBy,
+      createdAt: subProcess.createdAt,
+      updatedAt: subProcess.updatedAt,
+    };
+  }
+
+  /**
+   * Update a stage sub-process
+   */
+  async updateStageSubProcess(
+    subProcessId: string,
+    data: {
+      quantity?: number;
+      rejectQuantity?: number;
+      completed?: boolean;
+    }
+  ) {
+    // Find the sub-process
+    const existingSubProcess = await prisma.stageSubProcess.findUnique({
+      where: { id: subProcessId },
+    });
+
+    if (!existingSubProcess) {
+      throw new AppError('Stage sub-process not found', 404, 'SUB_PROCESS_NOT_FOUND');
+    }
+
+    // Validate quantity if provided
+    if (data.quantity !== undefined && data.quantity <= 0) {
+      throw new AppError('Quantity must be greater than 0', 400, 'INVALID_QUANTITY');
+    }
+
+    // Validate reject quantity if provided
+    if (data.rejectQuantity !== undefined && data.rejectQuantity < 0) {
+      throw new AppError('Reject quantity must be non-negative', 400, 'INVALID_REJECT_QUANTITY');
+    }
+
+    const updateData: any = {};
+    if (data.quantity !== undefined) {
+      updateData.quantity = data.quantity;
+    }
+    if (data.rejectQuantity !== undefined) {
+      updateData.rejectQuantity = data.rejectQuantity;
+    }
+    if (data.completed !== undefined) {
+      updateData.completed = data.completed;
+    }
+    updateData.updatedAt = new Date();
+
+    const updatedSubProcess = await prisma.stageSubProcess.update({
+      where: { id: subProcessId },
+      data: updateData,
+    });
+
+    // Run integrated validation after update
+    await this.validateSubProcessUpdate(existingSubProcess.polDetailId, existingSubProcess.stage, subProcessId);
+
+    return {
+      id: updatedSubProcess.id,
+      processName: updatedSubProcess.processName,
+      processOrder: updatedSubProcess.processOrder,
+      quantity: updatedSubProcess.quantity,
+      rejectQuantity: updatedSubProcess.rejectQuantity,
+      completed: updatedSubProcess.completed,
+      createdBy: updatedSubProcess.createdBy,
+      createdAt: updatedSubProcess.createdAt,
+      updatedAt: updatedSubProcess.updatedAt,
+    };
+  }
+
+  /**
+   * Delete a stage sub-process
+   */
+  async deleteStageSubProcess(subProcessId: string) {
+    // Find the sub-process
+    const existingSubProcess = await prisma.stageSubProcess.findUnique({
+      where: { id: subProcessId },
+    });
+
+    if (!existingSubProcess) {
+      throw new AppError('Stage sub-process not found', 404, 'SUB_PROCESS_NOT_FOUND');
+    }
+
+    await prisma.stageSubProcess.delete({
+      where: { id: subProcessId },
+    });
+
+    return { message: 'Stage sub-process deleted successfully' };
+  }
+
+  /**
+   * Validate sub-process sequence - ensure sub-processes are completed in order
+   */
+  private async validateSubProcessSequence(polDetailId: string, stage: string, processOrder: number): Promise<void> {
+    // Get all sub-processes for this stage and POL detail, sorted by process order
+    const subProcesses = await prisma.stageSubProcess.findMany({
+      where: {
+        polDetailId,
+        stage,
+      },
+      orderBy: { processOrder: 'asc' },
+    });
+
+    // Check if any previous sub-processes are incomplete
+    for (const subProcess of subProcesses) {
+      if (subProcess.processOrder < processOrder && !subProcess.completed) {
+        throw new AppError(
+          `Cannot complete sub-process ${processOrder} (${subProcess.processName}). Previous sub-process ${subProcess.processOrder} must be completed first.`,
+          400,
+          'SEQUENCE_VIOLATION'
+        );
+      }
+    }
+  }
+
+  /**
+   * Validate sub-process totals - ensure sub-process quantities sum to stage total
+   */
+  private async validateSubProcessTotals(polDetailId: string, stage: string): Promise<void> {
+    // Get total quantity from production records for this stage
+    const stageRecords = await prisma.productionRecord.findMany({
+      where: {
+        polDetailId,
+        stage: stage as ProductionStage,
+      },
+    });
+
+    const stageTotal = stageRecords.reduce((sum, record) => sum + record.quantity, 0);
+
+    // Get all sub-processes for this stage
+    const subProcesses = await prisma.stageSubProcess.findMany({
+      where: {
+        polDetailId,
+        stage,
+      },
+    });
+
+    const subProcessTotal = subProcesses.reduce((sum, sp) => sum + sp.quantity, 0);
+
+    if (subProcessTotal > stageTotal) {
+      throw new AppError(
+        `Sub-process total (${subProcessTotal}) exceeds stage total (${stageTotal}) for stage ${stage}`,
+        400,
+        'QUANTITY_EXCEEDED'
+      );
+    }
+  }
+
+  /**
+   * Validate stage against workflow - ensure stage total matches previous stage output
+   */
+  private async validateStageAgainstWorkflow(polDetailId: string, stage: string): Promise<void> {
+    const stageOrder = ['THROWING', 'TRIMMING', 'DECORATION', 'DRYING', 'LOAD_BISQUE', 'OUT_BISQUE', 'LOAD_HIGH_FIRING', 'OUT_HIGH_FIRING', 'SANDING', 'DIPPING', 'QC_GOOD'];
+    const currentIndex = stageOrder.indexOf(stage);
+
+    if (currentIndex === 0) {
+      // First stage, no previous stage to compare
+      return;
+    }
+
+    const previousStage = stageOrder[currentIndex - 1] as ProductionStage;
+
+    // Get total quantity from previous stage
+    const previousRecords = await prisma.productionRecord.findMany({
+      where: {
+        polDetailId,
+        stage: previousStage,
+      },
+    });
+
+    const expectedQuantity = previousRecords.reduce((sum, r) => sum + r.quantity, 0);
+
+    // Get total quantity from current stage
+    const currentRecords = await prisma.productionRecord.findMany({
+      where: {
+        polDetailId,
+        stage: stage as ProductionStage,
+      },
+    });
+
+    const actualQuantity = currentRecords.reduce((sum, r) => sum + r.quantity, 0);
+
+    const difference = actualQuantity - expectedQuantity;
+    const tolerance = expectedQuantity * 0.05; // 5% tolerance
+
+    if (Math.abs(difference) > tolerance) {
+      throw new AppError(
+        `Stage ${stage} quantity (${actualQuantity}) doesn't match previous stage ${previousStage} output (${expectedQuantity}). Difference: ${difference}`,
+        400,
+        'STAGE_MISMATCH'
+      );
+    }
+  }
+
+  /**
+   * Integrated validation for all sub-process updates
+   */
+  private async validateSubProcessUpdate(polDetailId: string, stage: string, subProcessId?: string): Promise<void> {
+    // Validate sub-process totals
+    await this.validateSubProcessTotals(polDetailId, stage);
+
+    // Validate stage against workflow
+    await this.validateStageAgainstWorkflow(polDetailId, stage);
+  }
+
+  /**
+   * Validate stage completion - ensure all sub-processes are complete before marking stage complete
+   */
+  private async validateStageCompletion(polDetailId: string, stage: string): Promise<void> {
+    // Get all sub-processes for this stage
+    const subProcesses = await prisma.stageSubProcess.findMany({
+      where: {
+        polDetailId,
+        stage,
+      },
+    });
+
+    // Check if any sub-processes are incomplete
+    const incompleteProcesses = subProcesses.filter(sp => !sp.completed);
+
+    if (incompleteProcesses.length > 0) {
+      const processNames = incompleteProcesses.map(sp => `${sp.processName} (${sp.processOrder})`).join(', ');
+      throw new AppError(
+        `Cannot complete stage ${stage}. The following sub-processes are still incomplete: ${processNames}`,
+        400,
+        'INCOMPLETE_SUB_PROCESSES'
+      );
+    }
+  }
+
+  /**
+   * Complete a stage sub-process
+   */
+  async completeStageSubProcess(subProcessId: string, completedBy: string) {
+    // Find the sub-process
+    const existingSubProcess = await prisma.stageSubProcess.findUnique({
+      where: { id: subProcessId },
+    });
+
+    if (!existingSubProcess) {
+      throw new AppError('Stage sub-process not found', 404, 'SUB_PROCESS_NOT_FOUND');
+    }
+
+    // Check if already completed
+    if (existingSubProcess.completed) {
+      throw new AppError('Stage sub-process is already completed', 400, 'ALREADY_COMPLETED');
+    }
+
+    // Validate sequence before completing
+    await this.validateSubProcessSequence(existingSubProcess.polDetailId, existingSubProcess.stage, existingSubProcess.processOrder);
+
+    const updatedSubProcess = await prisma.stageSubProcess.update({
+      where: { id: subProcessId },
+      data: {
+        completed: true,
+        updatedAt: new Date(),
+      },
+    });
+
+    return {
+      id: updatedSubProcess.id,
+      processName: updatedSubProcess.processName,
+      processOrder: updatedSubProcess.processOrder,
+      quantity: updatedSubProcess.quantity,
+      rejectQuantity: updatedSubProcess.rejectQuantity,
+      completed: updatedSubProcess.completed,
+      createdBy: updatedSubProcess.createdBy,
+      createdAt: updatedSubProcess.createdAt,
+      updatedAt: updatedSubProcess.updatedAt,
+    };
   }
 }
 

@@ -36,7 +36,7 @@ async function main() {
       username: 'manager',
       email: 'manager@prodganti.com',
       passwordHash: hashedPassword,
-      fullName: 'John Manager',
+      fullName: 'Madegun',
       role: 'MANAGER',
       is_active: true,
       createdAt: new Date(),
@@ -50,7 +50,7 @@ async function main() {
       username: 'admin',
       email: 'admin@prodganti.com',
       passwordHash: hashedPassword,
-      fullName: 'Jane Admin',
+      fullName: 'Eka Karyawan',
       role: 'ADMIN',
       is_active: true,
       createdAt: new Date(),
@@ -60,11 +60,25 @@ async function main() {
 
   // Create WORKER users for production tracking
   const workerNames = [
-    { username: 'worker1', fullName: 'Ayu Sari' },
-    { username: 'worker2', fullName: 'Made Sukarno' },
-    { username: 'worker3', fullName: 'Ketut Budi' },
-    { username: 'worker4', fullName: 'Wayan Susena' },
-    { username: 'worker5', fullName: 'Putu Antariksa' },
+    { username: 'worker1', fullName: 'Alvin' },
+    { username: 'worker2', fullName: 'Gusti' },
+    { username: 'worker3', fullName: 'Balon' },
+    { username: 'worker4', fullName: 'Deksudi' },
+    { username: 'worker5', fullName: 'Dedik' },
+    { username: 'worker6', fullName: 'Boki' },
+    { username: 'worker7', fullName: 'Lantur' },
+    { username: 'worker8', fullName: 'Gading' },
+    { username: 'worker9', fullName: 'Meong' },
+    { username: 'worker10', fullName: 'Yogi' },
+    { username: 'worker11', fullName: 'Yande' },
+    { username: 'worker12', fullName: 'Dejer' },
+    { username: 'worker13', fullName: 'Alon' },
+    { username: 'worker14', fullName: 'Bandut' },
+    { username: 'worker15', fullName: 'Osyong' },
+    { username: 'worker16', fullName: 'Ketut' },
+    { username: 'worker17', fullName: 'Komo' },
+    { username: 'worker18', fullName: 'Wulan' },
+    { username: 'worker19', fullName: 'Wardita' },
   ];
 
   for (let i = 0; i < workerNames.length; i++) {
@@ -73,7 +87,7 @@ async function main() {
       data: {
         id: `user-worker-${String(i + 1).padStart(3, '0')}`,
         username: worker.username,
-        email: `${worker.username}@prodganti.com`,
+        email: `${worker.username}@forming.com`,
         passwordHash: hashedPassword,
         fullName: worker.fullName,
         role: 'WORKER',
@@ -84,7 +98,7 @@ async function main() {
     });
   }
 
-  console.log('✅ Users created (2 users + 5 workers)');
+  console.log('✅ Users created (2 users + 19 workers)');
 
   // Create Ovens
   console.log('🔥 Creating Ovens...');
@@ -1101,7 +1115,7 @@ async function main() {
   console.log('   Admin: admin / password123');
   console.log('');
   console.log('📊 Database Statistics:');
-  console.log('   - Users: 7 (1 manager, 1 admin, 5 workers)');
+  console.log('   - Users: 7 (1 manager, 1 admin, 19 workers)');
   console.log('   - Ovens: 7');
   console.log('   - Defect Reasons: 8');
   console.log('   - Stage Categories: 6');

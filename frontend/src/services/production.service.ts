@@ -141,6 +141,40 @@ interface TrackDecorationTaskRequest {
   status?: string;
 }
 
+interface StageSubProcess {
+  id: string;
+  processName: string;
+  processOrder: number;
+  quantity: number;
+  rejectQuantity: number;
+  completed: boolean;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface StageSubProcessesResponse {
+  polDetailId: string;
+  stage: string;
+  subProcesses: StageSubProcess[];
+}
+
+interface CreateStageSubProcessRequest {
+  polDetailId: string;
+  stage: string;
+  processName: string;
+  processOrder: number;
+  quantity: number;
+  rejectQuantity?: number;
+  createdBy: string;
+}
+
+interface UpdateStageSubProcessRequest {
+  quantity?: number;
+  rejectQuantity?: number;
+  completed?: boolean;
+}
+
 export const productionService = {
   async getProductionStages(polDetailId: string): Promise<ProductionStagesResponse> {
     const response = await apiClient.get<ProductionStagesResponse>(
@@ -515,6 +549,40 @@ export const productionService = {
         };
       }>;
     }>>(`/production/part-combinations/${polDetailId}`);
+    return response;
+  },
+
+  // Get all sub-processes for a specific stage of a POL detail
+  async getStageSubProcesses(polDetailId: string, stage: string): Promise<StageSubProcessesResponse> {
+    const response = await apiClient.get<StageSubProcessesResponse>(
+      `/production/${polDetailId}/stages/${stage}/sub-processes`
+    );
+    return response;
+  },
+
+  // Create a new stage sub-process
+  async createStageSubProcess(data: CreateStageSubProcessRequest): Promise<StageSubProcess> {
+    const response = await apiClient.post<StageSubProcess>('/production/stage-sub-processes', data);
+    return response;
+  },
+
+  // Update a stage sub-process
+  async updateStageSubProcess(subProcessId: string, data: UpdateStageSubProcessRequest): Promise<StageSubProcess> {
+    const response = await apiClient.put<StageSubProcess>(`/production/stage-sub-processes/${subProcessId}`, data);
+    return response;
+  },
+
+  // Delete a stage sub-process
+  async deleteStageSubProcess(subProcessId: string): Promise<{ message: string }> {
+    const response = await apiClient.delete<{ message: string }>(`/production/stage-sub-processes/${subProcessId}`);
+    return response;
+  },
+
+  // Complete a stage sub-process
+  async completeStageSubProcess(subProcessId: string, completedBy: string): Promise<StageSubProcess> {
+    const response = await apiClient.put<StageSubProcess>(`/production/stage-sub-processes/${subProcessId}/complete`, {
+      completedBy,
+    });
     return response;
   },
 };
