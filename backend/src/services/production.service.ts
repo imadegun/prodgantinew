@@ -1046,8 +1046,11 @@ export class ProductionService {
 
   /**
    * Validate sub-process sequence - ensure sub-processes are completed in order
+   * NOTE: Relaxed validation - sub-processes can now be completed in any order
    */
   private async validateSubProcessSequence(polDetailId: string, stage: string, processOrder: number): Promise<void> {
+    console.log(`[validateSubProcessSequence] Checking sequence for polDetailId: ${polDetailId}, stage: ${stage}, processOrder: ${processOrder}`);
+    
     // Get all sub-processes for this stage and POL detail, sorted by process order
     const subProcesses = await prisma.stageSubProcess.findMany({
       where: {
@@ -1057,20 +1060,29 @@ export class ProductionService {
       orderBy: { processOrder: 'asc' },
     });
 
-    // Check if any previous sub-processes are incomplete
-    for (const subProcess of subProcesses) {
-      if (subProcess.processOrder < processOrder && !subProcess.completed) {
-        throw new AppError(
-          `Cannot complete sub-process ${processOrder} (${subProcess.processName}). Previous sub-process ${subProcess.processOrder} must be completed first.`,
-          400,
-          'SEQUENCE_VIOLATION'
-        );
-      }
+    console.log(`[validateSubProcessSequence] Found ${subProcesses.length} sub-processes for this stage`);
+    subProcesses.forEach(sp => {
+      console.log(`[validateSubProcessSequence]   - Order ${sp.processOrder}: ${sp.processName}, completed: ${sp.completed}`);
+    });
+
+    // RELAXED: Sub-processes can be completed in any order
+    // Only log a warning if previous sub-processes are incomplete, but don't block
+    const incompletePrevious = subProcesses.filter(
+      sp => sp.processOrder < processOrder && !sp.completed
+    );
+    
+    if (incompletePrevious.length > 0) {
+      const processNames = incompletePrevious.map(sp => `${sp.processName} (order ${sp.processOrder})`).join(', ');
+      console.log(`[validateSubProcessSequence] WARNING: Completing order ${processOrder} while previous sub-processes are incomplete: ${processNames}`);
+      // No longer throwing error - allowing completion in any order
     }
+    
+    console.log(`[validateSubProcessSequence] Sequence validation passed (relaxed mode)`);
   }
 
   /**
    * Validate sub-process totals - ensure sub-process quantities sum to stage total
+   * Special handling for SLAB/HANDBUILD products: allow sub-process creation when no stage production exists yet
    */
   private async validateSubProcessTotals(polDetailId: string, stage: string): Promise<void> {
     // Get total quantity from production records for this stage
@@ -1092,6 +1104,23 @@ export class ProductionService {
     });
 
     const subProcessTotal = subProcesses.reduce((sum, sp) => sum + sp.quantity, 0);
+
+    // Get POL detail to check product type
+    const detail = await prisma.pOLDetail.findUnique({
+      where: { id: polDetailId },
+    });
+
+    // Check if this is a SLAB or HAND_BUILT product that may not have stage production records yet
+    const isSlabOrHandbuilt = detail?.productType === 'SLAB_TRAY' || detail?.productType === 'HAND_BUILT';
+
+    // Allow sub-process creation when:
+    // 1. Stage total is 0 (no production records yet) AND product is SLAB/HANDBUILT (first stage doesn't require prior stage output)
+    // 2. Sub-process total doesn't exceed stage total
+    if (stageTotal === 0 && isSlabOrHandbuilt) {
+      // For SLAB/HANDBUILT products, allow sub-process creation when no stage production exists
+      // This is because they start from a stage that doesn't depend on previous stage output
+      return;
+    }
 
     if (subProcessTotal > stageTotal) {
       throw new AppError(
@@ -1186,6 +1215,7 @@ export class ProductionService {
 
   /**
    * Complete a stage sub-process
+   * When the final sub-process is completed, automatically creates the stage production record
    */
   async completeStageSubProcess(subProcessId: string, completedBy: string) {
     // Find the sub-process
@@ -1202,7 +1232,7 @@ export class ProductionService {
       throw new AppError('Stage sub-process is already completed', 400, 'ALREADY_COMPLETED');
     }
 
-    // Validate sequence before completing
+    // Validate sequence before completing (relaxed - allows any order)
     await this.validateSubProcessSequence(existingSubProcess.polDetailId, existingSubProcess.stage, existingSubProcess.processOrder);
 
     const updatedSubProcess = await prisma.stageSubProcess.update({
@@ -1212,6 +1242,48 @@ export class ProductionService {
         updatedAt: new Date(),
       },
     });
+
+    // Check if this was the final sub-process - if so, create stage production record
+    const allSubProcesses = await prisma.stageSubProcess.findMany({
+      where: {
+        polDetailId: existingSubProcess.polDetailId,
+        stage: existingSubProcess.stage,
+      },
+    });
+
+    const allCompleted = allSubProcesses.every(sp => sp.completed);
+    
+    if (allCompleted) {
+      // Get the LAST sub-process (highest processOrder) - not the sum of all
+      const sortedByOrder = [...allSubProcesses].sort((a, b) => b.processOrder - a.processOrder);
+      const lastSubProcess = sortedByOrder[0];
+      const lastQuantity = lastSubProcess.quantity;
+
+      // Check if stage production record already exists
+      const existingRecords = await prisma.productionRecord.findMany({
+        where: {
+          polDetailId: existingSubProcess.polDetailId,
+          stage: existingSubProcess.stage as ProductionStage,
+        },
+      });
+
+      // Only create if no records exist yet
+      if (existingRecords.length === 0) {
+        await prisma.productionRecord.create({
+          data: {
+            id: `prod-sub-${Date.now()}`,
+            polDetailId: existingSubProcess.polDetailId,
+            stage: existingSubProcess.stage as ProductionStage,
+            quantity: lastQuantity,
+            userId: completedBy,
+            notes: `Auto-created from last sub-process (order: ${lastSubProcess.processOrder})`,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        });
+        console.log(`[completeStageSubProcess] Auto-created stage production record for stage ${existingSubProcess.stage}, quantity: ${lastQuantity}, from processOrder: ${lastSubProcess.processOrder}`);
+      }
+    }
 
     return {
       id: updatedSubProcess.id,

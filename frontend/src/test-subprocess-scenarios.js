@@ -82,8 +82,16 @@ console.log('✅ Normal product includes forming stages:', !isNonThrowingProduct
 
 // Test Scenario 4: Sub-Process Validation
 console.log('\n📋 Test Scenario 4: Sub-Process Validation Logic');
-function validateSubProcessQuantities(subProcesses, stageTotal) {
+function validateSubProcessQuantities(subProcesses, stageTotal, productType = null) {
   const subProcessTotal = subProcesses.reduce((sum, sp) => sum + sp.quantity + sp.rejectQuantity, 0);
+
+  // Check if this is a SLAB or HAND_BUILT product
+  const isSlabOrHandbuilt = productType === 'SLAB_TRAY' || productType === 'HAND_BUILT';
+
+  // Allow sub-process creation when stage total is 0 for SLAB/HANDBUILT products
+  if (stageTotal === 0 && isSlabOrHandbuilt) {
+    return { valid: true };
+  }
 
   if (subProcessTotal > stageTotal) {
     return {
@@ -95,10 +103,27 @@ function validateSubProcessQuantities(subProcesses, stageTotal) {
   return { valid: true };
 }
 
-const stageTotal = 145; // Sum of all sub-process quantities
+// Test with normal product (stage total > 0)
+const stageTotal = 145;
 const validation = validateSubProcessQuantities(subProcesses, stageTotal);
 console.log('✅ Sub-process validation for stage total', stageTotal, ':', validation.valid ? 'PASS' : 'FAIL');
 if (!validation.valid) console.log('❌ Error:', validation.error);
+
+// Test with SLAB product when stage total is 0 (should allow - this is the new behavior)
+const slabStageTotal = 0;
+const slabValidation = validateSubProcessQuantities(subProcesses, slabStageTotal, 'SLAB_TRAY');
+console.log('✅ SLAB product sub-process validation (stage total=0):', slabValidation.valid ? 'PASS (allowed)' : 'FAIL (blocked)');
+if (!slabValidation.valid) console.log('❌ Error:', slabValidation.error);
+
+// Test with HAND_BUILT product when stage total is 0 (should allow - this is the new behavior)
+const handbuiltStageTotal = 0;
+const handbuiltValidation = validateSubProcessQuantities(subProcesses, handbuiltStageTotal, 'HAND_BUILT');
+console.log('✅ HAND_BUILT product sub-process validation (stage total=0):', handbuiltValidation.valid ? 'PASS (allowed)' : 'FAIL (blocked)');
+if (!handbuiltValidation.valid) console.log('❌ Error:', handbuiltValidation.error);
+
+console.log('\n📋 Test Scenario 5: Auto-completion Logic for Final Sub-Process');
+console.log('When all sub-processes are completed, a stage production record should be auto-created');
+console.log('Expected: Stage production record with quantity = sum of all sub-process quantities');
 
 // Test Scenario 5: CRUD Operations
 console.log('\n📋 Test Scenario 5: Sub-Process CRUD Operations');

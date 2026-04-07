@@ -1781,8 +1781,14 @@ const ProductionTracking = () => {
     try {
       await productionService.completeStageSubProcess(subProcessId, 'current-user'); // TODO: Get from auth context
       showSnackbar('Sub-process completed successfully', 'success');
+      // Reload both sub-processes and stage records (to get auto-created stage production)
       await loadStageSubProcesses();
       await loadPartStageSubProcesses();
+      // Also reload production stages to get the auto-created stage production record
+      loadProductionStages();
+      if (selectedPart) {
+        await handlePartSelect(selectedPart);
+      }
     } catch (error: any) {
       console.error('Error completing sub-process:', error);
       showSnackbar(error.message || 'Failed to complete sub-process', 'error');
@@ -1805,12 +1811,23 @@ const ProductionTracking = () => {
   };
 
   // Validate sub-process quantities against stage totals
+  // For SLAB/HANDBUILT products: allow sub-process creation when no stage production exists yet
   const validateSubProcessQuantities = (subProcesses: any[], stage: string, isPart: boolean = false): { valid: boolean; error?: string } => {
     const stageData = isPart ? partStageRecords[stage] : stageRecords[stage];
     if (!stageData) return { valid: true };
 
     const stageTotal = stageData.totalQuantity || 0;
     const subProcessTotal = subProcesses.reduce((sum, sp) => sum + sp.quantity + sp.rejectQuantity, 0);
+
+    // Check if this is a SLAB or HAND_BUILT product
+    const isSlabOrHandbuilt = polDetailsData?.productType === 'SLAB_TRAY' || polDetailsData?.productType === 'HAND_BUILT' ||
+                              productionWorkflow?.workflowType === 'SLAB' || productionWorkflow?.workflowType === 'HANDBUILD';
+
+    // Allow sub-process creation when stage total is 0 for SLAB/HANDBUILT products
+    // This is because they start from a stage that doesn't depend on previous stage output
+    if (stageTotal === 0 && isSlabOrHandbuilt) {
+      return { valid: true };
+    }
 
     if (subProcessTotal > stageTotal) {
       return {

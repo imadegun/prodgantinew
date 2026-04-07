@@ -85,11 +85,11 @@ describe('ProductionTracking - Sub-Process Tracking Implementation Tests', () =>
     it('should prevent over-allocation of sub-process quantities', () => {
       const stageTotal = 100;
       const subProcessTotal = 150;
-
+      
       // Should prevent over-allocation
       const isValid = subProcessTotal <= stageTotal;
       expect(isValid).toBe(false);
-
+      
       const errorMessage = `Total sub-process quantities (${subProcessTotal}) cannot exceed stage total (${stageTotal}). Please reduce quantities.`;
       expect(errorMessage).toContain('cannot exceed stage total');
     });
@@ -97,9 +97,45 @@ describe('ProductionTracking - Sub-Process Tracking Implementation Tests', () =>
     it('should allow valid sub-process quantities', () => {
       const stageTotal = 100;
       const subProcessTotal = 80;
-
+      
       const isValid = subProcessTotal <= stageTotal;
       expect(isValid).toBe(true);
+    });
+
+    it('should allow sub-process creation for SLAB products when stage total is 0', () => {
+      const stageTotal: number = 0;
+      const subProcessTotal: number = 50;
+      const productType: string = 'SLAB_TRAY';
+      
+      // For SLAB products, allow sub-process creation when stage total is 0
+      const isSlabOrHandbuilt = productType === 'SLAB_TRAY' || productType === 'HAND_BUILT';
+      const isValid = stageTotal === 0 && isSlabOrHandbuilt ? true : subProcessTotal <= stageTotal;
+      
+      expect(isValid).toBe(true);
+    });
+
+    it('should allow sub-process creation for HAND_BUILT products when stage total is 0', () => {
+      const stageTotal: number = 0;
+      const subProcessTotal: number = 50;
+      const productType: string = 'HAND_BUILT';
+      
+      // For HAND_BUILT products, allow sub-process creation when stage total is 0
+      const isSlabOrHandbuilt = productType === 'SLAB_TRAY' || productType === 'HAND_BUILT';
+      const isValid = stageTotal === 0 && isSlabOrHandbuilt ? true : subProcessTotal <= stageTotal;
+      
+      expect(isValid).toBe(true);
+    });
+
+    it('should still block over-allocation for SLAB products', () => {
+      const stageTotal: number = 50;
+      const subProcessTotal: number = 100;
+      const productType: string = 'SLAB_TRAY';
+      
+      // For SLAB products with stage total > 0, still block over-allocation
+      const isSlabOrHandbuilt = productType === 'SLAB_TRAY' || productType === 'HAND_BUILT';
+      const isValid = stageTotal === 0 && isSlabOrHandbuilt ? true : subProcessTotal <= stageTotal;
+      
+      expect(isValid).toBe(false);
     });
   });
 

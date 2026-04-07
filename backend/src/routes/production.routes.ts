@@ -640,4 +640,170 @@ router.get('/operators', authenticate, async (req, res) => {
   }
 });
 
+// =====================================================
+// Stage Sub-Process Routes
+// =====================================================
+
+// Get all sub-processes for a specific stage of a POL detail
+router.get('/:polDetailId/stages/:stage/sub-processes', authenticate, async (req, res) => {
+  try {
+    let { polDetailId, stage } = req.params;
+    
+    // Handle invalid IDs (like NaN)
+    if (polDetailId === 'NaN' || !polDetailId) {
+      const referer = req.headers.referer || req.headers.referrer;
+      if (referer) {
+        const refererStr = Array.isArray(referer) ? referer[0] : referer;
+        const match = refererStr.match(/\/stages\/([^/]+)/);
+        if (match && match[1] && match[1] !== 'NaN') {
+          polDetailId = match[1];
+        }
+      }
+    }
+    
+    if (!polDetailId || polDetailId === 'NaN') {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_ID',
+          message: 'Invalid POL detail ID',
+        },
+      });
+    }
+    
+    const result = await productionService.getStageSubProcesses(polDetailId, stage);
+    
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
+      success: false,
+      error: {
+        code: error.code || 'FETCH_SUB_PROCESSES_FAILED',
+        message: error.message || 'Failed to fetch stage sub-processes',
+      },
+    });
+  }
+});
+
+// Create a new stage sub-process
+router.post('/stage-sub-processes', authenticate, async (req, res) => {
+  try {
+    const { polDetailId, stage, processName, processOrder, quantity, rejectQuantity } = req.body;
+    const authReq = req as any;
+    
+    if (!polDetailId || !stage || !processName || processOrder === undefined || !quantity) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'MISSING_FIELDS',
+          message: 'polDetailId, stage, processName, processOrder, and quantity are required',
+        },
+      });
+    }
+    
+    const result = await productionService.createStageSubProcess({
+      polDetailId,
+      stage,
+      processName,
+      processOrder,
+      quantity,
+      rejectQuantity: rejectQuantity || 0,
+      createdBy: authReq.user.userId,
+    });
+    
+    res.status(201).json({
+      success: true,
+      data: result,
+    });
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
+      success: false,
+      error: {
+        code: error.code || 'CREATE_SUB_PROCESS_FAILED',
+        message: error.message || 'Failed to create stage sub-process',
+      },
+    });
+  }
+});
+
+// Update a stage sub-process
+router.put('/stage-sub-processes/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { quantity, rejectQuantity, completed } = req.body;
+    
+    const result = await productionService.updateStageSubProcess(id, {
+      quantity,
+      rejectQuantity,
+      completed,
+    });
+    
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
+      success: false,
+      error: {
+        code: error.code || 'UPDATE_SUB_PROCESS_FAILED',
+        message: error.message || 'Failed to update stage sub-process',
+      },
+    });
+  }
+});
+
+// Delete a stage sub-process
+router.delete('/stage-sub-processes/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const result = await productionService.deleteStageSubProcess(id);
+    
+    res.json({
+      success: true,
+      ...result,
+    });
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
+      success: false,
+      error: {
+        code: error.code || 'DELETE_SUB_PROCESS_FAILED',
+        message: error.message || 'Failed to delete stage sub-process',
+      },
+    });
+  }
+});
+
+// Complete a stage sub-process
+router.put('/stage-sub-processes/:id/complete', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const authReq = req as any;
+    
+    const result = await productionService.completeStageSubProcess(id, authReq.user.userId);
+    
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
+      success: false,
+      error: {
+        code: error.code || 'COMPLETE_SUB_PROCESS_FAILED',
+        message: error.message || 'Failed to complete stage sub-process',
+      },
+    });
+  }
+});
+
 export default router;
